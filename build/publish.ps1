@@ -25,12 +25,35 @@ if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 if (Test-Path $sha) { Remove-Item $sha -Force }
 
-dotnet publish src/Paldium.App -c Release -r win-x64 --self-contained false -o $out
+# Source paths in the compiled files (and their .pdb) are mapped to /_/, so the build folder of this machine is not embedded in the release.
+# Global properties reach every project of the build, the PalCalc submodule included.
+# A build that already exists would be reused with the old, unmapped paths: start from a clean state.
+dotnet clean src/Paldium.App -c Release -r win-x64 -v q | Out-Null
+dotnet clean tools/Paldium.Updater -c Release -r win-x64 -v q | Out-Null
+$pathMap = @('-p:ContinuousIntegrationBuild=true', "-p:PathMap=$($root.TrimEnd('\'))\=/_/")
+dotnet publish src/Paldium.App -c Release -r win-x64 --self-contained false -o $out @pathMap
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
 # The updater (T131) goes next to the exe: the app copies it out of the app folder and runs it from there while it replaces the app folder.
-dotnet publish tools/Paldium.Updater -c Release -r win-x64 --self-contained false -o (Join-Path $out 'updater')
+dotnet publish tools/Paldium.Updater -c Release -r win-x64 --self-contained false -o (Join-Path $out 'updater') @pathMap
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish of the updater failed.' }
+
+# Fody (Costura in PalCalc.SaveReader) rewrites its assembly after the compiler ran, and the pdb path in the debug directory keeps the build folder. The path is
+# a NUL-terminated string, so it is replaced in place: "<root>\x\y.pdb" becomes "/_/x/y.pdb" followed by NULs up to the old length (the file keeps its size).
+$latin1 = [System.Text.Encoding]::GetEncoding(28591)
+$rootPattern = [regex]::Escape($root.TrimEnd('\')) + '\\[^\x00]*'
+foreach ($dll in Get-ChildItem $out -Recurse -Filter *.dll) {
+    $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
+    $text = $latin1.GetString($bytes)
+    if ($text.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+    $patched = [regex]::Replace($text, $rootPattern, {
+        param($m)
+        $mapped = '/_/' + $m.Value.Substring($root.TrimEnd('\').Length + 1).Replace('\', '/')
+        $mapped.PadRight($m.Value.Length, [char]0)
+    }, 'IgnoreCase')
+    [System.IO.File]::WriteAllBytes($dll.FullName, $latin1.GetBytes($patched))
+    Write-Host "Mapped the build path in $($dll.Name)."
+}
 
 # Required content next to the exe.
 foreach ($needed in 'Paldium.exe', 'data/gamedata.json', 'data/breeding-rules.json', 'content/guides/en', 'content/guides/tr', 'wwwroot/gamedata', 'updater/Paldium.Updater.exe') {
@@ -62,6 +85,39 @@ finally {
     $archive.Dispose()
     $stream.Dispose()
 }
+
+# Scan the finished package for what must not be in a release: the build folder, user folders, the local private patterns (ASCII and UTF-16).
+$needles = @('C:\Users\', 'Documents\Code', $root)
+$patternFile = Join-Path $PSScriptRoot 'private-patterns.local.txt'
+$patterns = @()
+if (Test-Path $patternFile) { $patterns = @(Get-Content $patternFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') }) }
+else { Write-Warning 'build/private-patterns.local.txt is missing: only the generic scan runs.' }
+$regexes = @($patterns | ForEach-Object { New-Object System.Text.RegularExpressions.Regex($_, 'IgnoreCase') })
+$latin1 = [System.Text.Encoding]::GetEncoding(28591)
+$found = New-Object System.Collections.Generic.List[string]
+$reader = [System.IO.Compression.ZipFile]::OpenRead($zip)
+try {
+    foreach ($entry in $reader.Entries) {
+        if ($entry.FullName -notmatch '\.(dll|exe|pdb|json|lua|md|txt|config|xml|js|css|html)$') { continue }
+        $ms = New-Object System.IO.MemoryStream
+        $es = $entry.Open(); $es.CopyTo($ms); $es.Dispose()
+        $bytes = $ms.ToArray()
+        $texts = @($latin1.GetString($bytes), [System.Text.Encoding]::Unicode.GetString($bytes))
+        if ($bytes.Length -gt 1) { $texts += [System.Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1) }
+        foreach ($text in $texts) {
+            $hit = $false
+            foreach ($n in $needles) { if ($text.IndexOf($n, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true; break } }
+            if (-not $hit) { foreach ($r in $regexes) { if ($r.IsMatch($text)) { $hit = $true; break } } }
+            if ($hit) { $found.Add($entry.FullName); break }
+        }
+    }
+}
+finally { $reader.Dispose() }
+if ($found.Count -gt 0) {
+    Remove-Item $zip -Force
+    throw "The package was deleted: $($found.Count) file(s) contain a build path, user folder or private pattern: $(($found | Select-Object -First 15) -join ', ')"
+}
+Write-Host "Package scan: clean ($($patterns.Count) private pattern(s) + generic paths, ASCII and UTF-16)."
 
 # The SHA-256 of the zip (attached to the GitHub release; the app checks the download against it).
 $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
