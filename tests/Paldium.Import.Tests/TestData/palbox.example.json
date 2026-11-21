@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "exportedAtUtc": "2026-11-12T20:00:00Z",
+  "playerName": "Example",
+  "playerUid": "0A1B2C3D4E5F60718293A4B5C6D7E8F9",
+  "pals": [
+    { "instanceId": "11111111222222223333333344444444", "characterId": "CowPal", "gender": "Female", "level": 23, "rank": 1,
+      "passives": ["CraftSpeed_up2"], "talents": { "hp": 70, "shot": 55, "defense": 80 },
+      "equippedAttacks": ["Unique_CowPal_Charge"], "learnedAttacks": ["Unique_CowPal_Charge"], "nickname": null,
+      "location": { "kind": "Palbox", "page": 0, "slot": 0 } },
+    { "characterId": "BOSS_Anubis", "gender": "Male", "level": 55, "rank": 3,
+      "passives": ["Legend", "CraftSpeed_up3", "PAL_ALLAttack_up2", "Deffence_up2"],
+      "location": { "kind": "Palbox", "page": 0, "slot": 1 } },
+    { "characterId": "Sekhmet", "gender": "Female", "level": 40, "rank": 1, "passives": [],
+      "nickname": "Sunny", "location": { "kind": "Palbox", "page": 1, "slot": 14 } },
+    { "characterId": "ChickenPal", "level": 5, "location": { "kind": "Palbox", "page": 2, "slot": 3 } },
+    { "characterId": "LazyDragon", "gender": "Male", "level": 30, "rank": 2, "passives": ["Rare"],
+      "talents": { "hp": 100 }, "location": { "kind": "Palbox", "page": 2, "slot": 29 } }
+  ]
+}

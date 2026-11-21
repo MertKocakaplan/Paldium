@@ -1,0 +1,58 @@
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+@if (Open)
+{
+    <div @ref="_el"
+         class="@($"drawer drawer-{Side}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+         style="@($"--drawer-w:{Width.ToString(CultureInfo.InvariantCulture)}px")"
+         role="region"
+         aria-label="@AriaLabel"
+         tabindex="-1">
+        @ChildContent
+    </div>
+}
+
+@code {
+    private ElementReference _el;
+    private DotNetObjectReference<Drawer>? _self;
+    private bool _attached;
+
+    [Parameter] public string Side { get; set; } = "left";
+    [Parameter] public int Width { get; set; } = 288;
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_attached)
+        {
+            _attached = true;
+            _self ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("pbDrawer.attach", _el, _self);
+        }
+        else if (!Open && _attached)
+        {
+            _attached = false;
+            await JS.InvokeVoidAsync("pbDrawer.detach", _el, true);
+        }
+    }
+
+    [JSInvokable]
+    public Task RequestClose() => OpenChanged.InvokeAsync(false);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_attached)
+        {
+            _attached = false;
+            try { await JS.InvokeVoidAsync("pbDrawer.detach", _el, true); }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
+    }
+}

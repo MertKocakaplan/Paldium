@@ -1,0 +1,39 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+
+<figure class="eggs100" aria-label="@AriaText()">
+    <div class="dots">
+        @for (var i = 0; i < 100; i++)
+        {
+            <i class="@(i < LitCount() ? "on" : null)"></i>
+        }
+    </div>
+    <figcaption>@CaptionText()</figcaption>
+</figure>
+
+@code {
+    [Parameter] public double Probability { get; set; }
+    [Parameter] public int DesiredCount { get; set; }
+    [Parameter] public string? CaptionOverride { get; set; }
+
+    private int LitCount() => Probability <= 0
+        ? 0
+        : Math.Clamp((int)Math.Round(Probability * 100.0, MidpointRounding.AwayFromZero), 0, 100);
+
+    private string CaptionText()
+    {
+        if (!string.IsNullOrEmpty(CaptionOverride)) return CaptionOverride;
+        if (Probability <= 0) return L["Odds.Eggs100Impossible"].Value;
+        var lit = LitCount();
+        if (lit == 0) return L["Odds.Eggs100LessThanOne", DesiredCount].Value;
+        return L["Odds.Eggs100Caption", lit, DesiredCount].Value;
+    }
+
+    private string AriaText()
+    {
+        if (Probability <= 0) return L["Odds.Eggs100Impossible"].Value;
+        var lit = LitCount();
+        if (lit == 0) return L["Odds.Eggs100LessThanOne", DesiredCount].Value;
+        return L["Odds.Eggs100Aria", lit, DesiredCount].Value;
+    }
+}

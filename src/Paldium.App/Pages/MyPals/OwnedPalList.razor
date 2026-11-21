@@ -1,0 +1,945 @@
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
+@using Paldium.Core.Queries
+@using Paldium.Import.Sync
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IOwnedPalRepository Repository
+@inject OwnedScopeService Scope
+@inject MyPalsStateService State
+@inject SourcesService Sources
+@inject ISyncService Sync
+@inject SettingsStore Settings
+@inject PreferredPalActions PreferredActions
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@{
+    var snapshot = Repository.Current;
+    var viewMode = NormalizeView(Settings.Current.MyPals.View);
+    var isGallery = viewMode != ViewSwitch.Table;
+    var activeItems = BuildActiveItems();
+    var columns = BuildColumns();
+    var statuses = Sync.Statuses;
+    var srcStateWord = SourcesSummaryWord(statuses);
+    var srcStateCls = SourcesStateClass(statuses);
+    var sortByCol = EffectiveSortColumn();
+    var sortDesc = State.SortKey == OwnedSortKey.Default ? false : State.Descending;
+    var editingPal = !_addingNew && !string.IsNullOrEmpty(_editingUid) ? snapshot.Find(_editingUid) : null;
+    var inspectorOpen = _editorOpen && (_addingNew || editingPal != null);
+    var filterDrawer = CompactNav || inspectorOpen;
+    var workClass = CompactNav ? "work noRail" : inspectorOpen ? "work edit" : "work";
+    var emptyFragment = RenderEmptyState(snapshot, activeItems);
+}
+
+<NavigationLock OnBeforeInternalNavigation="HandleBeforeInternalNavigationAsync" />
+
+<div class="@($"b p{(isGallery ? " gallery-mode" : "")}")">
+    <div class="@workClass">
+        <FilterRail Drawer="@filterDrawer"
+                    PanelKey="mypals"
+                    Open="@_filterOpen"
+                    OpenChanged="v => _filterOpen = v"
+                    Title="@L["Filters.Title"].Value"
+                    AnyActive="@State.Filter.HasAny"
+                    OnClear="ClearFilters">
+            <MyPalsFilters Filter="@State.Filter"
+                           FilterChanged="SetFilter"
+                           Snapshot="@snapshot" />
+        </FilterRail>
+
+        <div class="main">
+            <ListHead Title="@L["Nav.MyPals"].Value"
+                      ShowFilterButton="@(CompactNav || inspectorOpen)"
+                      FilterOpen="@_filterOpen"
+                      ActiveFilterCount="@activeItems.Count"
+                      OnToggleFilters="() => _filterOpen = !_filterOpen">
+                <Summary>
+                    <span class="sum" title="@SummaryTooltip(snapshot)">
+                        @RenderSummary(snapshot.Pals.Count, _rows.Count, Scope.ScopedPals.Count)
+                    </span>
+                </Summary>
+                <ChildContent>
+                    @if (isGallery)
+                    {
+                        <SortDropdown Options="@GallerySortOptions()"
+                                      Value="@State.GallerySort"
+                                      Descending="@State.Descending"
+                                      OnSortChanged="HandleGallerySort" />
+                    }
+                    <ViewSwitch Value="@viewMode"
+                                ValueChanged="SetViewMode"
+                                AllowCards="true" />
+
+                    <Dropdown TValue="string"
+                              TriggerClass="src"
+                              Open="@_srcOpen"
+                              OpenChanged="v => _srcOpen = v"
+                              AnchorOrigin="Origin.BottomRight"
+                              TransformOrigin="Origin.TopRight"
+                              AriaLabel="@L["MyPals.SourcesButtonAria", Sources.Sources.Count, srcStateWord].Value">
+                        <TriggerContent>
+                            <span class="@($"dot{srcStateCls}")" aria-hidden="true"></span>
+                            <span>@SourcesTriggerText(srcStateWord)</span>
+                        </TriggerContent>
+                        <ChildContent>
+                            <div class="pop-panel src-pop">
+                                <div class="pop-panel-head">
+                                    <span>@L["Sources.Title"]</span>
+                                    <span class="src-pop-cnt">@L["Sources.Summary", Sources.Sources.Count]</span>
+                                </div>
+                                @if (Sources.Sources.Count == 0)
+                                {
+                                    <p class="pop-row-help">@L["MyPals.NoSourcesConfigured"]</p>
+                                }
+                                else
+                                {
+                                    <ul class="src-pop-list">
+                                        @foreach (var src in Sources.Sources)
+                                        {
+                                            var st = statuses.FirstOrDefault(s => string.Equals(s.SourceId, src.Id, StringComparison.Ordinal));
+                                            <li>
+                                                <span class="@($"dot{SourceItemDotClass(src.Enabled, st?.State)}")" aria-hidden="true"></span>
+                                                <span class="src-pop-nm" title="@src.Path">@SourceConfigTitle(src)</span>
+                                                <span class="src-pop-st">@SourceStatusLabel(src.Enabled, st)</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                <div class="pop-foot">
+                                    <a class="btn2" href="settings#kaynak" @onclick="() => _srcOpen = false">
+                                        @L["MyPals.ManageSources"]
+                                    </a>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </Dropdown>
+
+                    <ScopeMenu ShortSummary="true"
+                               ShowScopePrefix="true"
+                               AnchorOrigin="Origin.BottomRight"
+                               TransformOrigin="Origin.TopRight" />
+
+                    <button type="button" class="btn2" @onclick="AddPalAsync">
+                        <Icon Name="plus" Size="14" />
+                        <span>@L["MyPals.Add"]</span>
+                    </button>
+                </ChildContent>
+            </ListHead>
+
+            @if (snapshot.OrphanOverrideUids.Count > 0)
+            {
+                <div class="orphan-bar">
+                    <Icon Name="info" Size="16" />
+                    <span>@L["MyPals.OrphanOverrides", snapshot.OrphanOverrideUids.Count]</span>
+                </div>
+            }
+
+            <ActiveFilterBar Items="@activeItems"
+                             OnRemove="RemoveClause"
+                             OnClearAll="ClearFilters" />
+
+            @if (isGallery)
+            {
+                <OwnedPalGallery Items="@_rows"
+                                 Dense="@(viewMode == ViewSwitch.Dense)"
+                                 SelectedKey="@(inspectorOpen && !_addingNew ? editingPal?.Uid : null)"
+                                 IsInScope="Scope.IsInScope"
+                                 WantedPassives="@State.Filter.Passives"
+                                 EmptyContent="@emptyFragment"
+                                 OnOpen="OpenEditAsync"
+                                 OnPlanBreed="PlanInPlanner"
+                                 OnOpenPaldex="OpenInPaldex"
+                                 OnTogglePlan="pal => SetUse(pal, pal.IsExcluded)"
+                                 OnRemoveManual="AskRemoveManualAsync" />
+            }
+            else
+            {
+                <DataTable TItem="OwnedPal"
+                           Columns="@columns"
+                           Items="@_rows"
+                           KeySelector="static p => p.Uid"
+                           SelectedKey="@(inspectorOpen && !_addingNew ? editingPal?.Uid : null)"
+                           RowClass="pal => Scope.IsInScope(pal) ? null : outOfScopeRow"
+                           RowTitle="RowTitle"
+                           SortBy="@sortByCol"
+                           SortDescending="@sortDesc"
+                           OnSort="HandleSort"
+                           OnRowActivate="OpenEditAsync"
+                           EmptyContent="@emptyFragment">
+                <RowTemplate Context="pal">
+                    <td>
+                        <div class="pal">
+                            <PalIcon PalId="@pal.SpeciesId" Size="32" />
+                            <span class="t">
+                                <span class="nm">@SpeciesName(pal)</span>
+                                <GenderIcon Gender="@pal.Gender" Size="14" />
+                                @if (!string.IsNullOrEmpty(pal.Nickname))
+                                {
+                                    <span class="nick">@pal.Nickname</span>
+                                }
+                            </span>
+                            <span class="s">
+                                <span class="lv">@LevelAndRank(pal)</span>
+                                @if (AttackSummary(pal) is { Length: > 0 } atk)
+                                {
+                                    <span class="atk">· @atk</span>
+                                }
+                                <span class="fl">
+                                @if (pal.IsEdited)
+                                {
+                                    <Flag Text="@L["MyPals.FlagEdited"].Value" Kind="ed" Title="@L["MyPals.Edited"].Value" />
+                                }
+                                @if (pal.IsOnExpedition)
+                                {
+                                    <Flag Text="@L["MyPals.FlagExpedition"].Value" />
+                                }
+                                @if (pal.Location.Kind == LocationKind.GlobalStorage)
+                                {
+                                    <Flag Text="@L["MyPals.FlagGeneticCopy"].Value" Title="@L["MyPals.GeneticCopy"].Value" />
+                                }
+                                @if (!Scope.IsInScope(pal) || pal.IsExcluded)
+                                {
+                                    <Flag Text="@L["MyPals.FlagOutOfPlan"].Value" Kind="off" Title="@(!Scope.IsInScope(pal) ? L["MyPals.OutOfScope"].Value : L["MyPals.ExcludedTip"].Value)" />
+                                }
+                                </span>
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="pas">
+                            @if (pal.Passives.Count == 0)
+                            {
+                                <span class="other dash">—</span>
+                            }
+                            else
+                            {
+                                @foreach (var id in pal.Passives)
+                                {
+                                    <PassiveLine PassiveId="@id"
+                                                 Want="@State.Filter.Passives.Contains(id, StringComparer.OrdinalIgnoreCase)" />
+                                }
+                            }
+                        </div>
+                    </td>
+                    <td>
+                        <div class="@($"iv{(pal.Ivs == null ? " unk" : "")}")"
+                             title="@(pal.IvTotal is { } total ? L["MyPals.IvTotal", total].Value : L["Common.Unknown"].Value)">
+                            <span>@(pal.Ivs?.Hp.ToString(CultureInfo.InvariantCulture) ?? "—")</span>
+                            <span>@(pal.Ivs?.Attack.ToString(CultureInfo.InvariantCulture) ?? "—")</span>
+                            <span>@(pal.Ivs?.Defense.ToString(CultureInfo.InvariantCulture) ?? "—")</span>
+                        </div>
+                    </td>
+                    <td>
+                        <PalLocation Pal="@pal" />
+                    </td>
+                    <td>
+                        <button type="button"
+                                class="use"
+                                aria-pressed="@(!pal.IsExcluded ? "true" : "false")"
+                                aria-label="@L["MyPals.UsePalAria", SpeciesName(pal), pal.Level].Value"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => SetUse(pal, pal.IsExcluded)">
+                            @if (!pal.IsExcluded)
+                            {
+                                <Icon Name="check" Size="14" />
+                            }
+                        </button>
+                    </td>
+                    <td>
+                        <span @onclick:stopPropagation="true">
+                            <Dropdown TValue="string"
+                                      TriggerClass="rowmenu"
+                                      ShowChevron="false"
+                                      AriaLabel="@L["MyPals.RowActionsAria"].Value"
+                                      AnchorOrigin="Origin.BottomRight"
+                                      TransformOrigin="Origin.TopRight">
+                                <TriggerContent>
+                                    <Icon Name="more" Size="16" />
+                                </TriggerContent>
+                                <ChildContent>
+                                    <div class="cpop" role="menu" aria-label="@L["MyPals.RowActionsShort"].Value">
+                                        <button type="button" class="mi" role="menuitem" @onclick="() => OpenEditAsync(pal)">
+                                            <Icon Name="edit" Size="16" />
+                                            <span>@L["Common.Edit"]</span>
+                                        </button>
+                                        <button type="button" class="mi" role="menuitem" @onclick="() => PlanInPlanner(pal)">
+                                            <Icon Name="arrow-right" Size="16" />
+                                            <span>@L["MyPals.PlanBreed"]</span>
+                                        </button>
+                                        <button type="button" class="mi" role="menuitem" @onclick="() => OpenInPaldex(pal)">
+                                            <Icon Name="eye" Size="16" />
+                                            <span>@L["MyPals.OpenPaldex"]</span>
+                                        </button>
+                                        <button type="button" class="mi" role="menuitem" @onclick="() => PreferredActions.Toggle(pal)">
+                                            <Icon Name="@(PreferredActions.IsPreferred(pal) ? "x" : "pin")" Size="16" />
+                                            <span>@(PreferredActions.IsPreferred(pal) ? L["MyPals.RemovePreferred"] : L["MyPals.AddPreferred"])</span>
+                                        </button>
+                                        @if (pal.Source == PalSourceKind.Manual)
+                                        {
+                                            <hr />
+                                            <button type="button" class="mi" role="menuitem" @onclick="() => AskRemoveManualAsync(pal)">
+                                                <Icon Name="x" Size="16" />
+                                                <span>@L["Common.Remove"]</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </ChildContent>
+                            </Dropdown>
+                        </span>
+                    </td>
+                </RowTemplate>
+            </DataTable>
+            }
+        </div>
+
+        <OwnedPalEditor @ref="_editor"
+                        Open="@inspectorOpen"
+                        Drawer="@CompactNav"
+                        Existing="@(_addingNew ? null : editingPal)"
+                        AddSession="@_addSession"
+                        OnClose="RequestCloseEditorAsync"
+                        OnSaved="OnEditorSaved"
+                        OnRemoved="OnEditorRemoved"
+                        OnDirtyChanged="v => _editorDirty = v" />
+    </div>
+</div>
+
+<dialog @ref="_unsavedDialog" class="pb-dlg" aria-labelledby="pb-unsaved-title">
+    <h3 id="pb-unsaved-title">@L["Editor.UnsavedTitle"]</h3>
+    <p>@L["Editor.UnsavedBody"]</p>
+    <div class="dlg-foot">
+        <button type="button" class="ghostb" @onclick="KeepEditingAsync">@L["Editor.Stay"]</button>
+        <button type="button" class="danger-fill" @onclick="DiscardPendingAsync">@L["Editor.DiscardAndLeave"]</button>
+        <button type="button" class="save" @onclick="SaveAndContinueAsync">@L["Editor.SaveAndContinue"]</button>
+    </div>
+</dialog>
+
+<dialog @ref="_removeDialog" class="pb-dlg" aria-labelledby="pb-list-remove-title">
+    <h3 id="pb-list-remove-title">@L["Editor.RemoveConfirmTitle"]</h3>
+    <p>@L["MyPals.ConfirmRemove"]</p>
+    <div class="dlg-foot">
+        <button type="button" class="ghostb" @onclick="CancelRemoveDialogAsync">@L["Common.Cancel"]</button>
+        <button type="button" class="danger-fill" @onclick="ConfirmRemoveDialogAsync">@L["Common.Remove"]</button>
+    </div>
+</dialog>
+
+@code {
+    private const string outOfScopeRow = "out-of-scope";
+
+    private IReadOnlyList<OwnedPal> _rows = [];
+    private bool _filterOpen;
+    private bool _srcOpen;
+
+    private OwnedPalEditor? _editor;
+    private ElementReference _unsavedDialog;
+    private ElementReference _removeDialog;
+    private bool _editorOpen;
+    private bool _addingNew;
+    private int _addSession;
+    private string? _editingUid;
+    private bool _editorDirty;
+    private bool _allowNextNavigation;
+    private Action? _pendingAction;
+    private OwnedPal? _removeTarget;
+
+    private readonly OnceParameter _speciesOnce = new();
+    private readonly OnceParameter _passiveOnce = new();
+    private readonly OnceParameter _palOnce = new();
+
+    [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
+
+    /// <summary>Passive id to filter by when the page opens (from the Skills page link).</summary>
+    [Parameter] public string? InitialPassive { get; set; }
+
+    /// <summary>Species id to filter by when the page opens (from the Paldex link).</summary>
+    [Parameter] public string? InitialSpecies { get; set; }
+
+    /// <summary>Selection key/uid of a Pal to select and open in the inspector panel.</summary>
+    [Parameter] public string? InitialPal { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Repository.Changed += OnOwnedChanged;
+        Scope.Changed += OnScopeChanged;
+        Sync.StatusesChanged += OnSyncChanged;
+        Settings.Changed += OnSettingsChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        var changed = false;
+
+        if (_speciesOnce.IsNew(InitialSpecies) && !string.IsNullOrEmpty(InitialSpecies))
+        {
+            if (Data.TryNormalizePalId(InitialSpecies, out var normalized))
+            {
+                State.Filter = OwnedPalFilter.Empty with { SpeciesId = normalized };
+                changed = true;
+            }
+        }
+
+        if (_passiveOnce.IsNew(InitialPassive) && !string.IsNullOrEmpty(InitialPassive))
+        {
+            var match = Data.Passives.FirstOrDefault(p => string.Equals(p.Id, InitialPassive, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                State.Filter = OwnedPalFilter.Empty with { Passives = [match.Id] };
+                changed = true;
+            }
+        }
+
+        if (_palOnce.IsNew(InitialPal) && !string.IsNullOrEmpty(InitialPal))
+        {
+            var match = Repository.Current.Find(InitialPal);
+            if (match != null)
+            {
+                if (string.IsNullOrEmpty(InitialSpecies) && string.IsNullOrEmpty(InitialPassive))
+                {
+                    var candidate = State.Filter.Apply(Repository.Current.Pals, Data, State.SortKey, State.Descending);
+                    if (!candidate.Any(r => string.Equals(r.Uid, match.Uid, StringComparison.Ordinal)))
+                        State.Filter = OwnedPalFilter.Empty;
+                }
+                _addingNew = false;
+                _editingUid = match.Uid;
+                _editorOpen = true;
+                _filterOpen = false;
+                _editorDirty = false;
+                changed = true;
+            }
+        }
+
+        if (changed || _rows.Count == 0 && Repository.Current.Pals.Count > 0)
+            Apply();
+        else
+            Apply();
+    }
+
+    protected override void OnUiLanguageChanged() => Apply();
+
+    private void OnOwnedChanged(object? sender, OwnedPalSnapshot snapshot) =>
+        InvokeAsync(() => { Apply(); StateHasChanged(); });
+
+    private void OnScopeChanged(object? sender, EventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
+    private void OnSyncChanged(object? sender, EventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
+    private void OnSettingsChanged(object? sender, AppSettings settings) =>
+        InvokeAsync(() =>
+        {
+            // Another view changes which sort applies (the gallery sort is for the cards only).
+            if ((NormalizeView(settings.MyPals.View) == ViewSwitch.Table) != _appliedAsTable) Apply();
+            StateHasChanged();
+        });
+
+    private bool _appliedAsTable;
+
+    private void Apply()
+    {
+        _appliedAsTable = NormalizeView(Settings.Current.MyPals.View) == ViewSwitch.Table;
+        _rows = State.ApplyAll(Repository.Current.Pals, Data, Lang, _appliedAsTable);
+    }
+
+    private static string NormalizeView(string? view) => view switch
+    {
+        ViewSwitch.Cards => ViewSwitch.Cards,
+        ViewSwitch.Dense => ViewSwitch.Dense,
+        _ => ViewSwitch.Table,
+    };
+
+    private void SetViewMode(string view)
+    {
+        var normalized = NormalizeView(view);
+        if (string.Equals(Settings.Current.MyPals.View, normalized, StringComparison.Ordinal)) return;
+        Settings.Update(s => s with { MyPals = s.MyPals with { View = normalized } });
+    }
+
+    private IReadOnlyList<SortOption> GallerySortOptions() =>
+    [
+        new(MyPalsStateService.SortDex, L["Sort.PalNo"].Value, DefaultDescending: false),
+        new(MyPalsStateService.SortName, L["Sort.Name"].Value, DefaultDescending: false),
+        new(MyPalsStateService.SortLevel, L["Sort.Level"].Value, DefaultDescending: true),
+        new(MyPalsStateService.SortIv, L["Sort.IvTotal"].Value, DefaultDescending: true),
+        new(MyPalsStateService.SortLocation, L["Sort.Location"].Value, DefaultDescending: false),
+        new(MyPalsStateService.SortAdded, L["Sort.RecentlyAdded"].Value, DefaultDescending: true),
+    ];
+
+    private void HandleGallerySort((string Key, bool Descending) next)
+    {
+        State.SetGallerySort(next.Key, next.Descending);
+        Apply();
+    }
+
+    private RenderFragment RenderEmptyState(OwnedPalSnapshot snapshot, IReadOnlyList<ActiveFilterItem> activeItems) => __builder =>
+    {
+        if (snapshot.Pals.Count == 0)
+        {
+            <EmptyResult Title="@L["MyPals.EmptyTitle"].Value"
+                         Reason="@L["MyPals.Empty"].Value">
+                <ExtraAction>
+                    <a class="btn2" href="settings#kaynak">@L["MyPals.ManageSources"]</a>
+                    <button type="button" class="btn2" @onclick="AddPalAsync">@L["MyPals.Add"]</button>
+                </ExtraAction>
+            </EmptyResult>
+        }
+        else
+        {
+            <EmptyResult Title="@L["MyPals.NoMatch"].Value"
+                         Reason="@L["MyPals.EmptyReason"].Value"
+                         Removals="@BuildRemovalItems(snapshot.Pals, activeItems)"
+                         OnRemove="RemoveClause"
+                         OnClearAll="ClearFilters" />
+        }
+    };
+
+    private void SetFilter(OwnedPalFilter filter)
+    {
+        State.Filter = filter;
+        Apply();
+    }
+
+    private void RemoveClause(string key)
+    {
+        State.Filter = State.Filter.WithoutClause(key);
+        Apply();
+    }
+
+    private void ClearFilters()
+    {
+        State.Filter = OwnedPalFilter.Empty;
+        Apply();
+    }
+
+    private void HandleSort(string columnKey)
+    {
+        if (!Enum.TryParse<OwnedSortKey>(columnKey, out var key)) return;
+        OwnedSortKey nextKey;
+        bool nextDesc;
+        if (State.SortKey == key)
+        {
+            nextKey = key;
+            nextDesc = !State.Descending;
+        }
+        else if (State.SortKey == OwnedSortKey.Default && key == OwnedSortKey.Species)
+        {
+            nextKey = OwnedSortKey.Species;
+            nextDesc = true;
+        }
+        else
+        {
+            nextKey = key;
+            nextDesc = key is OwnedSortKey.Level or OwnedSortKey.IvTotal;
+        }
+        State.SetTableSort(nextKey, nextDesc);
+        Apply();
+    }
+
+    private string? EffectiveSortColumn() => State.SortKey switch
+    {
+        OwnedSortKey.Default => nameof(OwnedSortKey.Species),
+        OwnedSortKey.Species => nameof(OwnedSortKey.Species),
+        OwnedSortKey.IvTotal => nameof(OwnedSortKey.IvTotal),
+        OwnedSortKey.Location => nameof(OwnedSortKey.Location),
+        _ => null,
+    };
+
+    private IReadOnlyList<DataTableColumn> BuildColumns() =>
+    [
+        new(L["MyPals.ColPal"].Value, "col-pal", nameof(OwnedSortKey.Species)),
+        new(L["Editor.Passives"].Value, "col-pas"),
+        new(L["MyPals.ColIvHeader"].Value, "col-iv", nameof(OwnedSortKey.IvTotal), Align: "r"),
+        new(L["MyPals.ColLocation"].Value, "col-loc", nameof(OwnedSortKey.Location)),
+        new(L["MyPals.ColUseShort"].Value, "col-use", Align: "c"),
+        new(L["MyPals.ColActionsAria"].Value, "col-act", HiddenHeader: true),
+    ];
+
+    private IReadOnlyList<ActiveFilterItem> BuildActiveItems()
+    {
+        var list = new List<ActiveFilterItem>();
+        var f = State.Filter;
+
+        if (!string.IsNullOrEmpty(f.SpeciesId))
+        {
+            var spName = Data.TryNormalizePalId(f.SpeciesId, out var cid) ? Data.Pal(cid).Names.Get(Lang) : f.SpeciesId;
+            list.Add(new(OwnedPalFilter.SpeciesKey, $"{L["MyPals.FilterSpecies"].Value}: {spName}"));
+        }
+        else if (!string.IsNullOrWhiteSpace(f.SpeciesQuery))
+        {
+            list.Add(new(OwnedPalFilter.SpeciesKey, $"{L["MyPals.FilterSpecies"].Value}: {f.SpeciesQuery.Trim()}"));
+        }
+
+        foreach (var id in f.Passives)
+        {
+            string name;
+            try { name = Data.Passive(id).Names.Get(Lang); }
+            catch (KeyNotFoundException) { name = id; }
+            list.Add(new(OwnedPalFilter.PassiveKeyPrefix + id, $"{L["MyPals.ChipPassive"].Value}: {name}"));
+        }
+
+        if (f.Gender is not (OwnedPalFilter.GenderAll or ""))
+        {
+            var label = f.Gender switch
+            {
+                OwnedPalFilter.GenderMale => L["Common.Male"].Value,
+                OwnedPalFilter.GenderFemale => L["Common.Female"].Value,
+                _ => L["Common.Unknown"].Value,
+            };
+            list.Add(new(OwnedPalFilter.GenderKey, $"{L["MyPals.FilterGender"].Value}: {label}"));
+        }
+
+        if (f.Locations.Count > 0)
+        {
+            var names = f.Locations.Select(FormatLocationFilterValue);
+            list.Add(new(OwnedPalFilter.LocationKey, $"{L["MyPals.FilterLocation"].Value}: {string.Join(", ", names)}"));
+        }
+
+        if (f.Owners.Count > 0)
+        {
+            var names = f.Owners.Select(FormatOwnerFilterValue);
+            list.Add(new(OwnedPalFilter.OwnerKey, $"{L["MyPals.FilterOwner"].Value}: {string.Join(", ", names)}"));
+        }
+
+        if (f.Sources.Count > 0)
+        {
+            var names = f.Sources.Select(FormatSourceFilterValue);
+            list.Add(new(OwnedPalFilter.SourceKey, $"{L["MyPals.FilterSource"].Value}: {string.Join(", ", names)}"));
+        }
+
+        if (f.MinIvTotal > 0)
+            list.Add(new(OwnedPalFilter.MinIvKey, $"{L["MyPals.FilterMinIv"].Value}: {f.MinIvTotal.ToString(CultureInfo.InvariantCulture)}"));
+
+        return list;
+    }
+
+    private IReadOnlyList<EmptyRemovalItem> BuildRemovalItems(
+        IReadOnlyList<OwnedPal> allPals,
+        IReadOnlyList<ActiveFilterItem> activeItems)
+    {
+        var labelMap = activeItems.ToDictionary(x => x.Key, x => x.Label, StringComparer.Ordinal);
+        return State.Filter.ComputeRemovals(allPals, Data)
+            .Select(r => new EmptyRemovalItem(
+                r.Key,
+                labelMap.GetValueOrDefault(r.Key, r.Key),
+                L["MyPals.RemainCount", r.RemainingCount.ToString(CultureInfo.InvariantCulture)].Value,
+                r.RemainingCount))
+            .OrderByDescending(r => r.RemainingCount)
+            .ToList();
+    }
+
+    private string FormatLocationFilterValue(string key)
+    {
+        if (string.Equals(key, OwnedPalFilter.ExpeditionLocationKey, StringComparison.Ordinal))
+            return L["MyPals.FilterExpedition"].Value;
+        return Enum.TryParse<LocationKind>(key, out var kind) ? Terms.Location(kind) : key;
+    }
+
+    private string FormatOwnerFilterValue(string id)
+    {
+        if (string.Equals(id, OwnedPalFilter.UnknownOwnerKey, StringComparison.OrdinalIgnoreCase))
+            return L["MyPals.UnknownOwner"].Value;
+        var match = Repository.Current.Pals.FirstOrDefault(p => p.Owner != null && string.Equals(p.Owner.PlayerId, id, StringComparison.OrdinalIgnoreCase));
+        return match?.Owner?.PlayerName ?? match?.Owner?.PlayerId ?? id;
+    }
+
+    private string FormatSourceFilterValue(string key) =>
+        Enum.TryParse<PalSourceKind>(key, out var kind)
+            ? kind switch
+            {
+                PalSourceKind.ModBridge => L["MyPals.FilterSourceModBridge"].Value,
+                PalSourceKind.Manual => L["MyPals.FilterSourceManual"].Value,
+                PalSourceKind.GlobalStorage => Term("GlobalPalbox"),
+                _ => L["SourceKind." + kind].Value,
+            }
+            : key;
+
+    private string SpeciesName(OwnedPal pal) =>
+        Data.TryNormalizePalId(pal.SpeciesId, out var cid) ? Data.Pal(cid).Names.Get(Lang) : pal.SpeciesId;
+
+    private string LevelAndRank(OwnedPal pal)
+    {
+        var lv = L["MyPals.LevelShort", pal.Level.ToString(CultureInfo.InvariantCulture)].Value;
+        return pal.Rank <= 1 ? lv : $"{lv} · ★{(pal.Rank - 1).ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    private string AttackSummary(OwnedPal pal)
+    {
+        if (pal.EquippedAttacks.Count == 0) return string.Empty;
+        var names = pal.EquippedAttacks
+            .TakeLast(2)
+            .Select(id => Data.Actives.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id);
+        return string.Join(", ", names);
+    }
+
+    private string RowTitle(OwnedPal pal)
+    {
+        var parts = new List<string>();
+        if (!Scope.IsInScope(pal)) parts.Add(L["MyPals.OutOfScope"].Value);
+        var attacks = pal.EquippedAttacks
+            .Select(id => Data.Actives.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id).ToList();
+        if (attacks.Count > 0) parts.Add(L["MyPals.EquippedAttacks", string.Join(", ", attacks)].Value);
+        return string.Join("\n", parts);
+    }
+
+    private RenderFragment RenderSummary(int total, int shown, int scoped) => __builder =>
+    {
+        var partShown = L["MyPals.SummaryShown", "\x01", "\x02"].Value;
+        @RenderBoldTokenized(partShown, total.ToString(CultureInfo.InvariantCulture), shown.ToString(CultureInfo.InvariantCulture))
+        <span class="tx">
+            <text> </text>
+            @{
+                var partScoped = L["MyPals.SummaryScoped", "\x01"].Value;
+            }
+            @RenderBoldTokenized(partScoped, scoped.ToString(CultureInfo.InvariantCulture), string.Empty)
+        </span>
+    };
+
+    private static RenderFragment RenderBoldTokenized(string pattern, string arg0, string arg1) => __builder =>
+    {
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] == '\x01')
+            {
+                <b>@arg0</b>
+            }
+            else if (pattern[i] == '\x02')
+            {
+                <b>@arg1</b>
+            }
+            else
+            {
+                var start = i;
+                while (i + 1 < pattern.Length && pattern[i + 1] != '\x01' && pattern[i + 1] != '\x02') i++;
+                @pattern[start..(i + 1)]
+            }
+        }
+    };
+
+    private string SummaryTooltip(OwnedPalSnapshot snapshot)
+    {
+        var parts = new List<string>
+        {
+            L["MyPals.Count", _rows.Count, snapshot.Pals.Count].Value,
+            L["MyPals.ScopeInfo", Scope.ScopedPals.Count].Value,
+        };
+        if (snapshot.DuplicateCount > 0)
+            parts.Add(L["MyPals.Duplicates", snapshot.DuplicateCount].Value);
+        return string.Join(" · ", parts);
+    }
+
+    private string SourcesSummaryWord(IReadOnlyList<SourceStatus> statuses)
+    {
+        if (Sources.Sources.Count == 0) return L["MyPals.SrcNone"].Value;
+        if (statuses.Any(s => s.State == SourceState.Reading)) return L["Sync.Reading"].Value;
+        if (statuses.Any(s => s.State == SourceState.Error)) return L["Sync.Error"].Value;
+        return L["MyPals.SrcOk"].Value;
+    }
+
+    private string SourcesTriggerText(string stateWord) =>
+        Sources.Sources.Count == 0
+            ? stateWord
+            : L["MyPals.SrcSummary", Sources.Sources.Count, stateWord].Value;
+
+    private string SourcesStateClass(IReadOnlyList<SourceStatus> statuses)
+    {
+        if (Sources.Sources.Count == 0) return " idle";
+        if (statuses.Any(s => s.State == SourceState.Error)) return " err";
+        if (statuses.Any(s => s.State == SourceState.Reading)) return " warn";
+        return string.Empty;
+    }
+
+    private static string SourceItemDotClass(bool enabled, string? state)
+    {
+        if (!enabled) return " idle";
+        return state switch
+        {
+            SourceState.Error => " err",
+            SourceState.Reading => " warn",
+            _ => string.Empty,
+        };
+    }
+
+    private string SourceConfigTitle(SourceConfig src) => src.Type switch
+    {
+        SourceType.ModBridgeFile => L["SourceKind.ModBridge"].Value,
+        SourceType.GlobalStorageFile => Term("GlobalPalbox"),
+        SourceType.ZipImport => $"{L["SourceKind.Save"].Value} (ZIP)",
+        _ => System.IO.Path.GetFileName(src.Path) is { Length: > 0 } name ? name : src.Path,
+    };
+
+    private string SourceStatusLabel(bool enabled, SourceStatus? status)
+    {
+        if (!enabled) return L["MyPals.SrcDisabled"].Value;
+        if (status == null) return L["MyPals.SrcWaiting"].Value;
+        return status.State switch
+        {
+            SourceState.Error => L["Sync.Error"].Value,
+            SourceState.Reading => L["Sync.Reading"].Value,
+            _ => L["MyPals.SrcOk"].Value,
+        };
+    }
+
+    private void SetUse(OwnedPal pal, bool use)
+    {
+        Repository.Current.Overrides.TryGetValue(pal.Uid, out var previous);
+        Repository.SetOverride(pal.Uid, (previous ?? new PalOverride()) with { IsExcluded = use ? null : true });
+    }
+
+    private Task AddPalAsync() =>
+        GuardUnsavedAsync(() =>
+        {
+            _addingNew = true;
+            _addSession++;
+            _editingUid = null;
+            _editorOpen = true;
+            _filterOpen = false;
+            _editorDirty = false;
+        });
+
+    private Task OpenEditAsync(OwnedPal pal)
+    {
+        if (!_addingNew && _editorOpen && string.Equals(_editingUid, pal.Uid, StringComparison.Ordinal))
+            return Task.CompletedTask;
+
+        return GuardUnsavedAsync(() =>
+        {
+            _addingNew = false;
+            _editingUid = pal.Uid;
+            _editorOpen = true;
+            _filterOpen = false;
+            _editorDirty = false;
+        });
+    }
+
+    private Task RequestCloseEditorAsync() =>
+        GuardUnsavedAsync(CloseEditorImmediate);
+
+    private void CloseEditorImmediate()
+    {
+        _editorOpen = false;
+        _addingNew = false;
+        _editorDirty = false;
+    }
+
+    private void OnEditorSaved(string savedUid)
+    {
+        _addingNew = false;
+        _editingUid = savedUid;
+        _editorDirty = false;
+        Apply();
+    }
+
+    private void OnEditorRemoved()
+    {
+        CloseEditorImmediate();
+        _editingUid = null;
+        Apply();
+    }
+
+    private async Task GuardUnsavedAsync(Action nextAction)
+    {
+        if (!_editorOpen || !(_editor?.HasUnsavedChanges ?? _editorDirty))
+        {
+            nextAction();
+            return;
+        }
+
+        _pendingAction = nextAction;
+        await JS.InvokeVoidAsync("pbShowModal", _unsavedDialog);
+    }
+
+    private async Task HandleBeforeInternalNavigationAsync(LocationChangingContext context)
+    {
+        if (_allowNextNavigation)
+        {
+            _allowNextNavigation = false;
+            return;
+        }
+
+        if (!_editorOpen || !(_editor?.HasUnsavedChanges ?? _editorDirty))
+            return;
+
+        context.PreventNavigation();
+        var target = context.TargetLocation;
+        _pendingAction = () =>
+        {
+            _allowNextNavigation = true;
+            Navigation.NavigateTo(target);
+        };
+        await JS.InvokeVoidAsync("pbShowModal", _unsavedDialog);
+    }
+
+    private async Task KeepEditingAsync()
+    {
+        _pendingAction = null;
+        await JS.InvokeVoidAsync("pbCloseModal", _unsavedDialog);
+    }
+
+    private async Task DiscardPendingAsync()
+    {
+        await JS.InvokeVoidAsync("pbCloseModal", _unsavedDialog);
+        _editor?.ResetDraft();
+        _editorDirty = false;
+        var action = _pendingAction;
+        _pendingAction = null;
+        action?.Invoke();
+    }
+
+    private async Task SaveAndContinueAsync()
+    {
+        await JS.InvokeVoidAsync("pbCloseModal", _unsavedDialog);
+        if (_editor != null && !_editor.TrySave())
+        {
+            _pendingAction = null;
+            return;
+        }
+        _editorDirty = false;
+        var action = _pendingAction;
+        _pendingAction = null;
+        action?.Invoke();
+    }
+
+    private void PlanInPlanner(OwnedPal pal) =>
+        Navigation.NavigateTo($"planner?target={Uri.EscapeDataString(pal.SpeciesId)}");
+
+    private void OpenInPaldex(OwnedPal pal) =>
+        Navigation.NavigateTo(Links.Pal(pal.SpeciesId));
+
+    private async Task AskRemoveManualAsync(OwnedPal pal)
+    {
+        _removeTarget = pal;
+        await JS.InvokeVoidAsync("pbShowModal", _removeDialog);
+    }
+
+    private async Task CancelRemoveDialogAsync()
+    {
+        _removeTarget = null;
+        await JS.InvokeVoidAsync("pbCloseModal", _removeDialog);
+    }
+
+    private async Task ConfirmRemoveDialogAsync()
+    {
+        var target = _removeTarget;
+        _removeTarget = null;
+        await JS.InvokeVoidAsync("pbCloseModal", _removeDialog);
+        if (target == null) return;
+        if (string.Equals(_editingUid, target.Uid, StringComparison.Ordinal))
+        {
+            CloseEditorImmediate();
+            _editingUid = null;
+        }
+        Repository.RemoveManual(target.Uid);
+    }
+
+    public override void Dispose()
+    {
+        Repository.Changed -= OnOwnedChanged;
+        Scope.Changed -= OnScopeChanged;
+        Sync.StatusesChanged -= OnSyncChanged;
+        Settings.Changed -= OnSettingsChanged;
+        base.Dispose();
+    }
+}

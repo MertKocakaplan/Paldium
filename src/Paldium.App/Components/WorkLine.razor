@@ -1,0 +1,73 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* Work suitability rows for SpeciesCard (.works / .wr) or inline strip for table cells. *@
+@if (CompactInline)
+{
+    var entries = OrderedWorks();
+    @if (entries.Count > 0)
+    {
+        <div class="@($"works-inline{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+            @foreach (var entry in entries)
+            {
+                <span class="wi-item" title="@($"{entry.Type.Names.Get(Lang)} {entry.Level}")">
+                    <img class="wi" src="@("gamedata/" + entry.Type.IconPath)" width="16" height="16" alt="@entry.Type.Names.Get(Lang)" />
+                    <span class="lvn">@entry.Level.ToString(CultureInfo.InvariantCulture)</span>
+                </span>
+            }
+        </div>
+    }
+}
+else
+{
+    var entries = OrderedWorks();
+    <div class="@($"works{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+        @if (entries.Count <= MaxRows)
+        {
+            @foreach (var entry in entries)
+            {
+                @RenderRow(entry)
+            }
+        }
+        else
+        {
+            var visibleCount = Math.Max(0, MaxRows - 1);
+            @for (var i = 0; i < visibleCount; i++)
+            {
+                @RenderRow(entries[i])
+            }
+            var extraCount = entries.Count - visibleCount;
+            var summary = string.Join(", ", entries.Skip(visibleCount).Select(e => $"{e.Type.Names.Get(Lang)} {e.Level.ToString(CultureInfo.InvariantCulture)}"));
+            <span class="wr more">@L["Paldex.MoreWorks", extraCount, summary]</span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
+    [Parameter] public int MaxRows { get; set; } = 4;
+    [Parameter] public bool CompactInline { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private RenderFragment RenderRow((WorkTypeInfo Type, int Level) entry) => __builder =>
+    {
+        var levelText = entry.Level.ToString(CultureInfo.InvariantCulture);
+        <span class="wr">
+            <img class="wi" src="@("gamedata/" + entry.Type.IconPath)" width="16" height="16" alt="" />
+            <span class="n">@entry.Type.Names.Get(Lang)</span>
+            <span class="lvn" aria-label="@L["Paldex.WorkLevelAria", levelText].Value">@levelText</span>
+        </span>
+    };
+
+    private List<(WorkTypeInfo Type, int Level)> OrderedWorks()
+    {
+        var list = new List<(WorkTypeInfo Type, int Level)>();
+        foreach (var type in Data.WorkTypes)
+        {
+            if (Pal.Work.TryGetValue(type.Id, out var level) && level > 0)
+                list.Add((type, level));
+        }
+
+        return list.OrderByDescending(x => x.Level).ToList();
+    }
+}

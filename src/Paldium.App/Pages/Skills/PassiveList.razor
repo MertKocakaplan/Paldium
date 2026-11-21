@@ -1,0 +1,406 @@
+@using Microsoft.JSInterop
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IJSRuntime JS
+
+@if (Results.Count == 0)
+{
+    <div class="tw">
+        @RenderEmpty()
+    </div>
+}
+else
+{
+    var hideTagsCol = InspectorOpen && !CompactNav;
+    var colCount = hideTagsCol ? 5 : 6;
+    <div class="tw" @onkeydown="OnContainerKeyDownAsync">
+        <table class="yt">
+            <colgroup>
+                @if (hideTagsCol)
+                {
+                    <col class="col-ynm-w" />
+                    <col />
+                    <col class="col-yrnd-w" />
+                    <col class="col-ysurg-w" />
+                    <col class="col-yown-w" />
+                }
+                else
+                {
+                    <col class="col-ynm" />
+                    <col />
+                    <col class="col-ytag" />
+                    <col class="col-yrnd" />
+                    <col class="col-ysurg" />
+                    <col class="col-yown" />
+                }
+            </colgroup>
+            <thead>
+                <tr>
+                    <th aria-sort="@AriaSortFor(PassiveSortKey.Name)">
+                        <button type="button" @onclick="() => ToggleColSort(PassiveSortKey.Name)">
+                            @L["Skills.ColName"]
+                            @if (Sort.Key == PassiveSortKey.Name)
+                            {
+                                <Icon Name="@(Sort.Descending ? "arrow-down" : "arrow-up")" Size="14" />
+                            }
+                            else
+                            {
+                                <Icon Name="sort" Size="14" />
+                            }
+                        </button>
+                    </th>
+                    <th>@L["Skills.ColDescription"]</th>
+                    @if (!hideTagsCol)
+                    {
+                        <th>@L["Skills.ColTags"]</th>
+                    }
+                    <th class="c" title="@L["Skills.RandomHeaderTip"].Value">@L["Skills.ColRandom"]</th>
+                    <th class="c">@L["Skills.ColSurgery"]</th>
+                    <th class="c">@L["Skills.ColOwned"]</th>
+                </tr>
+            </thead>
+            <tbody @ref="_tbody">
+                @if (Sort.Key == PassiveSortKey.Rank)
+                {
+                    @foreach (var grp in GroupByRank())
+                    {
+                        <tr class="@($"grp {SkillsText.RankGroupClass(grp.Rank)}")">
+                            <td colspan="@colCount">
+                                <span class="bar" aria-hidden="true"></span>
+                                @SkillsText.RankTitle(grp.Rank, L, Terms, withWorldTree: true)
+                                <span class="m">@grp.Items.Count.ToString(CultureInfo.InvariantCulture)</span>
+                            </td>
+                        </tr>
+                        @foreach (var p in grp.Items)
+                        {
+                            @RenderRow(p, hideTagsCol)
+                        }
+                    }
+                }
+                else
+                {
+                    @foreach (var p in Results)
+                    {
+                        @RenderRow(p, hideTagsCol)
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private ElementReference _tbody;
+
+    [Parameter, EditorRequired] public IReadOnlyList<PassiveSkill> Results { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, int> OwnedCounts { get; set; } = new Dictionary<string, int>();
+    [Parameter, EditorRequired] public IReadOnlySet<string> OwnedPassiveIds { get; set; } = new HashSet<string>();
+    [Parameter, EditorRequired] public PassiveFilter Filter { get; set; } = new();
+    [Parameter, EditorRequired] public bool OwnedOnly { get; set; }
+    [Parameter, EditorRequired] public PassiveSort Sort { get; set; } = new();
+    [Parameter] public EventCallback<PassiveSort> SortChanged { get; set; }
+    [Parameter] public string? SelectedPassiveId { get; set; }
+    [Parameter] public EventCallback<string?> OnSelectPassive { get; set; }
+    [Parameter] public bool InspectorOpen { get; set; }
+    [Parameter] public bool CompactNav { get; set; }
+    [Parameter] public EventCallback<PassiveFilter> FilterChanged { get; set; }
+    [Parameter] public EventCallback<bool> OwnedOnlyChanged { get; set; }
+    [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public EventCallback OnAllowAnyTag { get; set; }
+
+    private RenderFragment RenderRow(PassiveSkill p, bool hideTagsCol) => __builder =>
+    {
+        var selected = string.Equals(p.Id, SelectedPassiveId, StringComparison.OrdinalIgnoreCase);
+        var tabIdx = selected || (string.IsNullOrEmpty(SelectedPassiveId) && Results.Count > 0 && ReferenceEquals(p, Results[0])) ? 0 : -1;
+        var effects = SkillsText.SplitEffects(p.Descriptions.Get(Lang));
+        var visibleTags = SkillsText.VisibleTags(p).Select(t => SkillsText.TagLabel(t, L, Terms)).ToList();
+        var ownedCount = OwnedCounts.GetValueOrDefault(p.Id);
+        var capturedId = p.Id;
+
+        <tr data-row="true"
+            aria-selected="@(selected ? "true" : null)"
+            tabindex="@tabIdx"
+            @onclick="() => ToggleSelectAsync(capturedId)"
+            @onkeydown="e => OnRowKeyDownAsync(e, capturedId)">
+            <td>
+                <div class="pn">
+                    <RankGlyph Rank="@p.Rank" Size="16" />
+                    <span class="t">@p.Names.Get(Lang)</span>
+                    @if (p.MutationExclusive)
+                    {
+                        <span class="flag">@L["Skills.MutationOnlyShort"]</span>
+                    }
+                </div>
+            </td>
+            <td>
+                <div class="eff">
+                    @foreach (var line in effects.Take(3))
+                    {
+                        <span class="@(SkillsText.IsNegativeEffect(line) ? "neg" : null)">@line</span>
+                    }
+                    @if (effects.Length > 3)
+                    {
+                        <span class="more">@L["Skills.MoreEffects", effects.Length - 3]</span>
+                    }
+                </div>
+            </td>
+            @if (!hideTagsCol)
+            {
+                <td class="tags">@string.Join(", ", visibleTags)</td>
+            }
+            <td class="c">
+                @if (p.CanAppearRandomly)
+                {
+                    <span class="num" title="@L["Skills.RandomYes", p.RandomWeight].Value">@p.RandomWeight.ToString(CultureInfo.InvariantCulture)</span>
+                }
+                else
+                {
+                    <span class="no" title="@L["Skills.RandomNo"].Value">—</span>
+                }
+            </td>
+            <td class="c">
+                @if (p.Surgery.Supported)
+                {
+                    <span title="@L["Skills.SurgeryYes"].Value"><Icon Name="check" Size="14" /></span>
+                    @if (p.Surgery.Cost > 0)
+                    {
+                        <span class="num">@SkillsText.FormatCost(p.Surgery.Cost, Lang)</span>
+                    }
+                }
+                else
+                {
+                    <span class="no" title="@L["Skills.SurgeryNo"].Value">—</span>
+                }
+            </td>
+            <td class="c">
+                @if (ownedCount > 0)
+                {
+                    <a class="ownl"
+                       href="@($"mypals?passive={Uri.EscapeDataString(p.Id)}")"
+                       title="@L["Skills.OwnedPals", ownedCount].Value"
+                       @onclick:stopPropagation="true"
+                       @onkeydown:stopPropagation="true">
+                        @ownedCount.ToString(CultureInfo.InvariantCulture)
+                    </a>
+                }
+                else
+                {
+                    <span class="no">0</span>
+                }
+            </td>
+        </tr>
+    };
+
+    private RenderFragment RenderEmpty() => __builder =>
+    {
+        var specs = BuildRemovalSpecs();
+        var clauses = specs.Select(s => new FilterClause<PassiveSkill>(s.Key, s.Predicate)).ToList();
+        var removalCounts = FilterRemovalHelper.ComputeRemovals(Data.Passives, clauses);
+        var removals = specs.Select((s, i) => new EmptyRemovalItem(
+            s.Key,
+            s.Label,
+            L["Skills.EmptyRemaining", removalCounts[i].RemainingCount].Value,
+            removalCounts[i].RemainingCount))
+            .ToList();
+
+        var reason = Filter.Tags.Count > 1 && Filter.TagsMatchAll
+            ? BuildTagAllReason()
+            : L["Empty.DefaultReason"].Value;
+
+        <EmptyResult Title="@L["Skills.EmptyTitle"].Value"
+                     Reason="@reason"
+                     Removals="@removals"
+                     OnRemove="key => RemoveClauseAsync(specs, key)"
+                     OnClearAll="OnClearAll">
+            <ExtraAction>
+                @if (Filter.Tags.Count > 1 && Filter.TagsMatchAll)
+                {
+                    <button type="button" class="btn2" @onclick="OnAllowAnyTag">@L["Skills.MatchAnyTag"]</button>
+                }
+            </ExtraAction>
+        </EmptyResult>
+    };
+
+    private string BuildTagAllReason()
+    {
+        var tagNames = Filter.Tags.Select(t => SkillsText.TagLabel(t, L, Terms).ToLower(CultureInfo.GetCultureInfo(Lang))).ToList();
+        var joined = string.Join(" · ", tagNames);
+        return L["Skills.EmptyAllTagsReason", joined].Value;
+    }
+
+    private sealed record PassiveClauseSpec(
+        string Key,
+        string Label,
+        Func<PassiveSkill, bool> Predicate,
+        Func<Task> RemoveAsync);
+
+    private List<PassiveClauseSpec> BuildRemovalSpecs()
+    {
+        var list = new List<PassiveClauseSpec>();
+        var f = Filter;
+
+        if (!string.IsNullOrWhiteSpace(f.Text))
+        {
+            var q = f.Text.Trim();
+            list.Add(new(
+                "text",
+                $"{L["Filters.Search"].Value}: {q}",
+                p => SkillQuery.Matches(p, new PassiveFilter { Text = q }),
+                () => FilterChanged.InvokeAsync(f with { Text = null })));
+        }
+
+        if (f.Ranks.Count > 0)
+        {
+            var rankText = string.Join(", ", f.Ranks.Select(r => r < 0 ? $"−{-r}" : r.ToString(CultureInfo.InvariantCulture)));
+            list.Add(new(
+                "ranks",
+                $"{L["Skills.ColRank"].Value}: {rankText}",
+                p => f.Ranks.Contains(p.Rank),
+                () => FilterChanged.InvokeAsync(f with { Ranks = [] })));
+        }
+
+        foreach (var tag in f.Tags)
+        {
+            var captured = tag;
+            var label = $"{L["Skills.TagPrefix"].Value}: {SkillsText.TagLabel(captured, L, Terms)}";
+            list.Add(new(
+                "tag:" + captured,
+                label,
+                p => p.Tags.Contains(captured, StringComparer.OrdinalIgnoreCase),
+                () =>
+                {
+                    var next = f.Tags.Where(t => !string.Equals(t, captured, StringComparison.OrdinalIgnoreCase)).ToList();
+                    return FilterChanged.InvokeAsync(f with { Tags = next });
+                }));
+        }
+
+        if (f.CanAppearRandomly is { } rnd)
+        {
+            list.Add(new(
+                "random",
+                L["Skills.FilterRandom"].Value,
+                p => p.CanAppearRandomly == rnd,
+                () => FilterChanged.InvokeAsync(f with { CanAppearRandomly = null })));
+        }
+
+        if (f.SurgerySupported is { } surg)
+        {
+            list.Add(new(
+                "surgery",
+                L["Skills.FilterSurgery"].Value,
+                p => p.Surgery.Supported == surg,
+                () => FilterChanged.InvokeAsync(f with { SurgerySupported = null })));
+        }
+
+        if (f.MutationOnly is { } mut)
+        {
+            list.Add(new(
+                "mutation",
+                L["Skills.MutationOnlyShort"].Value,
+                p => p.MutationExclusive == mut,
+                () => FilterChanged.InvokeAsync(f with { MutationOnly = null })));
+        }
+
+        if (OwnedOnly)
+        {
+            list.Add(new(
+                "owned",
+                L["Skills.FilterOwned"].Value,
+                p => OwnedPassiveIds.Contains(p.Id),
+                () => OwnedOnlyChanged.InvokeAsync(false)));
+        }
+
+        return list;
+    }
+
+    private static Task RemoveClauseAsync(List<PassiveClauseSpec> specs, string key) =>
+        specs.FirstOrDefault(s => s.Key == key)?.RemoveAsync() ?? Task.CompletedTask;
+
+    private List<(int Rank, List<PassiveSkill> Items)> GroupByRank()
+    {
+        var groups = new List<(int Rank, List<PassiveSkill> Items)>();
+        foreach (var p in Results)
+        {
+            if (groups.Count == 0 || groups[^1].Rank != p.Rank)
+                groups.Add((p.Rank, []));
+            groups[^1].Items.Add(p);
+        }
+        return groups;
+    }
+
+    private Task ToggleSelectAsync(string id) =>
+        OnSelectPassive.InvokeAsync(
+            string.Equals(SelectedPassiveId, id, StringComparison.OrdinalIgnoreCase) ? null : id);
+
+    private string? AriaSortFor(PassiveSortKey key) => Sort.Key != key
+        ? null
+        : Sort.Descending ? "descending" : "ascending";
+
+    private Task ToggleColSort(PassiveSortKey key)
+    {
+        var next = Sort.Key == key
+            ? Sort with { Descending = !Sort.Descending }
+            : new PassiveSort { Key = key, Descending = key == PassiveSortKey.Rank };
+        return SortChanged.InvokeAsync(next);
+    }
+
+    private async Task OnContainerKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && !string.IsNullOrEmpty(SelectedPassiveId))
+            await OnSelectPassive.InvokeAsync(null);
+    }
+
+    private async Task OnRowKeyDownAsync(KeyboardEventArgs e, string id)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+                await OnSelectPassive.InvokeAsync(id);
+                break;
+            case "ArrowDown":
+                await MoveSiblingAsync(1, id);
+                break;
+            case "ArrowUp":
+                await MoveSiblingAsync(-1, id);
+                break;
+            case "Escape":
+                if (!string.IsNullOrEmpty(SelectedPassiveId))
+                    await OnSelectPassive.InvokeAsync(null);
+                break;
+        }
+    }
+
+    private async Task MoveSiblingAsync(int delta, string currentId)
+    {
+        try { await JS.InvokeVoidAsync("pbFocusSiblingRow", _tbody, delta); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+
+        if (string.IsNullOrEmpty(SelectedPassiveId)) return;
+        var idx = -1;
+        for (var i = 0; i < Results.Count; i++)
+        {
+            if (string.Equals(Results[i].Id, SelectedPassiveId, StringComparison.OrdinalIgnoreCase))
+            {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0)
+        {
+            for (var i = 0; i < Results.Count; i++)
+            {
+                if (string.Equals(Results[i].Id, currentId, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+        }
+        if (idx < 0) return;
+        var nextIdx = Math.Clamp(idx + delta, 0, Results.Count - 1);
+        if (nextIdx != idx)
+            await OnSelectPassive.InvokeAsync(Results[nextIdx].Id);
+    }
+}

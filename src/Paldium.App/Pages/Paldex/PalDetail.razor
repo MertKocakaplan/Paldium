@@ -1,0 +1,717 @@
+@using System.Globalization
+@using System.Net
+@using System.Text
+@using System.Text.RegularExpressions
+@using Microsoft.JSInterop
+@using Paldium.Core.Breeding
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@using Paldium.Core.Text
+@implements IAsyncDisposable
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IBreedingCalculator Breeding
+@inject NavigationManager Navigation
+@inject OwnedScopeService Scope
+@inject IJSRuntime JS
+
+@{
+    var elements = ResolveElements();
+    var workRows = Data.WorkTypes
+        .Select((type, order) => (Type: type, Order: order, Level: Pal.Work.TryGetValue(type.Id, out var lv) ? lv : 0))
+        .Where(x => x.Level > 0)
+        .OrderByDescending(x => x.Level)
+        .ThenBy(x => x.Order)
+        .ToList();
+    var hasLearnset = Pal.AttackLearnset.Count > 0;
+    var hasDrops = Pal.Drops.Count > 0;
+    var sections = BuildSections(hasLearnset, hasDrops);
+    if (!sections.Any(s => s.Id == _activeSection))
+        _activeSection = "genel";
+}
+
+<div class="@($"dx {PrimaryElementClass()}")">
+    <h1 class="sr">@($"{L["Nav.Paldex"].Value} · {Pal.DisplayName(Lang)}")</h1>
+
+    <div class="dhead">
+        <button type="button" class="btn2" @onclick="OnClose">
+            <Icon Name="back" Size="14" />@L["Nav.Paldex"]
+        </button>
+
+        <span class="pn">
+            <button type="button"
+                    class="ib2"
+                    disabled="@(PrevPal == null)"
+                    aria-label="@(PrevPal != null ? L["Detail.PrevPal", PrevPal.DisplayName(Lang)].Value : L["Nav.Paldex"].Value)"
+                    @onclick="GoPrev">‹</button>
+            @if (PrevPal != null)
+            {
+                <span class="num">#@PrevPal.DexLabel</span>
+            }
+            <span class="cur"><b>@Pal.DisplayName(Lang)</b> <span class="num">#@Pal.DexLabel</span></span>
+            @if (NextPal != null)
+            {
+                <span class="num">#@NextPal.DexLabel</span>
+            }
+            <button type="button"
+                    class="ib2"
+                    disabled="@(NextPal == null)"
+                    aria-label="@(NextPal != null ? L["Detail.NextPal", NextPal.DisplayName(Lang)].Value : L["Nav.Paldex"].Value)"
+                    @onclick="GoNext">›</button>
+        </span>
+
+        <span class="sp"></span>
+        <button type="button" class="btn2" @onclick="OpenCalculator">@L["Detail.ParentsInCalculator"]</button>
+        <button type="button" class="save" @onclick="OpenPlanner">@L["Detail.GeneratePlan"]</button>
+    </div>
+
+    <div class="dbody">
+        <aside class="hero">
+            <div class="@HeroCardClass(elements)" aria-label="@HeroCardAria(elements)">
+                <div class="ctop">
+                    <span class="t"><span class="nm">@Pal.DisplayName(Lang)</span></span>
+                    <OwnedCountBadge Stats="@_ownedStats" />
+                </div>
+                <div class="art">
+                    <span class="no">#@Pal.DexLabel</span>
+                    @if (elements.Count > 0)
+                    {
+                        <span class="tr">
+                            <span class="els">
+                                @foreach (var el in elements)
+                                {
+                                    <img src="@("gamedata/" + el.IconPath)" width="18" height="18" alt="@el.Names.Get(Lang)" title="@el.Names.Get(Lang)" />
+                                }
+                            </span>
+                        </span>
+                    }
+                    <img class="pal" src="@("gamedata/" + Pal.IconPath)" width="132" height="132" alt="" />
+                </div>
+                <div class="ivband">
+                    <span>@L["Detail.Rarity"]<b>@Pal.Rarity.ToString(CultureInfo.InvariantCulture)</b></span>
+                    <span>@L["Paldex.StatSizeShort"]<b>@Pal.Size</b></span>
+                    <span>@L["Detail.Price"]<b>@Pal.Price.ToString("N0", CultureInfo.GetCultureInfo(Lang))</b></span>
+                </div>
+            </div>
+
+            <section class="mine" aria-labelledby="mine-h">
+                <h2 id="mine-h">@L["Detail.MineTitle"] <span class="m">@_ownedCopies.Count.ToString(CultureInfo.InvariantCulture)</span></h2>
+                @if (_ownedCopies.Count == 0)
+                {
+                    <p class="h">@L["Detail.MineEmpty"]</p>
+                }
+                else
+                {
+                    @foreach (var copy in _ownedCopies.Take(5))
+                    {
+                        <div class="mrow">
+                            <span class="pin"><Icon Name="@PlaceIcon(copy.Location.Kind)" Size="16" /></span>
+                            <span>
+                                <b>@CopyPlaceTitle(copy)</b>
+                                @CopySummary(copy)
+                            </span>
+                            <a class="ib2" href="@Links.OwnedPal(copy.SelectionKey)" aria-label="@L["Detail.OpenInMyPals"].Value">
+                                <Icon Name="arrow-right" Size="14" />
+                            </a>
+                        </div>
+                    }
+                    <p class="h">
+                        @L["Detail.MineHint"]
+                        @if (_ownedCopies.Count > 5)
+                        {
+                            <text> <a class="link" href="@($"mypals?species={Uri.EscapeDataString(Pal.Id)}")">@L["Detail.OwnedLink"]</a></text>
+                        }
+                    </p>
+                }
+            </section>
+        </aside>
+
+        <div class="dmain" @ref="_dmainRef">
+            <nav class="anch" aria-label="@L["Detail.InThisPage"].Value">
+                @foreach (var sec in sections)
+                {
+                    <a href="@($"paldex#{sec.Id}")"
+                       aria-current="@(_activeSection == sec.Id ? "true" : null)"
+                       @onclick="@(() => ScrollToSection(sec.Id))"
+                       @onclick:preventDefault="true">@sec.Label</a>
+                }
+            </nav>
+
+            <div class="cols">
+                <div class="col">
+                    <section class="dsec" id="genel" aria-labelledby="g-h">
+                        <h2 id="g-h">@L["Detail.Stats"]</h2>
+                        <div class="sbar">
+                            <span class="k">@L["Detail.StatHpShort"]</span>
+                            <span class="bar"><i style="@StatPctVar(Pal.Stats.Hp, _maxHp)"></i></span>
+                            <b>@Pal.Stats.Hp.ToString(CultureInfo.InvariantCulture)</b>
+                        </div>
+                        <div class="sbar">
+                            <span class="k">@L["Detail.StatAttack"]</span>
+                            <span class="bar"><i style="@StatPctVar(Pal.Stats.Attack, _maxAtk)"></i></span>
+                            <b>@Pal.Stats.Attack.ToString(CultureInfo.InvariantCulture)</b>
+                        </div>
+                        <div class="sbar">
+                            <span class="k">@L["Detail.StatDefense"]</span>
+                            <span class="bar"><i style="@StatPctVar(Pal.Stats.Defense, _maxDef)"></i></span>
+                            <b>@Pal.Stats.Defense.ToString(CultureInfo.InvariantCulture)</b>
+                        </div>
+                        <div class="sgrid">
+                            <span class="k">@L["Detail.StatWalkShort"]</span><b>@Pal.Stats.WalkSpeed.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatRunShort"]</span><b>@Pal.Stats.RunSpeed.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatRideShort"]</span><b>@Pal.Stats.RideSprintSpeed.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatTransport"]</span><b>@Pal.Stats.TransportSpeed.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatStamina"]</span><b>@Pal.Stats.Stamina.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatFullStomachShort"]</span><b>@Pal.Stats.MaxFullStomach.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatFoodShort"]</span><b>@Pal.Stats.FoodAmount.ToString(CultureInfo.InvariantCulture)</b>
+                            <span class="k">@L["Detail.StatCraft"]</span><b>@Pal.Stats.CraftSpeed.ToString(CultureInfo.InvariantCulture)</b>
+                        </div>
+                    </section>
+
+                    <section class="dsec" aria-labelledby="w-h">
+                        <h2 id="w-h">@L["Detail.Work"]</h2>
+                        @if (workRows.Count == 0)
+                        {
+                            <p class="h">@L["Common.None"]</p>
+                        }
+                        else
+                        {
+                            @foreach (var w in workRows)
+                            {
+                                <div class="wrow">
+                                    <img class="wi" src="@("gamedata/" + w.Type!.IconPath)" width="20" height="20" alt="" />
+                                    <span class="n">@w.Type.Names.Get(Lang)</span>
+                                    <span class="wbar"><i style="@StatPctVar(w.Level, 8)"></i></span>
+                                    <b>@w.Level.ToString(CultureInfo.InvariantCulture)</b>
+                                </div>
+                            }
+                            <p class="h">
+                                @L["Detail.MaxWorkNote"]
+                                <a class="link" href="paldex#workers" @onclick="OnShowBestWorkers" @onclick:preventDefault="true">@L["Detail.SeeInBestWorkers"]</a>
+                            </p>
+                        }
+
+                        @if (Pal.Ranch.Count > 0)
+                        {
+                            var ranchItems = Paldium.App.Pages.GuidesParts.RanchModel.ItemsOf(Pal);
+                            var baseLevel = Pal.Work.TryGetValue("Farming", out var farming) && farming > 0 ? farming : 1;
+                            var atBase = (Pal.Ranch.FirstOrDefault(r => r.Rank == baseLevel) ?? Pal.Ranch.OrderBy(r => r.Rank).First());
+                            var atOne = atBase.Drops.OrderByDescending(d => d.Weight).Take(4).ToList();
+                            var later = ranchItems.Where(i => atOne.All(a => a.ItemId != i.ItemId)).ToList();
+                            <div class="ranchbox">
+                                <h3>@L["Ranch.InRanch"]</h3>
+                                <ul class="drops">
+                                    @if (ranchItems.Count == 1)
+                                    {
+                                        var only = atBase.Drops[0];
+                                        var top = Pal.Ranch.OrderBy(r => r.Rank).Last().Drops.First(d => d.ItemId == only.ItemId);
+                                        <li>
+                                            @if (only.IconPath != null) { <img src="@("gamedata/" + only.IconPath)" width="24" height="24" alt="" /> }
+                                            <span>@only.Names.Get(Lang)</span>
+                                            <span class="m">@L["Ranch.LevelRange", RanchRange(only), RanchRange(top), atBase.Rank]</span>
+                                        </li>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var drop in atOne)
+                                        {
+                                            <li>
+                                                @if (drop.IconPath != null) { <img src="@("gamedata/" + drop.IconPath)" width="24" height="24" alt="" /> }
+                                                <span>@drop.Names.Get(Lang)</span>
+                                                <span class="m">@Percent(drop.Chance) · @RanchRange(drop)</span>
+                                            </li>
+                                        }
+                                        @if (later.Count > 0)
+                                        {
+                                            <li><span class="m">@L["Ranch.MoreFromLevel", later.Count, later.Min(i => Paldium.App.Pages.GuidesParts.RanchModel.FirstLevel(Pal, i.ItemId) ?? 0)]</span></li>
+                                        }
+                                    }
+                                </ul>
+                                <a class="link" href="@("guides/agil?pal=" + Uri.EscapeDataString(Pal.Id))">@L["Ranch.OpenTable"]</a>
+                            </div>
+                        }
+                    </section>
+
+                    @if (Pal.PartnerSkill is { } partner)
+                    {
+                        <section class="dsec" aria-labelledby="ps-h">
+                            <h2 id="ps-h">@Term("PartnerSkill") · @partner.Names.Get(Lang)</h2>
+                            <div class="rk">
+                                <span class="l2">@L["Detail.CondenseRank"]</span>
+                                <Segmented TValue="int"
+                                           Class="mini"
+                                           Items="@RankItems()"
+                                           Value="@_partnerRank"
+                                           ValueChanged="r => _partnerRank = r"
+                                           AriaLabel="@L["Detail.CondenseRank"].Value" />
+                            </div>
+                            <p class="pd">@RenderPartnerSkill(partner, Lang, _partnerRank)</p>
+                        </section>
+                    }
+                </div>
+
+                <div class="col">
+                    <section class="dsec" id="breeding" aria-labelledby="b-h">
+                        <h2 id="b-h">@Term("Breeding")</h2>
+                        <div class="bfacts">
+                            <span class="k">@Term("BreedingPower")</span>
+                            <b>@Pal.BreedingPower.ToString(CultureInfo.InvariantCulture)</b>
+
+                            <span class="k">@Term("Egg")</span>
+                            <span>@Terms.EggName(Pal.Egg.Element, Pal.Egg.Size)</span>
+
+                            <span class="k">@L["Common.Gender"]</span>
+                            @if (Pal.MaleProbability is >= 0 and <= 1)
+                            {
+                                <div class="ratio-wrap">
+                                    <span class="ratio">
+                                        <i class="m" style="@PctVar(Pal.MaleProbability)"></i>
+                                        <i class="f" style="@PctVar(1.0 - Pal.MaleProbability)"></i>
+                                    </span>
+                                    <div class="ratiolab">
+                                        <span><GenderIcon Gender="Gender.Male" Size="12" />@Percent(Pal.MaleProbability)</span>
+                                        <span>@Percent(1.0 - Pal.MaleProbability)<GenderIcon Gender="Gender.Female" Size="12" /></span>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <span>@L["Common.Unknown"]</span>
+                            }
+
+                            @if (Pal.GuaranteedPassives.Count > 0)
+                            {
+                                <span class="k">@L["Detail.Passives"]</span>
+                                <span>@string.Join(", ", Pal.GuaranteedPassives.Select(PassiveLabel))</span>
+                            }
+                        </div>
+
+                        @if (Pal.BreedingFlags.Unbreedable)
+                        {
+                            <p class="h">@L["Obtain.Unbreedable", Term("Breeding")]</p>
+                        }
+                        else if (_pairCount > 0)
+                        {
+                            <h3>@L["Detail.PairCountOwnedFirst", _pairCount]</h3>
+                            <ol class="pairs">
+                                @foreach (var pair in _topPairs)
+                                {
+                                    var pa = Data.Pal(pair.A);
+                                    var pb = Data.Pal(pair.B);
+                                    var ownedA = IsOwnedSpecies(pair.A);
+                                    var ownedB = IsOwnedSpecies(pair.B);
+                                    <li>
+                                        <button type="button"
+                                                class="pc"
+                                                aria-label="@L["Detail.InspectParentAria", pa.DisplayName(Lang)].Value"
+                                                @onclick="() => SelectSpecies(pa)">
+                                            <img class="pal" src="@("gamedata/" + pa.IconPath)" width="28" height="28" alt="" />
+                                            <span>@pa.DisplayName(Lang)</span>
+                                            @if (ownedA)
+                                            {
+                                                <span class="ok" title="@L["Detail.OwnedTick"].Value"><Icon Name="check" Size="14" /></span>
+                                            }
+                                        </button>
+                                        <span class="op">+</span>
+                                        <button type="button"
+                                                class="pc"
+                                                aria-label="@L["Detail.InspectParentAria", pb.DisplayName(Lang)].Value"
+                                                @onclick="() => SelectSpecies(pb)">
+                                            <img class="pal" src="@("gamedata/" + pb.IconPath)" width="28" height="28" alt="" />
+                                            <span>@pb.DisplayName(Lang)</span>
+                                            @if (ownedB)
+                                            {
+                                                <span class="ok" title="@L["Detail.OwnedTick"].Value"><Icon Name="check" Size="14" /></span>
+                                            }
+                                        </button>
+                                    </li>
+                                }
+                            </ol>
+                            <p class="h">
+                                <a class="link" href="@($"calculator?target={Uri.EscapeDataString(Pal.Id)}")">
+                                    @L["Detail.SeeAllInCalculator", _pairCount]
+                                </a>
+                            </p>
+                        }
+                    </section>
+
+                    <ObtainSection Pal="Pal" />
+
+                    @if (hasLearnset)
+                    {
+                        <section class="dsec" id="yetenekler" aria-labelledby="a-h">
+                            <h2 id="a-h">@L["Detail.LearnedSkillsTitle"]</h2>
+                            <ul class="learn">
+                                @foreach (var entry in Pal.AttackLearnset.OrderBy(e => e.Level))
+                                {
+                                    var skill = FindSkill(entry.SkillId);
+                                    <li>
+                                        <span class="lvn">@($"{L["Detail.SkillLevel"].Value} {entry.Level.ToString(CultureInfo.InvariantCulture)}")</span>
+                                        <span>@(skill?.Names.Get(Lang) ?? entry.SkillId)</span>
+                                    </li>
+                                }
+                            </ul>
+                        </section>
+                    }
+
+                    @if (hasDrops)
+                    {
+                        <section class="dsec" id="dusenler" aria-labelledby="d-h">
+                            <h2 id="d-h">@L["Detail.Drops"]</h2>
+                            <ul class="drops">
+                                @foreach (var drop in Pal.Drops)
+                                {
+                                    <li>
+                                        <span>@drop.Names.Get(Lang)</span>
+                                        <span class="m">@(drop.Min == drop.Max ? drop.Min.ToString(CultureInfo.InvariantCulture) : $"{drop.Min}–{drop.Max}") · @Percent(drop.Rate)</span>
+                                    </li>
+                                }
+                            </ul>
+                        </section>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static string RanchRange(Paldium.Core.Domain.RanchDrop d) =>
+        d.Min == d.Max ? d.Min.ToString(CultureInfo.InvariantCulture) : $"{d.Min}–{d.Max}";
+
+    private static readonly Regex PlaceholderRegex = new(@"(?<pre>%)?\{(?<name>[A-Za-z0-9_]+)\}(?<post>%)?", RegexOptions.Compiled);
+
+    private ElementReference _dmainRef;
+    private DotNetObjectReference<PalDetail>? _dotNet;
+    private bool _attached;
+
+    private IReadOnlyList<ParentPair> _topPairs = [];
+    private int _pairCount;
+    private List<OwnedPal> _ownedCopies = [];
+    private OwnedSpeciesStats? _ownedStats;
+    private Dictionary<string, bool> _ownedSpecies = new(StringComparer.OrdinalIgnoreCase);
+
+    private int _maxHp = 1;
+    private int _maxAtk = 1;
+    private int _maxDef = 1;
+
+    private string? _loadedFor;
+    private string? _loadedLang;
+    private int _ownedVersion;
+    private int _loadedOwnedVersion = -1;
+    private int _partnerRank = PartnerSkillText.MinRank;
+    private string _activeSection = "genel";
+
+    [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
+    [Parameter] public PalSpecies? PrevPal { get; set; }
+    [Parameter] public PalSpecies? NextPal { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<PalSpecies> OnSelectPal { get; set; }
+    [Parameter] public EventCallback OnShowBestWorkers { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        if (Data.Pals.Count > 0)
+        {
+            _maxHp = Math.Max(1, Data.Pals.Max(p => p.Stats.Hp));
+            _maxAtk = Math.Max(1, Data.Pals.Max(p => p.Stats.Attack));
+            _maxDef = Math.Max(1, Data.Pals.Max(p => p.Stats.Defense));
+        }
+        Scope.Changed += OnOwnedChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        var palChanged = _loadedFor != Pal.Id;
+        var langChanged = _loadedLang != Lang;
+        var ownedChanged = _loadedOwnedVersion != _ownedVersion;
+        if (!palChanged && !langChanged && !ownedChanged) return;
+
+        if (palChanged)
+        {
+            _partnerRank = PartnerSkillText.MinRank;
+            _activeSection = "genel";
+        }
+
+        _loadedFor = Pal.Id;
+        _loadedLang = Lang;
+        _loadedOwnedVersion = _ownedVersion;
+
+        RefreshOwned();
+        RefreshPairs();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_attached) return;
+        _attached = true;
+        _dotNet ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("pbDetailNav.attach", _dmainRef, _dotNet);
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    private void OnOwnedChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        _ownedVersion++;
+        RefreshOwned();
+        RefreshPairs();
+        _loadedOwnedVersion = _ownedVersion;
+        StateHasChanged();
+    });
+
+    private void RefreshOwned()
+    {
+        var scoped = Scope.ScopedPals;
+        _ownedSpecies = scoped
+            .GroupBy(p => p.SpeciesId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, _ => true, StringComparer.OrdinalIgnoreCase);
+
+        _ownedCopies = scoped
+            .Where(p => string.Equals(p.SpeciesId, Pal.Id, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => p.Level)
+            .ThenBy(p => p.Location.Kind)
+            .ToList();
+
+        _ownedStats = OwnedSpeciesStats.Compute(_ownedCopies).GetValueOrDefault(Pal.Id);
+    }
+
+    private void RefreshPairs()
+    {
+        var all = Breeding.GetParents(Pal.Id);
+        _pairCount = all.Count;
+        _topPairs = PalQuery.RankParentPairs(Data, Pal, all, Lang)
+            .OrderByDescending(p => (IsOwnedSpecies(p.A) ? 1 : 0) + (IsOwnedSpecies(p.B) ? 1 : 0))
+            .ThenBy(p => string.Equals(p.A, p.B, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .Take(6)
+            .ToList();
+    }
+
+    private bool IsOwnedSpecies(string speciesId) =>
+        _ownedSpecies.TryGetValue(speciesId, out var owned) && owned;
+
+    private IReadOnlyList<(string Id, string Label)> BuildSections(bool hasLearnset, bool hasDrops)
+    {
+        var list = new List<(string, string)>(5)
+        {
+            ("genel", L["Detail.AnchorGeneral"].Value),
+            ("breeding", Term("Breeding")),
+            ("nerede", L["Detail.AnchorWhere"].Value),
+        };
+        if (hasLearnset) list.Add(("yetenekler", L["Detail.AnchorSkills"].Value));
+        if (hasDrops) list.Add(("dusenler", L["Detail.AnchorDrops"].Value));
+        return list;
+    }
+
+    private async Task GoPrev()
+    {
+        if (PrevPal != null) await SelectSpecies(PrevPal);
+    }
+
+    private async Task GoNext()
+    {
+        if (NextPal != null) await SelectSpecies(NextPal);
+    }
+
+    private async Task SelectSpecies(PalSpecies pal)
+    {
+        await OnSelectPal.InvokeAsync(pal);
+        try { await JS.InvokeVoidAsync("pbDetailNav.scrollTopAll"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task ScrollToSection(string id)
+    {
+        _activeSection = id;
+        try { await JS.InvokeVoidAsync("pbDetailNav.scrollTo", _dmainRef, id); }
+        catch (JSDisconnectedException) { }
+    }
+
+    [JSInvokable]
+    public async Task OnShortcutPrev() => await GoPrev();
+
+    [JSInvokable]
+    public async Task OnShortcutNext() => await GoNext();
+
+    [JSInvokable]
+    public async Task OnShortcutClose() => await OnClose.InvokeAsync();
+
+    [JSInvokable]
+    public void OnActiveSectionChanged(string sectionId)
+    {
+        if (_activeSection == sectionId) return;
+        _activeSection = sectionId;
+        StateHasChanged();
+    }
+
+    private IReadOnlyList<ElementInfo> ResolveElements() =>
+        Pal.Elements
+            .Select(id => Data.Elements.FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            .OfType<ElementInfo>()
+            .ToList();
+
+    private string PrimaryElementClass() =>
+        Pal.Elements.Count > 0 ? $"el-{Pal.Elements[0].ToLowerInvariant()}" : "el-earth";
+
+    private string HeroCardClass(IReadOnlyList<ElementInfo> elements)
+    {
+        var first = Pal.Elements.Count > 0 ? Pal.Elements[0].ToLowerInvariant() : "normal";
+        var second = Pal.Elements.Count > 1 ? Pal.Elements[1].ToLowerInvariant() : first;
+        return $"card sp big el-{first} el2-{second}";
+    }
+
+    private string HeroCardAria(IReadOnlyList<ElementInfo> elements)
+    {
+        if (elements.Count == 0)
+            return L["Paldex.CardAria", Pal.DisplayName(Lang), Pal.DexLabel, string.Empty].Value.TrimEnd(' ', ',');
+        return L["Detail.CardAria", Pal.DisplayName(Lang), Pal.DexLabel, string.Join(", ", elements.Select(e => e.Names.Get(Lang)))].Value;
+    }
+
+    private static string PlaceIcon(LocationKind kind) => kind switch
+    {
+        LocationKind.Party => "list",
+        LocationKind.Base => "pin",
+        _ => "shelf",
+    };
+
+    private string CopyPlaceTitle(OwnedPal copy)
+    {
+        if (!string.IsNullOrWhiteSpace(copy.Nickname)
+            && !string.Equals(copy.Nickname, Pal.DisplayName(Lang), StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{LocationText.ShortPlace(copy, Terms, L)} · {copy.Nickname}";
+        }
+        return LocationText.Format(copy, Terms, L);
+    }
+
+    private string CopySummary(OwnedPal copy)
+    {
+        var parts = new List<string>(3)
+        {
+            $"{L["MyPals.ColLevel"].Value} {copy.Level.ToString(CultureInfo.InvariantCulture)}",
+            copy.Gender switch
+            {
+                Gender.Male => "♂",
+                Gender.Female => "♀",
+                _ => "?",
+            },
+        };
+        if (copy.Passives.Count > 0)
+            parts.Add(string.Join(", ", copy.Passives.Select(PassiveLabel)));
+        return string.Join(" · ", parts);
+    }
+
+    private string PassiveLabel(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private ActiveSkill? FindSkill(string id)
+    {
+        try { return Data.Active(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private static IReadOnlyList<SegmentedItem<int>> RankItems() =>
+    [
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3"),
+        new(4, "4"),
+        new(5, "5"),
+    ];
+
+    private static string StatPctVar(int value, int max)
+    {
+        var pct = Math.Clamp(Math.Round(value * 100.0 / Math.Max(1, max), MidpointRounding.AwayFromZero), 0, 100);
+        return $"--pct:{pct.ToString("0", CultureInfo.InvariantCulture)}%";
+    }
+
+    private static string PctVar(double ratio)
+    {
+        var pct = Math.Clamp(Math.Round(ratio * 100.0, MidpointRounding.AwayFromZero), 0, 100);
+        return $"--pct:{pct.ToString("0", CultureInfo.InvariantCulture)}%";
+    }
+
+    private string Percent(double value) => value.ToString("P0", CultureInfo.GetCultureInfo(Lang));
+
+    private void OpenPlanner() => Navigation.NavigateTo($"planner?target={Uri.EscapeDataString(Pal.Id)}");
+
+    private void OpenCalculator() => Navigation.NavigateTo($"calculator?target={Uri.EscapeDataString(Pal.Id)}");
+
+    private static MarkupString RenderPartnerSkill(PartnerSkillInfo skill, string lang, int rank)
+    {
+        var index = Math.Clamp(rank, PartnerSkillText.MinRank, PartnerSkillText.MaxRank) - 1;
+        var template = skill.Descriptions.Get(lang);
+        var sb = new StringBuilder(template.Length + 32);
+        var cursor = 0;
+
+        foreach (Match m in PlaceholderRegex.Matches(template))
+        {
+            if (m.Index > cursor)
+                sb.Append(WebUtility.HtmlEncode(template[cursor..m.Index]));
+
+            var pre = m.Groups["pre"].Value;
+            var name = m.Groups["name"].Value;
+            var post = m.Groups["post"].Value;
+
+            if (skill.NumbersByRank.TryGetValue(name, out var numbers) && index < numbers.Count && numbers[index] is { } number)
+            {
+                var formatted = Math.Round(number, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture);
+                sb.Append("<b class=\"pv\">")
+                  .Append(WebUtility.HtmlEncode(pre))
+                  .Append(WebUtility.HtmlEncode(formatted))
+                  .Append(WebUtility.HtmlEncode(post))
+                  .Append("</b>");
+            }
+            else if (TryLanguageText(skill.TextsByRank, name, lang, out var texts) && index < texts.Count && texts[index] is { } replacement)
+            {
+                sb.Append(WebUtility.HtmlEncode(pre))
+                  .Append(WebUtility.HtmlEncode(replacement))
+                  .Append(WebUtility.HtmlEncode(post));
+            }
+            else
+            {
+                sb.Append(WebUtility.HtmlEncode(m.Value));
+            }
+
+            cursor = m.Index + m.Length;
+        }
+
+        if (cursor < template.Length)
+            sb.Append(WebUtility.HtmlEncode(template[cursor..]));
+
+        var cleaned = Regex.Replace(sb.ToString(), @"[ \t]{2,}", " ").Trim();
+        return new MarkupString(cleaned);
+    }
+
+    private static bool TryLanguageText(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string?>>> dict,
+        string name,
+        string lang,
+        out IReadOnlyList<string?> texts)
+    {
+        texts = [];
+        if (!dict.TryGetValue(name, out var perLang)) return false;
+        if (perLang.TryGetValue(lang, out texts!)) return true;
+        var dash = lang.IndexOf('-');
+        if (dash > 0 && perLang.TryGetValue(lang[..dash], out texts!)) return true;
+        return perLang.TryGetValue("en", out texts!);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Scope.Changed -= OnOwnedChanged;
+        if (_attached)
+        {
+            try { await JS.InvokeVoidAsync("pbDetailNav.detach"); }
+            catch (JSDisconnectedException) { }
+        }
+        _dotNet?.Dispose();
+    }
+}

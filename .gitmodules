@@ -1,0 +1,3 @@
+[submodule "external/palcalc"]
+	path = external/palcalc
+	url = https://github.com/tylercamp/palcalc

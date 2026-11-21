@@ -1,0 +1,233 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@using Paldium.Import.Sync
+@inject AppState State
+@inject IServiceProvider Services
+@inject LanguageService Language
+@inject GuideStateService GuideState
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Strings> L
+@inject UpdateService Updates
+@inject SettingsStore Settings
+@inject ModInstallService ModInstaller
+
+<a href="#icerik" class="skip-link" @onclick="SkipToContent" @onclick:preventDefault="true">@L["Layout.SkipToContent"]</a>
+
+<CascadingValue Name="CompactNav" Value="_compact">
+    <div class="@("app-shell" + (IsReading() ? " reading" : ""))">
+        <header class="tb">
+            <span class="brand">
+                <Icon Name="egg" Size="18" />
+                <span class="nm">Paldium</span>
+            </span>
+            <PageNav Disabled="@(!State.IsReady)" />
+            <span class="sp"></span>
+            @if (State.IsReady)
+            {
+                <SyncStatusBadge />
+            }
+            @if (Updates.Progress.Phase == UpdatePhase.Downloading || Updates.Available != null)
+            {
+                var downloading = Updates.Progress.Phase == UpdatePhase.Downloading;
+                <button type="button" class="updbadge" @onclick="Updates.OpenDialog"
+                        aria-label="@(downloading ? L["Update.BadgeDownloading", Updates.Progress.Percent].Value : L["Update.Badge", Updates.Available!.Version].Value)">
+                    <Icon Name="arrow-up" Size="14" />
+                    @if (downloading)
+                    {
+                        <span class="dl num">@L["Update.BadgeDownloading", Updates.Progress.Percent]</span>
+                    }
+                    else
+                    {
+                        <span class="pre">@L["Update.BadgeLabel"] · </span><b class="num">@Updates.Available!.Version</b>
+                    }
+                </button>
+            }
+            <button type="button"
+                    class="ib"
+                    disabled="@IsRefreshDisabled()"
+                    title="@L["Sync.RefreshLabel"].Value"
+                    aria-label="@L["Sync.RefreshLabel"].Value"
+                    @onclick="RefreshAsync">
+                <Icon Name="refresh" Size="16" />
+            </button>
+            <button type="button"
+                    class="lang"
+                    title="@L["Layout.LanguageLabel", LanguageName()].Value"
+                    aria-label="@L["Layout.LanguageLabel", LanguageName()].Value"
+                    @onclick="ToggleLanguage">
+                @Language.Current.ToUpperInvariant()
+            </button>
+            <a href="settings"
+               class="@($"ib{(IsSettingsActive() ? " on" : "")}")"
+               aria-current="@(IsSettingsActive() ? "page" : null)"
+               title="@L["Nav.Settings"].Value"
+               aria-label="@L["Nav.Settings"].Value">
+                <Icon Name="settings" Size="16" />
+            </a>
+        </header>
+        @if (_banner != null)
+        {
+            <div class="updnote" role="status">
+                <span>@_banner.Text</span>
+                @if (_banner.Href != null) { <a href="@_banner.Href" class="lnk" @onclick="() => _banner = null">@_banner.LinkText</a> }
+                <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="() => _banner = null"><Icon Name="x" Size="14" /></button>
+            </div>
+        }
+        <main id="icerik" class="page-body">
+            @Body
+        </main>
+        <UpdateDialog />
+    </div>
+</CascadingValue>
+
+@code {
+    private sealed record Banner(string Text, string? Href = null, string? LinkText = null);
+
+    private Banner? _banner;
+    private readonly CancellationTokenSource _updateLoop = new();
+    private bool _compact;
+    private bool _refreshing;
+    private DotNetObjectReference<MainLayout>? _self;
+    private IJSObjectReference? _watchHandle;
+    private ISyncService? _sync;
+
+    private string LanguageName() => Language.Current == "tr" ? "Türkçe" : "English";
+
+    // Reading mode of a guide: the shell hides its tabs and the sync badge (the bar keeps its height).
+    private bool IsReading() => GuideState.Reading && PageTab.IsPathActive(Navigation.ToBaseRelativePath(Navigation.Uri), "guides")
+        && Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').StartsWith("guides/", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsSettingsActive() => PageTab.IsPathActive(Navigation.ToBaseRelativePath(Navigation.Uri), "settings");
+
+    protected override void OnInitialized()
+    {
+        Language.Changed += OnLanguageChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        State.Changed += OnStateChanged;
+        GuideState.Changed += OnGuideStateChanged;
+        Updates.Changed += OnUpdateChanged;
+        HookSync();
+        ShowUpdateNotices();
+        _ = Updates.RunBackgroundAsync(_updateLoop.Token);
+    }
+
+    private void OnGuideStateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private void OnUpdateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    // After an update (T131): a failed update says so once; a successful one is announced once, the old backups are cleaned up, and the user is pointed at
+    // "Update the mod" when the package has a newer mod (the mod is never installed by itself: the game may be running).
+    private void ShowUpdateNotices()
+    {
+        var current = Updates.CurrentVersion;
+        var lastRun = Settings.Current.Update.LastRunVersion;
+        if (Updates.TakeLastError() != null)
+        {
+            _banner = new Banner(L["Update.Failed"].Value, "settings#veri", L["Settings.OpenLogs"].Value);
+        }
+        else if (UpdateVersion.TryParse(lastRun, out var before) && UpdateVersion.TryParse(current, out var now) && now.CompareTo(before) > 0)
+        {
+            var game = ModInstaller.FindGameFolder(Settings.Current.PalworldFolderPicked);
+            var modOutdated = game != null && ModInstaller.GetState(game) is ModInstallState.Outdated or ModInstallState.LegacyInstalled;
+            _banner = modOutdated
+                ? new Banner(L["Update.Done", current].Value, "settings#kaynak", L["Update.UpdateMod"].Value)
+                : new Banner(L["Update.Done", current].Value);
+            Updates.CleanUp(lastRun!);
+        }
+
+        if (lastRun != current) Settings.Update(s => s with { Update = s.Update with { LastRunVersion = current } });
+    }
+
+    private void HookSync()
+    {
+        if (!State.IsReady || _sync != null) return;
+        _sync = Services.GetService<ISyncService>();
+        if (_sync != null) _sync.StatusesChanged += OnSyncChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JS.InvokeVoidAsync("setDocumentLanguage", Language.Current);
+        _self = DotNetObjectReference.Create(this);
+        _watchHandle = await JS.InvokeAsync<IJSObjectReference>("pbWatchCompactNav", _self);
+    }
+
+    /// <summary>Called by the media query listener: true below 1200 px (compact mode).</summary>
+    [JSInvokable]
+    public void SetCompact(bool compact)
+    {
+        if (_compact == compact) return;
+        _compact = compact;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await JS.InvokeVoidAsync("pbFocusTitle", true);
+        });
+
+    private async Task SkipToContent() => await JS.InvokeVoidAsync("pbFocusTitle", false);
+
+    private void ToggleLanguage() => Language.Set(Language.Current == "tr" ? "en" : "tr");
+
+    private bool IsRefreshDisabled()
+    {
+        if (_refreshing) return true;
+        if (!State.IsReady) return false;
+        return _sync == null || _sync.Statuses.Count == 0;
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_refreshing) return;
+        if (!State.IsReady)
+        {
+            State.Reload();
+            return;
+        }
+        if (_sync == null) return;
+
+        _refreshing = true;
+        try
+        {
+            await _sync.RefreshNowAsync();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e) =>
+        InvokeAsync(() =>
+        {
+            HookSync();
+            StateHasChanged();
+        });
+
+    private void OnSyncChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private void OnLanguageChanged(object? sender, EventArgs e) =>
+        InvokeAsync(async () =>
+        {
+            await JS.InvokeVoidAsync("setDocumentLanguage", Language.Current);
+            StateHasChanged();
+        });
+
+    public void Dispose()
+    {
+        Language.Changed -= OnLanguageChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+        GuideState.Changed -= OnGuideStateChanged;
+        State.Changed -= OnStateChanged;
+        if (_sync != null) _sync.StatusesChanged -= OnSyncChanged;
+        _ = _watchHandle?.InvokeVoidAsync("dispose");
+        _self?.Dispose();
+    }
+}

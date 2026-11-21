@@ -1,0 +1,399 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Data
+@using Paldium.Core.Domain
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@if (_steps.Count > 0)
+{
+    var activeIdx = _currentIdx >= 0 ? _currentIdx : _steps.Count - 1;
+    var activeStep = _steps[activeIdx];
+    var leadParts = SplitPlaceholder(L["Plan.GlanceLead", "{0}"].Value, "{0}");
+
+    <div class="glance">
+        <div class="gtop">
+            <span class="chain2" aria-label="@L["Plan.GlanceChainAria"].Value">
+                @for (var i = 0; i < _steps.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        <span class="ln" aria-hidden="true"></span>
+                    }
+                    var pillCls = i == activeIdx && _currentIdx >= 0
+                        ? "s cur"
+                        : (Done.Contains(i) ? "s done" : "s");
+                    <span class="@pillCls">
+                        <Icon Name="egg" />
+                        <span>@SpeciesName(_steps[i].ChildSpeciesId)</span>
+                    </span>
+                }
+            </span>
+            <span>
+                @L["Plan.GlanceSummary",
+                    L["Plan.StepProgress", activeIdx + 1, _steps.Count].Value,
+                    SpeciesName(Plan.Root.SpeciesId),
+                    PlanIndex + 1,
+                    "~" + Eggs(Plan.ExpectedEggsTotal)]
+            </span>
+            <span class="sp"></span>
+            <button type="button" class="ghostb" @onclick="OnClose">
+                <Icon Name="x" Size="16" />
+                <span>@L["Plan.CloseGlance"]</span>
+            </button>
+        </div>
+
+        <div>
+            <h1>@L["Plan.BreedSpeciesAction", SpeciesName(activeStep.ChildSpeciesId)]</h1>
+            @if (_currentIdx >= 0)
+            {
+                <p class="lead">@leadParts.Before<b class="num">@Eggs(activeStep.ExpectedEggs)</b>@leadParts.After</p>
+            }
+            else
+            {
+                <p class="lead">@L["Plan.GlanceLeadAllDone"]</p>
+            }
+        </div>
+
+        <div class="gpair">
+            @{ var (inUseA, inUseB) = PlanText.ParentsInUse(Plan, activeStep, FlexChoices); }
+            @RenderParentCard(inUseA)
+            <span class="gop" aria-hidden="true">+</span>
+            @RenderParentCard(inUseB)
+            <span class="gop to">
+                <div class="eggn" aria-label="@L["Plan.ExpectedEggsAria", "~" + Eggs(activeStep.ExpectedEggs)].Value">
+                    <Icon Name="egg" />
+                    <span>@("~" + Eggs(activeStep.ExpectedEggs))</span>
+                </div>
+            </span>
+
+            <div class="gcard kid">
+                <div class="who">
+                    <PalIcon PalId="@activeStep.ChildSpeciesId" Size="56" />
+                    <div>
+                        <div class="t">
+                            <span>@SpeciesName(activeStep.ChildSpeciesId)</span>
+                            @if (activeStep.ChildGender == GenderReq.Any && !ReferenceEquals(activeStep, Plan.Root))
+                        {
+                            <span class="flexg" role="img" aria-label="@L["Plan.EitherGender"].Value">⚥</span>
+                        }
+                        else
+                        {
+                            <GenderIcon Gender="@ReqGender(activeStep.ChildGender)" Size="18" />
+                        }
+                        </div>
+                        <div class="m">@L["Plan.FromEgg"]</div>
+                    </div>
+                </div>
+                <p class="need">@RenderKeepInstruction(activeStep)</p>
+                @if (_currentIdx >= 0 && !ReferenceEquals(activeStep, Plan.Root))
+                {
+                    <button type="button" class="btn2" @onclick="() => OnOtherHatched.InvokeAsync(activeStep)">
+                        @L["Plan.Glance.OtherHatched", SpeciesName(activeStep.ChildSpeciesId)]
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="gfoot">
+            @if (_currentIdx >= 0 && activeStep.ChildGender == GenderReq.Any && !ReferenceEquals(activeStep, Plan.Root))
+            {
+                @* T105: the child can be either gender; the choice decides the next step's partner. *@
+                <span class="flexask" role="group" aria-label="@L["Plan.Flex.Which"].Value">
+                    <span class="k">@L["Plan.Flex.Which"]</span>
+                    <button type="button" class="gbig" @ref="_doneBtn" @onclick="() => OnCompleteFlexStep.InvokeAsync((_currentIdx, Gender.Male))">
+                        <GenderIcon Gender="Gender.Male" Size="18" /> <span>@L["Common.Male"]</span>
+                    </button>
+                    <button type="button" class="gbig" @onclick="() => OnCompleteFlexStep.InvokeAsync((_currentIdx, Gender.Female))">
+                        <GenderIcon Gender="Gender.Female" Size="18" /> <span>@L["Common.Female"]</span>
+                    </button>
+                </span>
+            }
+            else
+            {
+                <button type="button"
+                        class="@($"gbig{(_currentIdx < 0 ? " done-btn" : "")}")"
+                        @ref="_doneBtn"
+                        disabled="@(_currentIdx < 0)"
+                        @onclick="CompleteActiveStep">
+                    <Icon Name="check" Size="20" />
+                    <span>@(_currentIdx >= 0 ? L["Plan.GlanceStepDone"] : L["Plan.Completed"])</span>
+                </button>
+            }
+
+            @if (_currentIdx >= 0 && _currentIdx + 1 < _steps.Count)
+            {
+                var next = _steps[_currentIdx + 1];
+                <span class="m">
+                    <span>@L["Plan.GlanceThenLabel"]</span>
+                    <PalIcon PalId="@next.ParentA.SpeciesId" Size="26" />
+                    <b>@ParentDisplay(next.ParentA)</b>
+                    <GenderIcon Gender="@NodeGender(next.ParentA)" Size="14" />
+                    <span>+</span>
+                    <PalIcon PalId="@next.ParentB.SpeciesId" Size="26" />
+                    <b>@ParentDisplay(next.ParentB)</b>
+                    <GenderIcon Gender="@NodeGender(next.ParentB)" Size="14" />
+                    <span aria-hidden="true">→</span>
+                    <span>@SpeciesName(next.ChildSpeciesId)</span>
+                </span>
+            }
+            else if (_currentIdx >= 0)
+            {
+                <span class="m">@L["Plan.GlanceFinalStepHint"]</span>
+            }
+        </div>
+
+        <PlanChecklist Plan="@Plan"
+                       Done="@Done"
+                       OnToggleStep="@OnToggleStep"
+                       HeadingId="st-h-glance" />
+    </div>
+}
+
+@code {
+    private ElementReference _doneBtn;
+    private IReadOnlyList<BreedStep> _steps = [];
+    private int _currentIdx = -1;
+    private HashSet<string> _wanted = new(StringComparer.Ordinal);
+
+    [Parameter, EditorRequired] public BreedingPlan Plan { get; set; } = default!;
+    [Parameter] public int PlanIndex { get; set; }
+    [Parameter, EditorRequired] public IReadOnlySet<int> Done { get; set; } = new HashSet<int>();
+    [Parameter, EditorRequired] public IReadOnlyCollection<string> WantedPassives { get; set; } = Array.Empty<string>();
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnCompleteStep { get; set; }
+    [Parameter] public EventCallback<int> OnToggleStep { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, Gender> FlexChoices { get; set; } = new Dictionary<int, Gender>();
+    [Parameter] public EventCallback<(int Index, Gender Gender)> OnCompleteFlexStep { get; set; }
+    /// <summary>"Another Hoocrates hatched...": back to the full view with the node panel open on "Pick from My Pals" (T103).</summary>
+    [Parameter] public EventCallback<BreedStep> OnOtherHatched { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _steps = PlanText.StepsOf(Plan);
+        _currentIdx = PlanText.CurrentStepIndex(_steps, Done);
+        _wanted = new HashSet<string>(WantedPassives, StringComparer.Ordinal);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _steps.Count == 0) return;
+        try { await _doneBtn.FocusAsync(); }
+        catch { }
+    }
+
+    private Task CompleteActiveStep()
+    {
+        if (_currentIdx < 0) return Task.CompletedTask;
+        return OnCompleteStep.InvokeAsync(_currentIdx);
+    }
+
+    private RenderFragment RenderParentCard(PlanNode parent) => __builder =>
+    {
+        var gender = NodeGender(parent);
+        var passives = ParentPassives(parent);
+
+        <div class="gcard">
+            <div class="who">
+                <PalIcon PalId="@parent.SpeciesId" Size="56" />
+                <div>
+                    <div class="t">
+                        <span>@ParentDisplay(parent)</span>
+                        <GenderIcon Gender="@gender" Size="18" />
+                    </div>
+                    <div class="m">@RoleSubtitle(parent)</div>
+                </div>
+            </div>
+
+            @if (parent is OwnedLeaf owned)
+            {
+                var (container, pageText, slotText) = LocationText.ThreeLine(owned.Pal, Terms, L);
+                <div class="place">
+                    @if (Paldium.Core.Domain.PalLocation.IsPaged(owned.Pal.Location.Kind) && owned.Pal.Location.SlotIndex is { } slot and >= 0)
+                    {
+                        <BoxMap Slot="@slot" Large="true" />
+                    }
+                    else
+                    {
+                        <LocationTile Kind="@owned.Pal.Location.Kind" />
+                    }
+                    <span>
+                        <b>@container</b>
+                        @if (!string.IsNullOrEmpty(pageText))
+                        {
+                            <span class="tl">@pageText</span>
+                        }
+                        @if (!string.IsNullOrEmpty(slotText))
+                        {
+                            <span class="tl">@slotText</span>
+                        }
+                    </span>
+                </div>
+            }
+            else if (parent is BreedStep prevStep)
+            {
+                <div class="place">
+                    <LocationTile Kind="LocationKind.Unknown" />
+                    <span>
+                        <b>@L["Plan.WillHatch"]</b>
+                        <span class="tl">@ShortKeepHint(prevStep)</span>
+                    </span>
+                </div>
+            }
+            else if (parent is WildLeaf wild)
+            {
+                <div class="place">
+                    <LocationTile Kind="LocationKind.Unknown" />
+                    <span>
+                        <b>@PlanText.ObtainLabel(wild.ObtainMethod, L)</b>
+                        <span class="tl">@WildLevelText(wild)</span>
+                    </span>
+                </div>
+            }
+
+            @if (passives.Count > 0)
+            {
+                <ul aria-label="@L["Plan.PassivesListAria"].Value">
+                    @foreach (var pid in passives)
+                    {
+                        var rank = PassiveRank(pid);
+                        var isWant = _wanted.Contains(pid);
+                        var cls = isWant ? "want" : (rank < 0 ? "neg" : "other");
+                        <li class="@cls">
+                            <RankGlyph Rank="@rank" Size="16" />
+                            <span>@PassiveName(pid)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <ul aria-label="@L["Plan.PassivesListAria"].Value">
+                    <li class="other">@L["Plan.NoPassives"]</li>
+                </ul>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderKeepInstruction(BreedStep step) => __builder =>
+    {
+        var genderText = step.ChildGender switch
+        {
+            GenderReq.Male => L["Plan.GlanceGenderMale"].Value,
+            GenderReq.Female => L["Plan.GlanceGenderFemale"].Value,
+            _ => null,
+        };
+
+        if (step.TargetPassives.Count == 0)
+        {
+            var text = genderText != null
+                ? L["Plan.GlanceKeepGenderOnly", genderText].Value
+                : L["Plan.GlanceKeepAny"].Value;
+            @text
+            return;
+        }
+
+        const string token = "__PASSIVES__";
+        var pattern = genderText != null
+            ? L["Plan.GlanceKeepWithPassives", genderText, token].Value
+            : L["Plan.GlanceKeepPassivesAny", token].Value;
+        var (before, after) = SplitPlaceholder(pattern, token);
+
+        @before
+        for (var i = 0; i < step.TargetPassives.Count; i++)
+        {
+            if (i > 0)
+            {
+                <span>, </span>
+            }
+            <b>@PassiveName(step.TargetPassives[i])</b>
+        }
+        @after
+    };
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string PassiveName(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private int PassiveRank(string id)
+    {
+        try { return Data.Passive(id).Rank; }
+        catch { return 1; }
+    }
+
+    private string ParentDisplay(PlanNode n) => n switch
+    {
+        OwnedLeaf { Pal.Nickname: { } nick } => nick,
+        _ => SpeciesName(n.SpeciesId),
+    };
+
+    private string RoleSubtitle(PlanNode n) => n switch
+    {
+        OwnedLeaf => L["Plan.NodeOwned"].Value,
+        BreedStep s => L["Plan.NodeStepChild", PlanText.StepNumber(Plan, s)].Value,
+        WildLeaf => L["Plan.NodeWild"].Value,
+        _ => string.Empty,
+    };
+
+    private static IReadOnlyList<string> ParentPassives(PlanNode n) => n switch
+    {
+        OwnedLeaf o => o.Pal.Passives,
+        BreedStep s => s.TargetPassives,
+        _ => Array.Empty<string>(),
+    };
+
+    private static Gender? NodeGender(PlanNode n) => n switch
+    {
+        OwnedLeaf o => o.Pal.Gender,
+        _ => ReqGender(n.Gender),
+    };
+
+    private static Gender? ReqGender(GenderReq g) => g switch
+    {
+        GenderReq.Male => Gender.Male,
+        GenderReq.Female => Gender.Female,
+        _ => null,
+    };
+
+    private string ShortKeepHint(BreedStep step)
+    {
+        var gText = step.ChildGender switch
+        {
+            GenderReq.Male => L["Plan.KeepMale"].Value,
+            GenderReq.Female => L["Plan.KeepFemale"].Value,
+            _ => L["Plan.KeepAny"].Value,
+        };
+        return step.TargetPassives.Count > 0
+            ? L["Plan.KeepWithPassives", gText, step.TargetPassives.Count].Value
+            : L["Plan.KeepOnly", gText].Value;
+    }
+
+    private string WildLevelText(WildLeaf wild)
+    {
+        try
+        {
+            if (Data.Pal(wild.SpeciesId).WildLevel is { } wl)
+                return L["Plan.WildLevelRange", wl.Min, wl.Max].Value;
+        }
+        catch (KeyNotFoundException) { }
+        return L["Plan.WildObtainHint"].Value;
+    }
+
+    private string Eggs(double v) => v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private static (string Before, string After) SplitPlaceholder(string text, string placeholder)
+    {
+        var idx = text.IndexOf(placeholder, StringComparison.Ordinal);
+        return idx < 0
+            ? (text, string.Empty)
+            : (text[..idx], text[(idx + placeholder.Length)..]);
+    }
+}

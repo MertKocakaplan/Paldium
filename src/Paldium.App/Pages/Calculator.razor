@@ -1,0 +1,156 @@
+@page "/calculator"
+@using Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Breeding
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IBreedingCalculator Breeding
+@inject IOwnedPalRepository Repository
+@inject CalculatorStateService CalcState
+
+@{
+    var pair = CalcState.ResolvePair(Data, Breeding, Repository);
+    var showOddsSide = CalcState.Mode == CalculatorStateService.ModePair && pair.ValidOwnedChild != null;
+    var showMutationSide = CalcState.Mode == CalculatorStateService.ModeMutation;
+    var hasRightPanel = showOddsSide || showMutationSide;
+}
+
+<div class="b x h">
+    <div class="@($"work hw{(hasRightPanel ? " half2" : "")}")">
+        <div class="bench">
+            <h1 class="sr" tabindex="-1">@L["Nav.Calculator"]</h1>
+
+            <div class="plantabs" role="tablist" aria-label="@L["Nav.Calculator"].Value">
+                @for (var i = 0; i < ModeOrder.Length; i++)
+                {
+                    var idx = i;
+                    var m = ModeOrder[idx];
+                    var active = CalcState.Mode == m;
+                    <button type="button"
+                            @ref="_tabButtons[idx]"
+                            role="tab"
+                            class="pt"
+                            aria-selected="@(active ? "true" : "false")"
+                            tabindex="@(active ? 0 : -1)"
+                            @onclick="() => SelectMode(m)"
+                            @onkeydown="e => OnTabKeyDownAsync(e, idx)">
+                        <b>@TabTitle(m)</b>
+                        <span class="pt-sub">@TabSub(m)</span>
+                    </button>
+                }
+                <span class="sp"></span>
+                <a class="ghostb vt howto" href="@HowToHref()">
+                    <Icon Name="info" Size="16" />@L["Calculator.HowItWorks"]
+                </a>
+            </div>
+
+            @if (CalcState.Mode == CalculatorStateService.ModePair)
+            {
+                <PairToChild Pair="@pair" OnChanged="StateHasChanged" />
+            }
+            else if (CalcState.Mode == CalculatorStateService.ModeParents)
+            {
+                <TargetToParents TargetId="@CalcState.TargetSpeciesId" OnChanged="StateHasChanged" />
+            }
+            else if (CalcState.Mode == CalculatorStateService.ModeOdds)
+            {
+                <PassiveOdds />
+            }
+            else
+            {
+                <Mutation Pair="@pair" OnChanged="StateHasChanged" />
+            }
+        </div>
+
+        @if (showOddsSide)
+        {
+            <PassiveOddsPanel Child="@pair.ValidOwnedChild"
+                              OwnedA="@pair.OwnedA"
+                              OwnedB="@pair.OwnedB"
+                              OnDesiredChanged="StateHasChanged" />
+        }
+        else if (showMutationSide)
+        {
+            <MutationPanel Pair="@pair" OnChanged="StateHasChanged" />
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] ModeOrder =
+    [
+        CalculatorStateService.ModePair,
+        CalculatorStateService.ModeParents,
+        CalculatorStateService.ModeOdds,
+        CalculatorStateService.ModeMutation,
+    ];
+
+    private readonly Dictionary<int, ElementReference> _tabButtons = new();
+
+    /// <summary>Optional <c>?mode=cift|ebeveynler|olasilik|mutasyon</c>.</summary>
+    [SupplyParameterFromQuery(Name = "mode")]
+    public string? ModeParam { get; set; }
+
+    /// <summary>Optional <c>?target=SpeciesId</c>: opens the "Target -> Parents" tab for that species (used by Paldex).</summary>
+    [SupplyParameterFromQuery(Name = "target")]
+    public string? Target { get; set; }
+
+    /// <summary>Optional <c>?a=SpeciesId|Uid&amp;b=SpeciesId|Uid</c>: opens with both parents chosen.</summary>
+    [SupplyParameterFromQuery(Name = "a")]
+    public string? ParentA { get; set; }
+
+    [SupplyParameterFromQuery(Name = "b")]
+    public string? ParentB { get; set; }
+
+    /// <summary>Optional <c>?passive=PassiveId</c>: opens the Passive Odds tab with that passive desired (used by Skills inspector).</summary>
+    [SupplyParameterFromQuery(Name = "passive")]
+    public string? PassiveParam { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        CalcState.ApplyQuery(ModeParam, ParentA, ParentB, Target, Data, Repository, PassiveParam);
+    }
+
+    private void SelectMode(string mode) => CalcState.Mode = mode;
+
+    private async Task OnTabKeyDownAsync(KeyboardEventArgs e, int idx)
+    {
+        var next = e.Key switch
+        {
+            "ArrowRight" => (idx + 1) % ModeOrder.Length,
+            "ArrowLeft" => (idx - 1 + ModeOrder.Length) % ModeOrder.Length,
+            "Home" => 0,
+            "End" => ModeOrder.Length - 1,
+            _ => -1,
+        };
+        if (next < 0 || next == idx) return;
+        CalcState.Mode = ModeOrder[next];
+        if (_tabButtons.TryGetValue(next, out var el))
+            await el.FocusAsync();
+    }
+
+    private string TabTitle(string mode) => mode switch
+    {
+        CalculatorStateService.ModePair => L["Calculator.Tab.PairToChild"].Value,
+        CalculatorStateService.ModeParents => L["Calculator.Tab.TargetToParents"].Value,
+        CalculatorStateService.ModeOdds => L["Calculator.Tab.PassiveOdds"].Value,
+        CalculatorStateService.ModeMutation => L["Calculator.Tab.Mutation"].Value,
+        _ => string.Empty,
+    };
+
+    private string TabSub(string mode) => mode switch
+    {
+        CalculatorStateService.ModePair => L["Calculator.TabSub.PairToChild"].Value,
+        CalculatorStateService.ModeParents => L["Calculator.TabSub.TargetToParents"].Value,
+        CalculatorStateService.ModeOdds => L["Calculator.TabSub.PassiveOdds"].Value,
+        CalculatorStateService.ModeMutation => L["Calculator.TabSub.Mutation"].Value,
+        _ => string.Empty,
+    };
+
+    private string HowToHref() => CalcState.Mode switch
+    {
+        CalculatorStateService.ModeOdds => "guides/02-passive-inheritance",
+        CalculatorStateService.ModeMutation => "guides/04-mutation",
+        _ => "guides/01-how-breeding-works",
+    };
+}

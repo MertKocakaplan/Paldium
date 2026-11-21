@@ -1,0 +1,47 @@
+@inherits LocalizedComponentBase
+
+@* Species ownership pill with male/female counts and green pair border when both genders are owned. *@
+@if (Stats is null || Stats.Total == 0)
+{
+    <span class="@CssClass(none: true)">@L["Paldex.OwnedNone"]</span>
+}
+else
+{
+    <span class="@CssClass(none: false, pair: Stats.HasPair)" title="@TooltipText()">
+        @if (Stats.Male > 0)
+        {
+            <GenderIcon Gender="Gender.Male" Size="12" AriaLabel="@L["Common.Male"].Value" />
+            <b>@Stats.Male.ToString(CultureInfo.InvariantCulture)</b>
+        }
+        @if (Stats.Female > 0)
+        {
+            <GenderIcon Gender="Gender.Female" Size="12" AriaLabel="@L["Common.Female"].Value" />
+            <b>@Stats.Female.ToString(CultureInfo.InvariantCulture)</b>
+        }
+        @if (Stats.Male == 0 && Stats.Female == 0)
+        {
+            <b aria-label="@L["Paldex.OwnedTotalAria", Stats.Total].Value">@Stats.Total.ToString(CultureInfo.InvariantCulture)</b>
+        }
+    </span>
+}
+
+@code {
+    [Parameter] public OwnedSpeciesStats? Stats { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string CssClass(bool none, bool pair = false)
+    {
+        var baseCls = none ? "own none" : pair ? "own pair" : "own";
+        return string.IsNullOrEmpty(Class) ? baseCls : $"{baseCls} {Class}";
+    }
+
+    private string TooltipText()
+    {
+        if (Stats == null) return string.Empty;
+        var summary = L["Paldex.OwnedTip",
+            Stats.Total.ToString(CultureInfo.InvariantCulture),
+            Stats.Male.ToString(CultureInfo.InvariantCulture),
+            Stats.Female.ToString(CultureInfo.InvariantCulture)].Value;
+        return Stats.HasPair ? $"{summary} {L["Paldex.OwnedBadgeHint"].Value}" : summary;
+    }
+}

@@ -1,0 +1,29 @@
+@inherits LocalizedComponentBase
+
+<img class="@($"rank{(Rank < 0 ? " neg" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+     src="@IconPath()"
+     alt="@AccessibleName()"
+     width="@Size"
+     height="@Size" />
+
+@code {
+    [Parameter, EditorRequired] public int Rank { get; set; }
+    [Parameter] public int Size { get; set; } = 16;
+    [Parameter] public string? Class { get; set; }
+
+    private string IconPath()
+    {
+        if (Rank < 0)
+        {
+            var mag = Math.Clamp(-Rank, 1, 3);
+            return $"gamedata/icons/passive-rank/Passive_Negative_{mag.ToString(CultureInfo.InvariantCulture)}_icon.png";
+        }
+
+        var pos = Math.Clamp(Rank, 1, 5);
+        return $"gamedata/icons/passive-rank/Passive_Positive_{pos.ToString(CultureInfo.InvariantCulture)}_icon.png";
+    }
+
+    private string AccessibleName() => Rank < 0
+        ? L["Skill.NegativeRankLabel", Math.Clamp(-Rank, 1, 3)].Value
+        : L["Skill.RankLabel", Math.Clamp(Rank, 1, 5)].Value;
+}

@@ -1,0 +1,443 @@
+@namespace Paldium.App.Pages.GuidesParts
+@using System.Globalization
+@using Paldium.Core.Domain
+@using Paldium.Core.Owned
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+@inject GuideStateService State
+@inject NavigationManager Nav
+
+@* "Ranch: who drops what" (screens/guides.md, T109): a reference table from the game data, searched, not read. List on the left (by Pal or by
+   item), detail on the right with the Farming level 1 to 10 table. The level is kept while moving between Pals and items. *@
+<div class="rread ranch">
+    <div class="rbar">
+        <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+        <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Ranch.Title"]</b></span>
+        <span class="sp"></span>
+        <span class="note9"><Icon Name="info" Size="14" />@L["Ranch.LevelNote"]</span>
+    </div>
+
+    <div class="rg9">
+        <aside class="rl9">
+            <div class="hd">
+                <Segmented TValue="string"
+                           Items="@ViewItems()"
+                           Value="@State.RanchView"
+                           ValueChanged="SetView"
+                           AriaLabel="@L["Ranch.Title"].Value" />
+                <SearchField Value="@State.RanchQuery"
+                             ValueChanged="SetQuery"
+                             Placeholder="@L["Ranch.Search"].Value"
+                             AriaLabel="@L["Ranch.Search"].Value"
+                             OnEscape="() => SetQuery(string.Empty)" />
+                <div class="fl">
+                    <button type="button" class="ck9" role="checkbox" aria-checked="@(State.RanchOnlyOwned ? "true" : "false")" disabled="@(OwnedCount() == 0)" @onclick="ToggleOwned">
+                        <span class="sq">@if (State.RanchOnlyOwned) { <Icon Name="check" Size="12" /> }</span>
+                        @L["Ranch.OnlyOwned"]
+                    </button>
+                    <span class="m num">@(OwnedCount() == 0 ? L["Ranch.MyPalsEmpty"].Value : (State.RanchView == "pal" ? L["Ranch.PalCount", VisiblePals().Count].Value : L["Ranch.ItemCount", VisibleItems().Count].Value))</span>
+                </div>
+            </div>
+
+            <ul class="ls9" role="listbox" aria-label="@L["Ranch.Title"].Value" @onkeydown="OnListKeyDownAsync">
+                @if (State.RanchView == "pal")
+                {
+                    @if (ItemSuggestions() is { Count: > 0 } suggestions)
+                    {
+                        @foreach (var s in suggestions)
+                        {
+                            var captured = s;
+                            <li class="sug" @onclick="() => OpenItem(captured.ItemId)">
+                                @if (captured.IconPath != null) { <img src="@("gamedata/" + captured.IconPath)" alt="" /> }
+                                <span><b>@captured.Names.Get(Lang)</b> · @L["Ranch.ItemWord"]</span>
+                                <span class="go">@L["Ranch.OpenByItem"]<Icon Name="arrow-right" Size="14" /></span>
+                            </li>
+                        }
+                    }
+
+                    @foreach (var pal in VisiblePals())
+                    {
+                        var captured = pal;
+                        var items = RanchModel.ItemsOf(captured);
+                        var own = OwnedOf(captured.Id);
+                        <li class="@("prow9" + (captured.Id == SelectedPal?.Id && State.RanchView == "pal" ? " sel" : ""))" role="option" aria-selected="@(captured.Id == SelectedPal?.Id ? "true" : "false")" @onclick="() => OpenPal(captured.Id)">
+                            <PalIcon Pal="captured" Size="36" />
+                            <span class="t">@captured.DisplayName(Lang)</span>
+                            <span class="r">
+                                @if (own > 0) { <span class="own">@L["Ranch.Owned", own]</span> }
+                            </span>
+                            <span class="iline">
+                                @if (items.Count == 1)
+                                {
+                                    @if (items[0].IconPath != null) { <img src="@("gamedata/" + items[0].IconPath)" alt="" /> }
+                                    <span class="@(ItemHit(items[0]) ? "hit" : null)">@items[0].Names.Get(Lang)</span>
+                                }
+                                else
+                                {
+                                    @foreach (var it in items)
+                                    {
+                                        <span class="@("ic" + (ItemHit(it) ? " hit" : ""))" title="@it.Names.Get(Lang)">
+                                            @if (it.IconPath != null) { <img src="@("gamedata/" + it.IconPath)" alt="@it.Names.Get(Lang)" /> }
+                                        </span>
+                                    }
+                                    <span class="n">@L["Ranch.ItemsCount", items.Count]</span>
+                                }
+                            </span>
+                        </li>
+                    }
+
+                    @if (VisiblePals().Count == 0)
+                    {
+                        <li class="noresult">
+                            <p class="h">@L["Ranch.NoResults", State.RanchQuery]</p>
+                            <button type="button" class="btn2" @onclick="() => SetQuery(string.Empty)">@L["Ranch.ClearSearch"]</button>
+                        </li>
+                    }
+                }
+                else
+                {
+                    @foreach (var item in VisibleItems())
+                    {
+                        var captured = item;
+                        var palsOwned = captured.Pals.Count(p => OwnedOf(p.Id) > 0);
+                        <li class="@("prow9" + (captured.ItemId == SelectedItem?.ItemId && State.RanchView == "item" ? " sel" : ""))" role="option" aria-selected="@(captured.ItemId == SelectedItem?.ItemId ? "true" : "false")" @onclick="() => OpenItem(captured.ItemId)">
+                            @if (captured.IconPath != null) { <img src="@("gamedata/" + captured.IconPath)" alt="" /> } else { <span></span> }
+                            <span class="t">@captured.Names.Get(Lang)</span>
+                            <span class="r">@if (palsOwned > 0) { <span class="own">@L["Ranch.Owned", palsOwned]</span> }</span>
+                            <span class="iline">
+                                @foreach (var p in captured.Pals.Take(5)) { <span class="ic" title="@p.DisplayName(Lang)"><PalIcon Pal="p" Size="20" /></span> }
+                                <span class="n">@L["Ranch.PalsCount", captured.Pals.Count]</span>
+                            </span>
+                        </li>
+                    }
+
+                    @if (VisibleItems().Count == 0)
+                    {
+                        <li class="noresult">
+                            <p class="h">@L["Ranch.NoResults", State.RanchQuery]</p>
+                            <button type="button" class="btn2" @onclick="() => SetQuery(string.Empty)">@L["Ranch.ClearSearch"]</button>
+                        </li>
+                    }
+                }
+            </ul>
+        </aside>
+
+        <section class="rd9" aria-live="polite">
+            @if (State.RanchView == "pal" && SelectedPal is { } pal2)
+            {
+                @PalDetail(pal2)
+            }
+            else if (State.RanchView == "item" && SelectedItem is { } item2)
+            {
+                @ItemDetail(item2)
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? PalId { get; set; }
+    [Parameter] public string? ItemId { get; set; }
+    [Parameter] public int? Level { get; set; }
+
+    private IReadOnlyList<PalSpecies> _all = [];
+    private IReadOnlyList<RanchItem> _items = [];
+    private string _lang = "en";
+
+    private PalSpecies? SelectedPal => _all.FirstOrDefault(p => p.Id == State.RanchPal) ?? VisiblePals().FirstOrDefault();
+    private RanchItem? SelectedItem => _items.FirstOrDefault(i => i.ItemId == State.RanchItem) ?? VisibleItems().FirstOrDefault();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+        Load();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Level is >= 1 and <= RanchModel.MaxLevel) { State.RanchLevel = Level.Value; State.RanchLevelFromUrl = true; }
+        if (!string.IsNullOrEmpty(PalId) && _all.Any(p => p.Id == PalId)) { State.RanchPal = PalId; State.RanchView = "pal"; }
+        else if (!string.IsNullOrEmpty(ItemId) && _items.Any(i => i.ItemId == ItemId)) { State.RanchItem = ItemId; State.RanchView = "item"; }
+    }
+
+    protected override void OnUiLanguageChanged() => Load();
+
+    private void Load()
+    {
+        _lang = Lang;
+        _all = RanchModel.Pals(Data.Pals);
+        _items = RanchModel.Items(_all, Lang);
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private int OwnedCount() => Scope.ScopedPals.Count(p => !p.IsExcluded && _all.Any(x => x.Id == p.SpeciesId));
+
+    private int OwnedOf(string palId) => Scope.ScopedPals.Count(p => !p.IsExcluded && string.Equals(p.SpeciesId, palId, StringComparison.OrdinalIgnoreCase));
+
+    // The species' own Farming level (1 to 4): the levels below it are dimmed in the table and it is the level shown first (T109).
+    private static int BaseLevel(PalSpecies p) => p.Work.TryGetValue("Farming", out var level) && level > 0 ? level : 1;
+
+    private bool ItemHit(RanchDrop drop) => ItemHitById(drop.ItemId, drop.Names);
+
+    private bool ItemHitById(string itemId, LocalizedText names)
+    {
+        var q = Paldium.Core.Queries.TextFold.Fold(State.RanchQuery).Trim();
+        return q.Length > 0 && Paldium.Core.Queries.TextFold.Fold(names.Get(Lang)).Contains(q, StringComparison.Ordinal);
+    }
+
+    private IReadOnlyList<PalSpecies> VisiblePals()
+    {
+        var list = RanchModel.SearchPals(_all, State.RanchQuery, Lang);
+        return State.RanchOnlyOwned ? list.Where(p => OwnedOf(p.Id) > 0).ToList() : list;
+    }
+
+    private IReadOnlyList<RanchItem> VisibleItems()
+    {
+        var list = RanchModel.SearchItems(_items, State.RanchQuery, Lang);
+        return State.RanchOnlyOwned ? list.Where(i => i.Pals.Any(p => OwnedOf(p.Id) > 0)).ToList() : list;
+    }
+
+    // Items that match the search are offered first in the Pal view ("open by item").
+    private IReadOnlyList<RanchItem> ItemSuggestions() =>
+        string.IsNullOrWhiteSpace(State.RanchQuery) ? [] : RanchModel.SearchItems(_items, State.RanchQuery, Lang);
+
+    private IReadOnlyList<SegmentedItem<string>> ViewItems() =>
+    [
+        new("pal", L["Ranch.ByPal"].Value + " " + _all.Count, IsWord: true),
+        new("item", L["Ranch.ByItem"].Value + " " + _items.Count, IsWord: true),
+    ];
+
+    private void SetView(string view) => State.RanchView = view;
+    private Task SetQuery(string value) { State.RanchQuery = value; return Task.CompletedTask; }
+    private void ToggleOwned() => State.RanchOnlyOwned = !State.RanchOnlyOwned;
+    private void OpenPal(string id) { State.RanchPal = id; State.RanchView = "pal"; }
+    private void OpenItem(string id) { State.RanchItem = id; State.RanchView = "item"; }
+    // Until the user picks a level, a Pal opens at its own base Farming level, not at 1.
+    private void SetLevel(int level) { State.RanchLevel = level; State.RanchLevelFromUrl = false; }
+
+    private Task OnListKeyDownAsync(KeyboardEventArgs e)
+    {
+        var step = e.Key == "ArrowDown" ? 1 : e.Key == "ArrowUp" ? -1 : 0;
+        if (step == 0) return Task.CompletedTask;
+        if (State.RanchView == "pal")
+        {
+            var list = VisiblePals();
+            var i = list.ToList().FindIndex(p => p.Id == SelectedPal?.Id);
+            if (list.Count > 0) State.RanchPal = list[Math.Clamp(i + step, 0, list.Count - 1)].Id;
+        }
+        else
+        {
+            var list = VisibleItems();
+            var i = list.ToList().FindIndex(x => x.ItemId == SelectedItem?.ItemId);
+            if (list.Count > 0) State.RanchItem = list[Math.Clamp(i + step, 0, list.Count - 1)].ItemId;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // "32%" in English, "%32" in Turkish; under 1 % one decimal ("%0,5").
+    private string Pct(double chance)
+    {
+        var value = chance < 0.01 ? (chance * 100).ToString("0.0", CultureInfo.GetCultureInfo(Lang)) : Math.Round(chance * 100).ToString("0", CultureInfo.GetCultureInfo(Lang));
+        return Lang == "tr" ? "%" + value : value + "%";
+    }
+
+    private string PctBar(double chance) => "width:" + Math.Round(chance * 100, 1).ToString(CultureInfo.InvariantCulture) + "%";
+
+    private static string Amount(RanchDrop d) => d.Min == d.Max ? d.Min.ToString(CultureInfo.InvariantCulture) : $"{d.Min}–{d.Max}";
+
+    private string Avg(double v) => v >= 10 ? Math.Round(v).ToString("0", CultureInfo.GetCultureInfo(Lang)) : v.ToString("0.#", CultureInfo.GetCultureInfo(Lang));
+
+    private string LevelHeader(int n) => L["Ranch.Level", n].Value;
+
+    private RenderFragment PalDetail(PalSpecies pal) => __builder =>
+    {
+        var items = RanchModel.ItemsOf(pal);
+        var level = LevelFor(pal);
+        var single = items.Count == 1;
+        var own = Scope.ScopedPals.Where(p => !p.IsExcluded && string.Equals(p.SpeciesId, pal.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+        // Rows: the items of the selected level by chance, the ones it does not drop last.
+        var rows = items.Select(i => (Item: i, Drop: RanchModel.DropAt(pal, level, i.ItemId)))
+                        .OrderByDescending(x => x.Drop?.Chance ?? -1).ThenBy(x => x.Item.Names.Get(Lang), StringComparer.CurrentCultureIgnoreCase).ToList();
+        <div class="dh9">
+            <PalIcon Pal="pal" Size="56" />
+            <div>
+                <h2>@pal.DisplayName(Lang)</h2>
+                <div class="m">
+                    <span>#@pal.DexLabel</span>
+                    <span class="wk9">@L["Ranch.BaseFarming", BaseLevel(pal)]</span>
+                    <a class="lnk" href="@Paldium.App.Components.Links.Pal(pal.Id)">@L["Ranch.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a>
+                </div>
+                <div class="m">
+                    @if (own.Count > 0)
+                    {
+                        <span class="ow">@L["Ranch.Owned", own.Count]</span>
+                        <span class="locs">@string.Join("; ", own.Take(3).Select(p => LocationText.ShortPlace(p, Terms, L) + " · " + (p.Gender == Gender.Male ? "♂" : p.Gender == Gender.Female ? "♀" : "") + " " + L["Ranch.PalLevel", p.Level].Value))@(own.Count > 3 ? " +" + (own.Count - 3) : "")</span>
+                        <a class="lnk" href="@("mypals?species=" + Uri.EscapeDataString(pal.Id))">@L["Ranch.ShowInMyPals"]</a>
+                    }
+                    else
+                    {
+                        <span class="ow no">@L["Ranch.NotOwned"]</span>
+                        <a class="lnk" href="@("planner?target=" + Uri.EscapeDataString(pal.Id))">@L["Ranch.MakeInPlanner"]</a>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="sec9">
+            <div class="sh">
+                <h3>@L["Ranch.EveryDrop", level]</h3>
+            </div>
+            <p class="h">@(single ? L["Ranch.PalHintSingle"].Value : L["Ranch.PalHintMulti"].Value)</p>
+            <div class="tscroll">
+                <table class="dt9 wide">
+                    <thead>
+                        <tr>
+                            <th>@L["Ranch.Item"]</th>
+                            <th>@L["Ranch.ChanceAt", level]</th>
+                            <th>@L["Ranch.Amount"]</th>
+                            <th class="gap"></th>
+                            <th class="rkl" colspan="10">@L["Ranch.LevelHeader"]</th>
+                        </tr>
+                        <tr class="r2">
+                            <th></th><th></th><th></th><th class="gap"></th>
+                            @for (var n = 1; n <= RanchModel.MaxLevel; n++)
+                            {
+                                var captured = n;
+                                var low = n < BaseLevel(pal);
+                                <th class="@("rk" + (n == level ? " on" : "") + (low ? " lo" : ""))" title="@(low ? L["Ranch.BelowBase", BaseLevel(pal)].Value : null)"><button type="button" aria-pressed="@(n == level ? "true" : "false")" aria-label="@L["Ranch.LevelAria", n].Value" @onclick="() => SetLevel(captured)">@n</button></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (item, drop) in rows)
+                        {
+                            <tr class="@(drop == null ? "off" : null)">
+                                <th class="iname" scope="row">
+                                    <span class="inm">
+                                        @if (item.IconPath != null) { <img src="@("gamedata/" + item.IconPath)" alt="" /> }
+                                        <span>@item.Names.Get(Lang)</span>
+                                    </span>
+                                </th>
+                                <td class="ch9">
+                                    @if (drop == null)
+                                    {
+                                        <span class="pv m">@L["Ranch.FromLevel", RanchModel.FirstLevel(pal, item.ItemId) ?? 0]</span>
+                                    }
+                                    else if (single)
+                                    {
+                                        <span class="pv m">@L["Ranch.Always"]</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="bar" aria-hidden="true"><i style="@PctBar(drop.Chance)"></i></span><span class="pv num">@Pct(drop.Chance)</span>
+                                    }
+                                </td>
+                                <td class="am num">@(drop == null ? "—" : Amount(drop))</td>
+                                <td class="gap"></td>
+                                @for (var n = 1; n <= RanchModel.MaxLevel; n++)
+                                {
+                                    var cell = RanchModel.DropAt(pal, n, item.ItemId);
+                                    <td class="@("c" + (n == level ? " on" : "") + (n < BaseLevel(pal) ? " lo" : ""))">
+                                        @if (cell == null) { <span class="no">—</span> }
+                                        else if (single) { <span class="a" aria-label="@L["Ranch.CellAriaSingle", n, Amount(cell)].Value">@Amount(cell)</span> }
+                                        else
+                                        {
+                                            <span class="p" aria-label="@L["Ranch.CellAria", n, Pct(cell.Chance), Amount(cell)].Value">@Pct(cell.Chance)</span>
+                                            <span class="a">@Amount(cell)</span>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    };
+
+    private RenderFragment ItemDetail(RanchItem item) => __builder =>
+    {
+        var level = State.RanchLevel;
+        var rows = item.Pals.Select(p => (Pal: p, Drop: RanchModel.DropAt(p, level, item.ItemId)))
+                            .OrderByDescending(x => x.Drop == null ? -1 : RanchModel.Average(x.Drop)).ThenBy(x => x.Pal.DisplayName(Lang), StringComparer.CurrentCultureIgnoreCase).ToList();
+        <div class="dh9">
+            @if (item.IconPath != null) { <img src="@("gamedata/" + item.IconPath)" alt="" /> }
+            <div>
+                <h2>@item.Names.Get(Lang)</h2>
+                <div class="m"><span>@L["Ranch.ItemSub", item.Pals.Count]</span></div>
+            </div>
+        </div>
+        <div class="sec9">
+            <p class="h">@L["Ranch.AverageHint", item.Names.Get(Lang)]</p>
+            <div class="tscroll">
+                <table class="dt9 wide byi">
+                    <thead>
+                        <tr>
+                            <th>@L["Ranch.PalWord"]</th>
+                            <th>@L["Ranch.ChanceAt", level]</th>
+                            <th>@L["Ranch.Amount"]</th>
+                            <th>@L["Ranch.Average"]</th>
+                            <th class="gap"></th>
+                            <th class="rkl" colspan="10">@L["Ranch.LevelHeader"]</th>
+                        </tr>
+                        <tr class="r2">
+                            <th></th><th></th><th></th><th></th><th class="gap"></th>
+                            @for (var n = 1; n <= RanchModel.MaxLevel; n++)
+                            {
+                                var captured = n;
+                                <th class="@("rk" + (n == level ? " on" : ""))"><button type="button" aria-pressed="@(n == level ? "true" : "false")" aria-label="@L["Ranch.LevelAria", n].Value" @onclick="() => SetLevel(captured)">@n</button></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (pal, drop) in rows)
+                        {
+                            var own = OwnedOf(pal.Id);
+                            var others = RanchModel.ItemsOf(pal).Count - 1;
+                            <tr class="@(drop == null ? "off" : null)" @onclick="() => OpenPal(pal.Id)">
+                                <th class="iname" scope="row">
+                                    <span class="inm">
+                                        <PalIcon Pal="pal" Size="28" />
+                                        <span>
+                                            <span>@pal.DisplayName(Lang)</span>
+                                            @if (own > 0) { <span class="own">@L["Ranch.Owned", own]</span> }
+                                            <span class="m">@(others > 0 ? L["Ranch.MoreItems", others].Value : L["Ranch.OnlyThis"].Value)</span>
+                                        </span>
+                                    </span>
+                                </th>
+                                <td class="ch9">
+                                    @if (drop == null) { <span class="pv m">@L["Ranch.FromLevel", RanchModel.FirstLevel(pal, item.ItemId) ?? 0]</span> }
+                                    else if (RanchModel.SingleItem(pal)) { <span class="pv m">@L["Ranch.Always"]</span> }
+                                    else { <span class="bar" aria-hidden="true"><i style="@PctBar(drop.Chance)"></i></span><span class="pv num">@Pct(drop.Chance)</span> }
+                                </td>
+                                <td class="am num">@(drop == null ? "—" : Amount(drop))</td>
+                                <td class="av num"><b>@(drop == null ? "—" : Avg(RanchModel.Average(drop)))</b></td>
+                                <td class="gap"></td>
+                                @for (var n = 1; n <= RanchModel.MaxLevel; n++)
+                                {
+                                    var cell = RanchModel.DropAt(pal, n, item.ItemId);
+                                    <td class="@("c" + (n == level ? " on" : ""))">
+                                        @if (cell == null) { <span class="no">—</span> } else { <span class="p">@Avg(RanchModel.Average(cell))</span> }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    };
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+
+    // The level shown for a Pal: the selected one, but not below the species' own base level, unless the URL asked for that level (T109).
+    private int LevelFor(PalSpecies pal) => State.RanchLevelFromUrl ? State.RanchLevel : Math.Max(State.RanchLevel, BaseLevel(pal));
+}

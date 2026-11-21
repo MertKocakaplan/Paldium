@@ -1,0 +1,19 @@
+@page "/mypals"
+@using Paldium.App.Pages.MyPalsParts
+@inherits LocalizedComponentBase
+
+<OwnedPalList InitialPassive="@Passive" InitialSpecies="@Species" InitialPal="@Pal" />
+
+@code {
+    /// <summary>Optional <c>?passive=PassiveId</c>: opens the list filtered by that passive (from the Skills page).</summary>
+    [SupplyParameterFromQuery(Name = "passive")]
+    public string? Passive { get; set; }
+
+    /// <summary>Optional <c>?species=SpeciesId</c>: opens the list filtered by that species (from the Paldex detail).</summary>
+    [SupplyParameterFromQuery(Name = "species")]
+    public string? Species { get; set; }
+
+    /// <summary>Optional <c>?pal=SelectionKey</c>: selects that Pal and opens the edit panel (from the Planner links).</summary>
+    [SupplyParameterFromQuery(Name = "pal")]
+    public string? Pal { get; set; }
+}

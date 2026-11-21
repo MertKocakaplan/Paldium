@@ -1,0 +1,17 @@
+@inherits LocalizedComponentBase
+
+<nav class="@($"tabs{(Disabled ? " off" : "")}")"
+     aria-disabled="@(Disabled ? "true" : null)"
+     aria-label="@L["Nav.Pages"].Value">
+    <PageTab Href="planner" Label="Nav.Planner" Disabled="Disabled" />
+    <PageTab Href="calculator" Label="Nav.Calculator" Disabled="Disabled" />
+    <PageTab Href="paldex" Label="Nav.Paldex" Disabled="Disabled" />
+    <PageTab Href="skills" Label="Nav.Skills" Disabled="Disabled" />
+    <PageTab Href="mypals" Label="Nav.MyPals" Disabled="Disabled" />
+    <PageTab Href="guides" Label="Nav.Guides" Disabled="Disabled" />
+    <PageTab Href="technology" Label="Nav.Technology" Disabled="Disabled" />
+</nav>
+
+@code {
+    [Parameter] public bool Disabled { get; set; }
+}

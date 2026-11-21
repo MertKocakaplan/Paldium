@@ -1,0 +1,202 @@
+@using Paldium.Import.Sync
+@implements IDisposable
+@inherits LocalizedComponentBase
+@inject ISyncService Sync
+@inject SourcesService Sources
+@inject IOwnedPalRepository Repository
+@inject OwnedScopeService Scope
+
+@{
+    var statuses = Sync.Statuses;
+    var lastSync = statuses.Where(s => s.LastSyncUtc != null).Select(s => s.LastSyncUtc!.Value).DefaultIfEmpty().Max();
+    var kind = KindOf(statuses, lastSync);
+    var errCount = statuses.Count(s => s.State == SourceState.Error);
+    var text = BadgeText(kind, errCount, lastSync, out var time, out var ariaLabel);
+}
+
+<MudTooltip Placement="Placement.Bottom" Delay="300" ShowOnFocus="true">
+    <TooltipContent>
+        <div class="pb-sync-tip">
+            @foreach (var line in TipLines(statuses))
+            {
+                <div>@line</div>
+            }
+            @if (Scope.ScopedPals.Count != Repository.Current.Pals.Count)
+            {
+                <div>@L["Sync.ScopeNarrowed"]</div>
+            }
+        </div>
+    </TooltipContent>
+    <ChildContent>
+        <a href="settings#kaynak"
+           class="@BadgeClass(kind)"
+           aria-label="@ariaLabel">
+            @if (kind == "reading")
+            {
+                <span class="spin" aria-hidden="true"></span>
+                <span>@text</span>
+            }
+            else if (kind == "error")
+            {
+                <span class="dot" aria-hidden="true"></span>
+                <b>@text</b>
+                @if (time != null)
+                {
+                    <span class="ago"> · @time</span>
+                }
+            }
+            else if (kind == "ok")
+            {
+                <span class="dot" aria-hidden="true"></span>
+                <b class="num">@text</b>
+                @if (time != null)
+                {
+                    <span class="ago"> · @time</span>
+                }
+            }
+            else
+            {
+                <span class="dot" aria-hidden="true"></span>
+                <span>@text</span>
+            }
+        </a>
+    </ChildContent>
+</MudTooltip>
+
+@code {
+    private CancellationTokenSource? _ticker;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Sync.StatusesChanged += OnChanged;
+        Repository.Changed += OnRepositoryChanged;
+        Scope.Changed += OnScopeChanged;
+
+        _ticker = new CancellationTokenSource();
+        _ = TickAsync(_ticker.Token);
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token)) await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+    private void OnRepositoryChanged(object? sender, OwnedPalSnapshot snapshot) => InvokeAsync(StateHasChanged);
+    private void OnScopeChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private static string KindOf(IReadOnlyList<SourceStatus> statuses, DateTimeOffset lastSync)
+    {
+        if (statuses.Count == 0) return "nosource";
+        if (statuses.Any(s => s.State == SourceState.Error)) return "error";
+        if (statuses.Any(s => s.State == SourceState.Reading)) return "reading";
+        return lastSync == default ? "never" : "ok";
+    }
+
+    private static string BadgeClass(string kind) => kind switch
+    {
+        "error" => "sync err",
+        "nosource" or "never" => "sync none",
+        _ => "sync",
+    };
+
+    private string BadgeText(string kind, int errCount, DateTimeOffset lastSync, out string? suffix, out string aria)
+    {
+        suffix = null;
+        var scoped = Scope.ScopedPals.Count;
+        var total = Repository.Current.Pals.Count;
+
+        switch (kind)
+        {
+            case "nosource":
+            {
+                var t = L["Sync.NoSource"].Value;
+                aria = L["Sync.Aria", t].Value;
+                return t;
+            }
+            case "error":
+            {
+                var t = errCount == 1 ? L["Sync.ErrorOne"].Value : L["Sync.ErrorMany", errCount].Value;
+                if (total > 0) suffix = L["Sync.StalePals", scoped == total ? total : scoped].Value;
+                aria = suffix == null ? L["Sync.Aria", t].Value : L["Sync.Aria", $"{t}, {suffix}"].Value;
+                return t;
+            }
+            case "reading":
+            {
+                var t = L["Sync.Reading"].Value;
+                aria = L["Sync.Aria", t].Value;
+                return t;
+            }
+            case "never":
+            {
+                var t = L["Sources.NeverSynced"].Value;
+                aria = L["Sync.Aria", t].Value;
+                return t;
+            }
+        }
+
+        suffix = Relative(lastSync);
+        var countText = scoped == total ? L["Sync.Pals", total].Value : L["Sync.PalsOfTotal", scoped, total].Value;
+        aria = L["Sync.AriaTimed", countText, suffix].Value;
+        return countText;
+    }
+
+    private string Relative(DateTimeOffset when)
+    {
+        var age = DateTimeOffset.UtcNow - when;
+        if (age < TimeSpan.FromMinutes(1)) return L["Sync.JustNow"].Value;
+        if (age < TimeSpan.FromHours(1)) return L["Sync.MinutesAgo", (int)age.TotalMinutes].Value;
+        return L["Sync.HoursAgo", (int)age.TotalHours].Value;
+    }
+
+    private IEnumerable<string> TipLines(IReadOnlyList<SourceStatus> statuses)
+    {
+        if (statuses.Count == 0)
+        {
+            yield return L["Sync.NoSource"].Value;
+            yield break;
+        }
+
+        foreach (var s in statuses)
+        {
+            var type = Sources.Sources.FirstOrDefault(c => c.Id == s.SourceId)?.Type;
+            var parts = new List<string> { TypeName(s.SourceId, type), StateName(s.State), L["Sync.Pals", s.PalCount].Value };
+            if (s.LastSyncUtc is { } at) parts.Add(at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture));
+            if (s.Error != null) parts.Add(s.Error);
+            yield return string.Join(" · ", parts);
+        }
+    }
+
+    private string TypeName(string sourceId, SourceType? type)
+    {
+        if (sourceId == "demo") return L["Sources.TypeDemo"].Value;
+        return type switch
+        {
+            SourceType.ZipImport => L["Sources.TypeZip"].Value,
+            SourceType.ModBridgeFile => L["Sources.TypeMod"].Value,
+            SourceType.GlobalStorageFile => Term("GlobalPalbox"),
+            _ => L["Sources.TypeWorld"].Value,
+        };
+    }
+
+    private string StateName(string state) =>
+        L["Sources.State." + state] is { ResourceNotFound: false } text ? text.Value : state;
+
+    public override void Dispose()
+    {
+        _ticker?.Cancel();
+        _ticker?.Dispose();
+        Sync.StatusesChanged -= OnChanged;
+        Repository.Changed -= OnRepositoryChanged;
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+}

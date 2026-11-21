@@ -1,0 +1,70 @@
+@inherits LocalizedComponentBase
+
+<Dropdown TValue="string"
+          TriggerClass="sortdd"
+          Open="@_open"
+          OpenChanged="v => _open = v"
+          AriaLabel="@ResolvedAriaLabel()"
+          AnchorOrigin="Origin.BottomRight"
+          TransformOrigin="Origin.TopRight"
+          Class="@Class">
+    <TriggerContent>
+        <Icon Name="sort" Size="14" />
+        <span class="tx">@CurrentLabel()</span>
+    </TriggerContent>
+    <ChildContent>
+        <div class="cpop" role="listbox" aria-label="@L["Sort.ListLabel"].Value">
+            @foreach (var opt in Options)
+            {
+                var selected = string.Equals(opt.Key, Value, StringComparison.Ordinal);
+                var dirLabel = (selected ? Descending : opt.DefaultDescending)
+                    ? L["Sort.Descending"].Value
+                    : L["Sort.Ascending"].Value;
+                <button type="button"
+                        class="mi"
+                        role="option"
+                        aria-selected="@(selected ? "true" : "false")"
+                        aria-label="@($"{opt.Label}, {dirLabel}")"
+                        @onclick="() => PickAsync(opt)">
+                    <span>@opt.Label</span>
+                    @if (selected)
+                    {
+                        <span class="m">
+                            <Icon Name="@(Descending ? "arrow-down" : "arrow-up")" Size="14" />
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+    </ChildContent>
+</Dropdown>
+
+@code {
+    private bool _open;
+
+    [Parameter, EditorRequired] public IReadOnlyList<SortOption> Options { get; set; } = [];
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public bool Descending { get; set; }
+    [Parameter] public EventCallback<(string Key, bool Descending)> OnSortChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string CurrentLabel() =>
+        Options.FirstOrDefault(o => string.Equals(o.Key, Value, StringComparison.Ordinal))?.Label ?? Value;
+
+    private string ResolvedAriaLabel()
+    {
+        if (!string.IsNullOrEmpty(AriaLabel)) return AriaLabel;
+        var dir = Descending ? L["Sort.Descending"].Value : L["Sort.Ascending"].Value;
+        return L["Sort.AriaLabel", CurrentLabel(), dir].Value;
+    }
+
+    private async Task PickAsync(SortOption opt)
+    {
+        var nextDesc = string.Equals(opt.Key, Value, StringComparison.Ordinal)
+            ? !Descending
+            : opt.DefaultDescending;
+        _open = false;
+        await OnSortChanged.InvokeAsync((opt.Key, nextDesc));
+    }
+}

@@ -1,0 +1,202 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inherits LocalizedComponentBase
+@inject IJSRuntime JS
+@inject IGameData Data
+
+@* The reader (screens/guides.md, mockups r-oku and r-hesap): top row, outline | text | side column, and the reading mode that hides the shell's tabs. *@
+<div class="rread">
+    @if (Reading)
+    {
+        <div class="rbar focus">
+            <button type="button" class="btn2" @onclick="() => OnReading.InvokeAsync(false)"><Icon Name="x" Size="14" />@L["Guide.ExitReading"]</button>
+            <span class="crumb">@L["Guide.Group." + Doc.Info.Group] · <b>@Doc.Info.Title</b></span>
+            <span class="sp"></span>
+            <span class="prog2" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@_progress"><i style="@("width:" + _progress + "%")"></i></span>
+            <span class="num m">@L["Guide.Fig.Percent", _progress]</span>
+            @if (TryInLabel() is { } tryLabel)
+            {
+                <a class="btn2 acc" href="@Doc.Info.Tools[0].Href"><Icon Name="arrow-right" Size="14" />@tryLabel</a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="rbar">
+            <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+            <span class="crumb">@L["Guide.Group." + Doc.Info.Group] · <b>@Doc.Info.Title</b></span>
+            <span class="sp"></span>
+            <span class="lang2">
+                @if (GuideLang == "tr") { <text>TR</text> } else { <button type="button" class="lnk" @onclick='() => OnLang.InvokeAsync("tr")'>TR</button> }
+                ·
+                @if (GuideLang == "en") { <text>EN</text> } else { <button type="button" class="lnk" @onclick='() => OnLang.InvokeAsync("en")'>EN</button> }
+            </span>
+            <button type="button" class="btn2" @onclick="() => OnReading.InvokeAsync(true)"><Icon Name="eye" Size="14" />@L["Guide.Reading"]</button>
+        </div>
+    }
+
+    <div class="@("rgrid" + (Reading ? " focus" : ""))" @ref="_grid">
+        <GuideOutline Headings="Doc.Outline" CurrentId="@_currentId" OnSelect="ScrollToAsync" />
+        <div class="rcol">
+            <article class="doc" aria-labelledby="d-h">
+                <p class="kick">@L["Guide.Kick", L["Guide.Group." + Doc.Info.Group].Value, Doc.Info.Minutes]</p>
+                <h1 id="d-h">@Doc.Info.Title</h1>
+                @if (Doc.FellBack)
+                {
+                    <p class="note">@L["Guide.NotInLanguage", GuideLang == "tr" ? "Türkçe" : "English"]</p>
+                }
+                @foreach (var block in Doc.Blocks)
+                {
+                    @switch (block)
+                    {
+                        case GuideHtmlBlock html:
+                            @((MarkupString)html.Html)
+                            break;
+                        case GuideDirectiveBlock { Directive: { Kind: GuideDirectiveKind.Figure } figure }:
+                            @RenderFigure(figure)
+                            break;
+                        case GuideDirectiveBlock { Directive: { } tryIt }:
+                            @RenderTry(tryIt)
+                            break;
+                    }
+                }
+            </article>
+        </div>
+        @if (!Reading)
+        {
+            <aside class="rside" aria-label="@L["Guide.Related"].Value">
+                @if (Doc.Info.Tools.Count > 0)
+                {
+                    <section>
+                        <h3>@L["Guide.TryTitle"]</h3>
+                        @foreach (var tool in Doc.Info.Tools)
+                        {
+                            <a class="toolc" href="@tool.Href"><b>@tool.Label</b></a>
+                        }
+                    </section>
+                }
+                @if (Next != null)
+                {
+                    <section>
+                        <h3>@L["Guide.Next"]</h3>
+                        <a class="nextg" href="@("guides/" + Next.Slug)"><span class="num">@Next.Slug[..2]</span><b>@Next.Title</b><span>@L["Guide.Minutes", Next.Minutes]</span></a>
+                    </section>
+                }
+                @if (Doc.PalIds.Count > 0)
+                {
+                    <section>
+                        <h3>@L["Guide.PalsOnPage"]</h3>
+                        <div class="pls">@foreach (var id in Doc.PalIds) { <GuidePalRef Id="@id" /> }</div>
+                    </section>
+                }
+            </aside>
+        }
+    </div>
+</div>
+
+@code {
+    private ElementReference _grid;
+    private DotNetObjectReference<GuideReader>? _self;
+    private IJSObjectReference? _handle;
+    private string? _attachedSlug;
+    private GuideDoc? _attachedDoc;
+    private string? _currentId;
+    private int _progress;
+
+    [Parameter, EditorRequired] public GuideDoc Doc { get; set; } = default!;
+    [Parameter] public GuideInfo? Next { get; set; }
+    [Parameter] public string GuideLang { get; set; } = "en";
+    [Parameter] public bool Reading { get; set; }
+    [Parameter] public EventCallback<string> OnLang { get; set; }
+    [Parameter] public EventCallback<bool> OnReading { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // A new guide or another language replaces the text (and its headings): the scroll listener attaches again.
+        var key = Doc.Info.Slug + "|" + GuideLang;
+        if (_attachedSlug == key && ReferenceEquals(_attachedDoc, Doc)) return;
+        _attachedSlug = key;
+        _attachedDoc = Doc;
+        _currentId = Doc.Outline.FirstOrDefault()?.Id;
+        _progress = 0;
+        if (_handle != null) await _handle.InvokeVoidAsync("dispose");
+        _self ??= DotNetObjectReference.Create(this);
+        _handle = await JS.InvokeAsync<IJSObjectReference>("pbGuideReader.attach", _grid, _self, Doc.Outline.Select(h => h.Id).ToArray());
+        StateHasChanged();
+    }
+
+    /// <summary>Called by the scroll listener: the current heading and how far the text is read.</summary>
+    [JSInvokable]
+    public void OnScrolled(string? id, int percent)
+    {
+        if (id == _currentId && percent == _progress) return;
+        _currentId = id;
+        _progress = percent;
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Called by the Esc key: leaves the reading mode.</summary>
+    [JSInvokable]
+    public async Task OnEscape()
+    {
+        if (Reading) await OnReading.InvokeAsync(false);
+    }
+
+    private async Task ScrollToAsync(string id)
+    {
+        _currentId = id;
+        await JS.InvokeVoidAsync("pbGuideReader.scrollTo", _grid, id);
+    }
+
+    // "Try in the Calculator" for the first related tool, from the page the tool link points to.
+    private string? TryInLabel()
+    {
+        if (Doc.Info.Tools.Count == 0) return null;
+        var page = Doc.Info.Tools[0].Href.TrimStart('/').Split('?', '#')[0];
+        return L["Guide.TryIn." + page] is { ResourceNotFound: false } text ? text.Value : null;
+    }
+
+    private RenderFragment RenderFigure(GuideDirective figure) => __builder =>
+    {
+        switch (figure.Name)
+        {
+            case "power-line":
+                <PowerLineFigure A="@figure.Arg("a")" B="@figure.Arg("b")" />
+                break;
+            case "pool":
+                <PoolFigure A="@figure.Arg("a")" B="@figure.Arg("b")" Bad="@figure.Arg("bad")" />
+                break;
+            case "inherit-bars":
+                <InheritBarsFigure />
+                break;
+            case "chance-bars":
+                <ChanceBarsFigure />
+                break;
+        }
+    };
+
+    private RenderFragment RenderTry(GuideDirective tryIt) => __builder =>
+    {
+        var a = tryIt.Arg("a");
+        var b = tryIt.Arg("b");
+        <p class="try">
+            <a class="btn2 acc" href="@tryIt.TryHref()"><Icon Name="arrow-right" Size="14" />@tryIt.Arg("label")</a>
+            @if (a.Length > 0 && b.Length > 0 && Data.Pals.Any(p => p.Id == a) && Data.Pals.Any(p => p.Id == b))
+            {
+                <span>@L["Guide.TryOpens", Data.Pal(a).DisplayName(Lang), Data.Pal(b).DisplayName(Lang)]</span>
+            }
+        </p>
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_handle != null)
+        {
+            try { await _handle.InvokeVoidAsync("dispose"); }
+            catch (JSDisconnectedException) { }
+        }
+
+        _self?.Dispose();
+        base.Dispose();
+    }
+}

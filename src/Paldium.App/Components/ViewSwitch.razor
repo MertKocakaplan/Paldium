@@ -1,0 +1,75 @@
+@inherits LocalizedComponentBase
+
+<div class="@($"vseg{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+     role="radiogroup"
+     aria-label="@L["View.Label"].Value">
+    @for (var i = 0; i < Options.Length; i++)
+    {
+        var idx = i;
+        var opt = Options[idx];
+        var selected = string.Equals(Value, opt.Key, StringComparison.Ordinal);
+        var disabled = !AllowCards && opt.Key != Table;
+        var label = L[opt.LabelKey].Value;
+        var tip = disabled ? L["View.SoonHint"].Value : label;
+        var tabIdx = selected ? 0 : -1;
+        <button type="button"
+                @ref="_buttons[idx]"
+                role="radio"
+                aria-checked="@(selected ? "true" : "false")"
+                aria-label="@label"
+                title="@tip"
+                disabled="@disabled"
+                tabindex="@tabIdx"
+                @onclick="() => SelectAsync(opt.Key, disabled)"
+                @onkeydown="e => OnKeyDownAsync(e, idx)">
+            <Icon Name="@opt.Icon" Size="16" />
+        </button>
+    }
+</div>
+
+@code {
+    public const string Table = "table";
+    public const string Cards = "cards";
+    public const string Dense = "dense";
+
+    private static readonly (string Key, string Icon, string LabelKey)[] Options =
+    [
+        (Table, "list", "View.Table"),
+        (Cards, "grid4", "View.Cards"),
+        (Dense, "grid9", "View.Dense"),
+    ];
+
+    private readonly Dictionary<int, ElementReference> _buttons = new();
+
+    [Parameter] public string Value { get; set; } = Table;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public bool AllowCards { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task SelectAsync(string key, bool disabled) =>
+        disabled ? Task.CompletedTask : ValueChanged.InvokeAsync(key);
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e, int idx)
+    {
+        var step = e.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => 1,
+            "ArrowLeft" or "ArrowUp" => -1,
+            _ => 0,
+        };
+        if (step == 0) return;
+
+        var next = idx;
+        for (var n = 0; n < Options.Length; n++)
+        {
+            next = (next + step + Options.Length) % Options.Length;
+            var isDisabled = !AllowCards && Options[next].Key != Table;
+            if (!isDisabled) break;
+        }
+
+        if (next == idx || (!AllowCards && Options[next].Key != Table)) return;
+        await ValueChanged.InvokeAsync(Options[next].Key);
+        if (_buttons.TryGetValue(next, out var el))
+            await el.FocusAsync();
+    }
+}

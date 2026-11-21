@@ -1,0 +1,46 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+
+<section class="@($"notes{(InPopover ? " in-pop" : "")}")"
+         style="@StyleAttr()"
+         aria-labelledby="@HeadingId">
+    <div class="notes-hd">
+        <h2 id="@HeadingId">@L["Plan.NotesTitle"]</h2>
+        @if (InPopover && OnClose.HasDelegate)
+        {
+            <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="OnClose">
+                <Icon Name="x" Size="14" />
+            </button>
+        }
+    </div>
+    <ul>
+        @foreach (var note in Notes)
+        {
+            var captured = note;
+            <li>
+                <Icon Name="info" Size="14" />
+                <span class="note-tx">@captured.Text</span>
+                @if (captured.SelectPlan is { } alt && captured.SelectLabel != null && OnSelectPlan.HasDelegate)
+                {
+                    <button type="button"
+                            class="btn2"
+                            @onclick="() => OnSelectPlan.InvokeAsync(new ExtraPlan(captured.SelectLabel, alt))">
+                        @L["Plan.FeasOpen"]
+                    </button>
+                }
+            </li>
+        }
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PlanText.PlanNoteEntry> Notes { get; set; } = [];
+    [Parameter] public EventCallback<ExtraPlan> OnSelectPlan { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public bool InPopover { get; set; }
+    [Parameter] public int? CanvasTop { get; set; }
+    [Parameter] public string HeadingId { get; set; } = "nt-h";
+
+    private string? StyleAttr() => !InPopover && CanvasTop is { } y ? $"--top:{y}px" : null;
+}

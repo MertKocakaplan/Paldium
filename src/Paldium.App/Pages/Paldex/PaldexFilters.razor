@@ -1,0 +1,324 @@
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* Paldex filter controls inside FilterRail (.x rail groups). *@
+<div class="fg">
+    <span class="l">@L["Paldex.FilterSpecies"]</span>
+    <SearchField Value="@(Filter.Text ?? string.Empty)"
+                 ValueChanged="SetTextAsync"
+                 Placeholder="@L["Paldex.SpeciesPlaceholder"].Value"
+                 AriaLabel="@L["Paldex.FilterSpecies"].Value" />
+</div>
+
+@if (HasElements)
+{
+    <div class="fg">
+        <span class="l">@L["Paldex.FilterElements"]</span>
+        <ElementTiles Selected="Filter.Elements"
+                      SelectedChanged="SetElementsAsync"
+                      AriaLabel="@L["Paldex.FilterElements"].Value" />
+    </div>
+}
+
+<div class="fg">
+    <span class="l">@L["Paldex.FilterWork"]</span>
+    <div class="wts" role="group" aria-label="@L["Paldex.FilterWork"].Value">
+        @foreach (var type in Data.WorkTypes)
+        {
+            var id = type.Id;
+            var name = type.Names.Get(Lang);
+            var selected = Filter.MinWork.TryGetValue(id, out var minLevel);
+            if (!selected)
+            {
+                <button type="button"
+                        class="wt"
+                        role="checkbox"
+                        aria-checked="false"
+                        @onclick="() => AddWorkAsync(id)">
+                    <img class="wi" src="@("gamedata/" + type.IconPath)" width="16" height="16" alt="" />
+                    <span class="n">@name</span>
+                </button>
+            }
+            else
+            {
+                <Dropdown TValue="int"
+                          Open="@(_openWorkId == id)"
+                          OpenChanged="open => SetOpenWork(id, open)"
+                          TriggerClass="wt wt-on"
+                          ShowChevron="false"
+                          AriaLabel="@L["Paldex.WorkMinLevelAria", name].Value"
+                          Class="wt-dd">
+                    <TriggerContent>
+                        <img class="wi" src="@("gamedata/" + type.IconPath)" width="16" height="16" alt="" />
+                        <span class="n">@name</span>
+                        <b class="min">≥@minLevel.ToString(CultureInfo.InvariantCulture)</b>
+                    </TriggerContent>
+                    <ChildContent>
+                        <div class="wt-pop">
+                            <span class="wt-pop-lbl">@name</span>
+                            <Stepper Min="1"
+                                     Max="@MaxWorkLevel"
+                                     Value="@minLevel"
+                                     ValueChanged="v => SetWorkLevelAsync(id, v)"
+                                     EmptyText=""
+                                     AriaLabel="@L["Paldex.WorkMinLevelAria", name].Value" />
+                            <button type="button"
+                                    class="btn2 wt-rm"
+                                    @onclick="() => RemoveWorkAsync(id)">
+                                @L["Common.Remove"]
+                            </button>
+                        </div>
+                    </ChildContent>
+                </Dropdown>
+            }
+        }
+    </div>
+</div>
+
+<div class="fg">
+    <span class="l">@L["Paldex.Ownership"]</span>
+    <div class="chk" role="radiogroup" aria-label="@L["Paldex.Ownership"].Value">
+        @foreach (var option in OwnershipOrder)
+        {
+            var selected = Filter.Ownership == option;
+            <button type="button"
+                    class="r"
+                    role="radio"
+                    aria-checked="@(selected ? "true" : "false")"
+                    @onclick="() => SetOwnershipAsync(option)">
+                <span class="rd" aria-hidden="true"></span>
+                <span class="lbl">@OwnershipLabel(option)</span>
+                <span class="n">@OwnershipCount(option).ToString(CultureInfo.InvariantCulture)</span>
+            </button>
+        }
+    </div>
+</div>
+
+<div class="fg">
+    <span class="l">@L["Filter.Capture"]</span>
+    <div class="chk" role="radiogroup" aria-label="@L["Filter.Capture"].Value">
+        @foreach (var option in CaptureOrder)
+        {
+            var selected = Filter.Capture == option;
+            <button type="button"
+                    class="r"
+                    role="radio"
+                    disabled="@(Capture == null)"
+                    aria-checked="@(selected ? "true" : "false")"
+                    @onclick="() => UpdateAsync(Filter with { Capture = option })">
+                <span class="rd" aria-hidden="true"></span>
+                <span class="lbl">@L["Filter.Capture." + option]</span>
+                <span class="n">@CaptureCount(option).ToString(CultureInfo.InvariantCulture)</span>
+            </button>
+        }
+    </div>
+    @if (Capture == null)
+    {
+        <span class="m">@L["Filter.Capture.Disabled"]</span>
+    }
+</div>
+
+@if (HasObtain)
+{
+    <div class="fg">
+        <span class="l">@L["Paldex.FilterObtain"]</span>
+        <div class="tgs" role="group" aria-label="@L["Paldex.FilterObtain"].Value">
+            @foreach (var method in ObtainMethods)
+            {
+                var captured = method;
+                var selected = Filter.ObtainMethods.Contains(captured, StringComparer.OrdinalIgnoreCase);
+                <button type="button"
+                        class="tg"
+                        role="checkbox"
+                        aria-checked="@(selected ? "true" : "false")"
+                        @onclick="() => ToggleObtainAsync(captured)">
+                    @Terms.ObtainMethod(captured)
+                </button>
+            }
+        </div>
+    </div>
+}
+
+<div class="fg">
+    <span class="l">@L["Paldex.Rarity"]</span>
+    <div class="rng" role="group" aria-label="@L["Paldex.RarityRangeAria"].Value">
+        <input type="number"
+               class="inp"
+               min="@_minRarity"
+               max="@_maxRarity"
+               placeholder="@_minRarity.ToString(CultureInfo.InvariantCulture)"
+               aria-label="@L["Paldex.MinRarityAria"].Value"
+               value="@FormatNullableInt(Filter.MinRarity)"
+               @onchange="OnMinRarityChanged" />
+        <span aria-hidden="true">–</span>
+        <input type="number"
+               class="inp"
+               min="@_minRarity"
+               max="@_maxRarity"
+               placeholder="@_maxRarity.ToString(CultureInfo.InvariantCulture)"
+               aria-label="@L["Paldex.MaxRarityAria"].Value"
+               value="@FormatNullableInt(Filter.MaxRarity)"
+               @onchange="OnMaxRarityChanged" />
+    </div>
+</div>
+
+<div class="fg">
+    <span class="l">@L["Paldex.FilterOther"]</span>
+    <TriStateSelect Label="@L["Paldex.FilterNocturnal"].Value"
+                    Value="Filter.Nocturnal"
+                    ValueChanged="v => UpdateAsync(Filter with { Nocturnal = v })" />
+    <TriStateSelect Label="@L["Paldex.FilterVariant"].Value"
+                    Value="Filter.Variant"
+                    ValueChanged="v => UpdateAsync(Filter with { Variant = v })" />
+    <TriStateSelect Label="@L["Paldex.FilterSameSpecies"].Value"
+                    Value="Filter.SameSpeciesOnly"
+                    ValueChanged="v => UpdateAsync(Filter with { SameSpeciesOnly = v })" />
+    <TriStateSelect Label="@L["Paldex.FilterWildCatchable"].Value"
+                    Value="Filter.WildCatchable"
+                    ValueChanged="v => UpdateAsync(Filter with { WildCatchable = v })" />
+</div>
+
+@code {
+    private static readonly string[] ObtainMethods =
+    [
+        "Wild", "AlphaBoss", "Imprisoned", "Dungeon", "DungeonBoss",
+        "Cage", "Merchant", "Fishing", "Raid", "TowerBoss", "Recipe",
+    ];
+
+    private static readonly PalOwnership[] OwnershipOrder =
+    [
+        PalOwnership.Any,
+        PalOwnership.Owned,
+        PalOwnership.NotOwned,
+        PalOwnership.MissingGender,
+        PalOwnership.Pair,
+    ];
+
+    private static readonly PalCaptureFilter[] CaptureOrder =
+    [
+        PalCaptureFilter.Any,
+        PalCaptureFilter.Open,
+        PalCaptureFilter.Started,
+        PalCaptureFilter.None,
+        PalCaptureFilter.Done,
+    ];
+
+    [Parameter, EditorRequired] public PalFilter Filter { get; set; } = new();
+    [Parameter] public EventCallback<PalFilter> FilterChanged { get; set; }
+    [Parameter] public bool HasElements { get; set; } = true;
+    [Parameter] public IReadOnlyDictionary<string, OwnedSpeciesStats>? Owned { get; set; }
+
+    /// <summary>The capture record of the player (T121); null when none is known (the capture group is then disabled).</summary>
+    [Parameter] public CaptureRecord? Capture { get; set; }
+    [Parameter] public CaptureAvailability CaptureState { get; set; }
+
+    private bool HasObtain => Data.Pals.Any(p => p.Obtain != null);
+    private int MaxWorkLevel => Data.Pals.SelectMany(p => p.Work.Values).DefaultIfEmpty(1).Max();
+    private int _minRarity;
+    private int _maxRarity;
+    private string? _openWorkId;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _minRarity = Data.Pals.Select(p => p.Rarity).DefaultIfEmpty(1).Min();
+        _maxRarity = Data.Pals.Select(p => p.Rarity).DefaultIfEmpty(20).Max();
+    }
+
+    private Task UpdateAsync(PalFilter filter) => FilterChanged.InvokeAsync(filter);
+
+    private Task SetTextAsync(string text) =>
+        UpdateAsync(Filter with { Text = string.IsNullOrWhiteSpace(text) ? null : text });
+
+    private Task SetElementsAsync(IReadOnlyList<string> elements) =>
+        UpdateAsync(Filter with { Elements = elements });
+
+    private async Task AddWorkAsync(string id)
+    {
+        var work = new Dictionary<string, int>(Filter.MinWork) { [id] = 1 };
+        await UpdateAsync(Filter with { MinWork = work });
+    }
+
+    private Task SetWorkLevelAsync(string id, int level)
+    {
+        var work = new Dictionary<string, int>(Filter.MinWork)
+        {
+            [id] = Math.Clamp(level, 1, MaxWorkLevel),
+        };
+        return UpdateAsync(Filter with { MinWork = work });
+    }
+
+    private async Task RemoveWorkAsync(string id)
+    {
+        if (_openWorkId == id) _openWorkId = null;
+        var work = new Dictionary<string, int>(Filter.MinWork);
+        work.Remove(id);
+        await UpdateAsync(Filter with { MinWork = work });
+    }
+
+    private void SetOpenWork(string id, bool open)
+    {
+        _openWorkId = open ? id : (_openWorkId == id ? null : _openWorkId);
+    }
+
+    private Task SetOwnershipAsync(PalOwnership ownership) =>
+        UpdateAsync(Filter with { Ownership = ownership });
+
+    private Task ToggleObtainAsync(string method)
+    {
+        var current = Filter.ObtainMethods.ToList();
+        var existing = current.FindIndex(m => string.Equals(m, method, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0) current.RemoveAt(existing);
+        else current.Add(method);
+        return UpdateAsync(Filter with { ObtainMethods = current, ObtainOnly = false });
+    }
+
+    private Task OnMinRarityChanged(ChangeEventArgs e) =>
+        UpdateAsync(Filter with { MinRarity = ParseRarity(e.Value?.ToString()) });
+
+    private Task OnMaxRarityChanged(ChangeEventArgs e) =>
+        UpdateAsync(Filter with { MaxRarity = ParseRarity(e.Value?.ToString()) });
+
+    private int? ParseRarity(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, _minRarity, _maxRarity)
+            : null;
+    }
+
+    private static string FormatNullableInt(int? value) =>
+        value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private string OwnershipLabel(PalOwnership option) => option switch
+    {
+        PalOwnership.Any => L["Paldex.OwnAny"].Value,
+        PalOwnership.Pair => L["Paldex.OwnPair"].Value,
+        _ => L["Ownership." + option].Value,
+    };
+
+    // The species that can be caught and match the option (the numbers beside the options add up: Open = Started + None).
+    private int CaptureCount(PalCaptureFilter option) =>
+        Capture == null ? 0 : Data.Pals.Count(p => PalQuery.CountsForCapture(p) && PalQuery.MatchesCapture(p, option, Capture));
+
+    private int OwnershipCount(PalOwnership option)
+    {
+        if (option == PalOwnership.Any || Owned == null) return Data.Pals.Count;
+        var count = 0;
+        foreach (var pal in Data.Pals)
+        {
+            var stats = Owned.GetValueOrDefault(pal.Id) ?? OwnedSpeciesStats.None;
+            var ok = option switch
+            {
+                PalOwnership.Owned => stats.Total > 0,
+                PalOwnership.NotOwned => stats.Total == 0,
+                PalOwnership.MissingGender => stats.IsMissingGender(pal.MaleProbability),
+                PalOwnership.Pair => stats.HasPair,
+                _ => true,
+            };
+            if (ok) count++;
+        }
+        return count;
+    }
+}

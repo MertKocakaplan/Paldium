@@ -1,0 +1,129 @@
+@typeparam TItem
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="@($"tw{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    <table>
+        <colgroup>
+            @foreach (var col in Columns)
+            {
+                <col class="@col.ColClass" />
+            }
+        </colgroup>
+        <thead>
+            <tr>
+                @foreach (var col in Columns)
+                {
+                    var isSorted = !string.IsNullOrEmpty(col.SortKey) && string.Equals(col.SortKey, SortBy, StringComparison.Ordinal);
+                    var ariaSort = isSorted ? (SortDescending ? "descending" : "ascending") : null;
+                    var thClass = col.Align switch { "r" => "r", "c" => "c", _ => null };
+                    <th class="@thClass" aria-sort="@ariaSort">
+                        @if (col.HiddenHeader)
+                        {
+                            <span class="sr">@col.Label</span>
+                        }
+                        else if (!string.IsNullOrEmpty(col.SortKey))
+                        {
+                            var capturedKey = col.SortKey;
+                            <button type="button" title="@col.Tip" @onclick="() => OnSort.InvokeAsync(capturedKey)">
+                                @if (col.IconSrc != null) { <img class="mimh" src="@col.IconSrc" width="16" height="16" alt="" /> }
+                                @col.Label
+                                @if (isSorted)
+                                {
+                                    <Icon Name="@(SortDescending ? "chevron-down" : "chevron-up")" Size="14" />
+                                }
+                            </button>
+                        }
+                        else
+                        {
+                            @col.Label
+                        }
+                    </th>
+                }
+            </tr>
+        </thead>
+        <tbody @ref="_tbody">
+            @if (Items.Count > 0)
+            {
+                <Virtualize Items="@(Items as ICollection<TItem> ?? Items.ToList())"
+                            Context="item"
+                            ItemSize="@RowHeight"
+                            OverscanCount="@OverscanCount"
+                            SpacerElement="tr">
+                    @{
+                        var key = KeySelector?.Invoke(item);
+                        var selected = !string.IsNullOrEmpty(SelectedKey) && string.Equals(key, SelectedKey, StringComparison.Ordinal);
+                        var isFirst = Items.Count > 0 && ReferenceEquals(item, Items[0]);
+                        var tabIdx = selected || (string.IsNullOrEmpty(SelectedKey) && isFirst) ? 0 : -1;
+                        var extraCls = RowClass?.Invoke(item);
+                    }
+                    <tr class="@extraCls"
+                        data-row="true"
+                        aria-selected="@(selected ? "true" : null)"
+                        tabindex="@tabIdx"
+                        title="@RowTitle?.Invoke(item)"
+                        @onclick="() => ActivateRowAsync(item)"
+                        @onkeydown="e => OnRowKeyDownAsync(e, item)">
+                        @RowTemplate(item)
+                    </tr>
+                </Virtualize>
+            }
+        </tbody>
+    </table>
+
+    @if (Items.Count == 0 && EmptyContent != null)
+    {
+        @EmptyContent
+    }
+    else if (Items.Count > 0 && FooterContent != null)
+    {
+        @FooterContent
+    }
+</div>
+
+@code {
+    private ElementReference _tbody;
+
+    [Parameter, EditorRequired] public IReadOnlyList<DataTableColumn> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<TItem> RowTemplate { get; set; } = default!;
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public Func<TItem, string>? KeySelector { get; set; }
+    [Parameter] public Func<TItem, string?>? RowClass { get; set; }
+    [Parameter] public Func<TItem, string?>? RowTitle { get; set; }
+    [Parameter] public string? SelectedKey { get; set; }
+    [Parameter] public string? SortBy { get; set; }
+    [Parameter] public bool SortDescending { get; set; }
+    [Parameter] public EventCallback<string> OnSort { get; set; }
+    [Parameter] public EventCallback<TItem> OnRowActivate { get; set; }
+    [Parameter] public float RowHeight { get; set; } = 56;
+    [Parameter] public int OverscanCount { get; set; } = 8;
+    [Parameter] public string? Class { get; set; }
+
+    private Task ActivateRowAsync(TItem item) =>
+        OnRowActivate.HasDelegate ? OnRowActivate.InvokeAsync(item) : Task.CompletedTask;
+
+    private async Task OnRowKeyDownAsync(KeyboardEventArgs e, TItem item)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                await MoveRowFocusAsync(1);
+                break;
+            case "ArrowUp":
+                await MoveRowFocusAsync(-1);
+                break;
+            case "Enter":
+                await ActivateRowAsync(item);
+                break;
+        }
+    }
+
+    private async Task MoveRowFocusAsync(int delta)
+    {
+        try { await JS.InvokeVoidAsync("pbFocusSiblingRow", _tbody, delta); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+}

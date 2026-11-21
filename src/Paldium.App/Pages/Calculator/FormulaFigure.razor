@@ -1,0 +1,89 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+
+@if (DominantTerm is { } t)
+{
+    <div class="calc">
+        <span class="f">
+            <b>@FormatFactorPct(t.InheritProbability)</b>
+            <i>@InheritLabel(t)</i>
+        </span>
+        <span class="op" aria-hidden="true">×</span>
+        <span class="f">
+            <b>@t.WaysFraction</b>
+            <i>@PoolLabel(t)</i>
+        </span>
+        <span class="op" aria-hidden="true">×</span>
+        <span class="f">
+            <b>@FormatFactorPct(t.RandomProbability)</b>
+            <i>@RandomLabel(t)</i>
+        </span>
+        <span class="op" aria-hidden="true">=</span>
+        <span class="f eq">
+            <b>@FormatResultPct(t.TermProbability)</b>
+            <i>@(HasMultipleTerms
+                ? L["Odds.FormulaResultDominant", FormatResultPct(TotalProbability)].Value
+                : L["Odds.FormulaResultPerEgg"].Value)</i>
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter] public PassiveOddsTerm? DominantTerm { get; set; }
+    [Parameter] public bool HasMultipleTerms { get; set; }
+    [Parameter] public double TotalProbability { get; set; }
+
+    private string InheritLabel(PassiveOddsTerm t)
+    {
+        if (t.IsSpecialCake)
+            return L["Odds.FormulaInheritCake", t.InheritedCount].Value;
+        if (t.IsPoolCap)
+            return L["Odds.FormulaInheritPoolCap", t.InheritedCount].Value;
+        return L["Odds.FormulaInheritExact", t.InheritedCount].Value;
+    }
+
+    private string PoolLabel(PassiveOddsTerm t)
+    {
+        if (t.UnwantedInherited == 0)
+            return L["Odds.FormulaPoolWantedOnly", t.PoolSize, WantedPhrase(t.DesiredCount)].Value;
+        return L["Odds.FormulaPoolWithUnwanted", t.PoolSize, t.DesiredCount, t.UnwantedInherited].Value;
+    }
+
+    private string WantedPhrase(int desiredCount)
+    {
+        if (!string.Equals(Lang, "tr", StringComparison.OrdinalIgnoreCase))
+            return desiredCount.ToString(CultureInfo.InvariantCulture);
+        return desiredCount switch
+        {
+            1 => "1'i",
+            2 => "2'si",
+            3 => "3'ü",
+            4 => "4'ü",
+            _ => desiredCount.ToString(CultureInfo.InvariantCulture),
+        };
+    }
+
+    private string RandomLabel(PassiveOddsTerm t)
+    {
+        if (t.RandomSlots <= 0)
+            return L["Odds.FormulaRandomFull"].Value;
+        if (t.AllowedRandomUnwanted <= 0)
+            return L["Odds.FormulaRandomNone"].Value;
+        return L["Odds.FormulaRandomMax", Math.Min(t.RandomSlots, t.AllowedRandomUnwanted)].Value;
+    }
+
+    private string FormatFactorPct(double ratio)
+    {
+        var pct = ratio * 100.0;
+        var fmt = Math.Abs(pct - Math.Round(pct)) < 0.05 ? "P0" : "P1";
+        return ratio.ToString(fmt, CultureInfo.GetCultureInfo(Lang));
+    }
+
+    private string FormatResultPct(double ratio)
+    {
+        var culture = CultureInfo.GetCultureInfo(Lang);
+        if (ratio <= 0) return 0.0.ToString("P1", culture);
+        if (ratio < 0.001) return ratio.ToString("P2", culture);
+        return ratio.ToString("P1", culture);
+    }
+}

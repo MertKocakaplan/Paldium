@@ -1,0 +1,33 @@
+@inherits LocalizedComponentBase
+
+@if (Items.Count > 0)
+{
+    <div class="@($"active{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+         role="region"
+         aria-label="@L["Filters.ActiveRegion"].Value">
+        <span class="l">@L["Filters.ActiveLabel"]</span>
+        @foreach (var item in Items)
+        {
+            var captured = item.Key;
+            <span class="ch">
+                <span>@item.Label</span>
+                <button type="button"
+                        class="x"
+                        aria-label="@L["Filters.RemoveOne", item.Label].Value"
+                        @onclick="() => OnRemove.InvokeAsync(captured)">
+                    <Icon Name="x" Size="14" />
+                </button>
+            </span>
+        }
+        <button type="button" class="clr" @onclick="OnClearAll">
+            @L["Filters.ClearAll"]
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ActiveFilterItem> Items { get; set; } = [];
+    [Parameter] public EventCallback<string> OnRemove { get; set; }
+    [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

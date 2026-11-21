@@ -1,0 +1,88 @@
+@using Microsoft.JSInterop
+@inherits LocalizedComponentBase
+@inject IJSRuntime JS
+
+<div class="@CssClass()">
+    <Icon Name="search" Size="16" />
+    <input @ref="_input"
+           type="search"
+           value="@Value"
+           placeholder="@Placeholder"
+           aria-label="@(AriaLabel ?? Placeholder)"
+           @oninput="OnInputAsync"
+           @onfocus="OnFocusAsync"
+           @onblur="OnBlurAsync"
+           @onkeydown="OnKeyDownAsync" />
+    @if (!string.IsNullOrEmpty(Value))
+    {
+        <button type="button"
+                class="field-clr"
+                aria-label="@L["Common.Clear"].Value"
+                title="@L["Common.Clear"].Value"
+                @onclick="ClearAsync">
+            <Icon Name="x" Size="14" />
+        </button>
+    }
+</div>
+
+@code {
+    private ElementReference _input;
+    private bool _didAutoFocus;
+
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public bool AutoFocus { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnFocus { get; set; }
+    [Parameter] public EventCallback OnBlur { get; set; }
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    [Parameter] public EventCallback OnEscape { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (AutoFocus && !_didAutoFocus)
+        {
+            _didAutoFocus = true;
+            try { await JS.InvokeVoidAsync("pbFocusElement", _input); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private string CssClass()
+    {
+        var baseCls = Large ? "bigfield" : "field";
+        return string.IsNullOrEmpty(Class) ? baseCls : $"{baseCls} {Class}";
+    }
+
+    private Task OnInputAsync(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? string.Empty;
+        Value = text;
+        return ValueChanged.InvokeAsync(text);
+    }
+
+    private Task OnFocusAsync() => OnFocus.InvokeAsync();
+
+    private Task OnBlurAsync() => OnBlur.InvokeAsync();
+
+    private async Task ClearAsync()
+    {
+        Value = string.Empty;
+        await ValueChanged.InvokeAsync(string.Empty);
+        try { await JS.InvokeVoidAsync("pbFocusElement", _input); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await OnSubmit.InvokeAsync();
+        else if (e.Key == "Escape")
+            await OnEscape.InvokeAsync();
+    }
+}

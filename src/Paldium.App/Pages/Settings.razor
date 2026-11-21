@@ -1,0 +1,383 @@
+@page "/settings"
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using Paldium.App.Pages.SettingsParts
+@using Paldium.Import.Bridge
+@using Paldium.Import.Sync
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject SettingsStore Store
+@inject BridgeSettingsStore ModSettingsStore
+@inject IOwnedPalRepository Repository
+@inject ISyncService Sync
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+
+@* Settings (screens/settings.md, mockups a-genel and a-kaynak-hata): section navigation on the left, one scrolling column of settings rows.
+   Every change is saved at once; there are no switches (two choices are a segmented control, several are check boxes). *@
+@{
+    var scope = Store.Current.Scope;
+    var planner = Store.Current.Planner;
+    var sourceError = Sync.Statuses.Any(s => s.State == SourceState.Error);
+}
+<div class="b a">
+    <div class="sett">
+        <h1 class="sr" tabindex="-1">@L["Settings.Title"]</h1>
+        <nav class="snav" aria-label="@L["Settings.NavLabel"].Value">
+            @foreach (var (id, key) in Sections)
+            {
+                var sectionId = id;
+                <a href="@("settings#" + sectionId)" aria-current="@(sectionId == _current ? "true" : null)" @onclick="() => ScrollToAsync(sectionId)" @onclick:preventDefault="true">
+                    @L[key]
+                    @if (sectionId == "kaynak" && sourceError) { <span class="bad" role="img" aria-label="@L["Sync.Error"].Value"></span> }
+                </a>
+            }
+        </nav>
+        <div class="scont" @ref="_content">
+            <section class="sgrp" id="genel" aria-labelledby="s-genel">
+                <h2 id="s-genel">@L["Settings.Sec.General"]</h2>
+                <SettingsRow Label="@L["Settings.Language"].Value" Description="@L["Settings.LanguageDesc"].Value">
+                    <Segmented TValue="string" Value="@Language.Current" ValueChanged="Language.Set" AriaLabel="@L["Settings.Language"].Value" Items="@LanguageItems" />
+                </SettingsRow>
+                <SettingsRow Label="@L["Scope.IAm"].Value" Description="@L["Settings.MeDesc"].Value">
+                    @if (Owners.Count == 0)
+                    {
+                        <span class="gsub">@L["Scope.NoPlayers"]</span>
+                    }
+                    else
+                    {
+                        <Dropdown TValue="string" Items="@MeItems()" Value="@(scope.MyPlayerId ?? "")" ValueChanged="SetMe" AriaLabel="@L["Scope.IAm"].Value" />
+                    }
+                </SettingsRow>
+            </section>
+
+            <section class="sgrp" id="kaynak" aria-labelledby="s-kaynak">
+                <h2 id="s-kaynak">@L["Settings.Sec.Sources"] <span class="m">@Sync.Statuses.Count</span></h2>
+                <p class="gsub">@L["Settings.SourcesDesc"]</p>
+                <SourcesSection />
+                <SettingsRow Label="@L["ModKeys.Title"].Value" Description="@L["ModKeys.Hint"].Value" Wide="true">
+                    <div class="modkeys">
+                        @foreach (var action in ModKeyActions)
+                        {
+                            var current = action;
+                            <div class="mk">
+                                <span>@L["ModKeys." + current.Setting]</span>
+                                <span class="cks">
+                                    @foreach (var modifier in BridgeSettings.Modifiers)
+                                    {
+                                        var mod = modifier;
+                                        var on = ModifiersOf(current).Contains(mod);
+                                        <button type="button" class="ck" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => SetShortcut(current, mod, !on)">
+                                            <span class="sq">@if (on) { <Icon Name="check" Size="14" /> }</span>@mod
+                                        </button>
+                                    }
+                                </span>
+                                <Dropdown TValue="string" Items="@KeyItems" Value="@KeyOf(current)" ValueChanged="k => SetKey(current, k)" AriaLabel="@L["ModKeys." + current.Setting].Value" />
+                            </div>
+                        }
+                        <div class="mk">
+                            <span>@L["ModKeys.scanMode"]</span>
+                            <Segmented TValue="string" Value="@_mod.ScanMode" ValueChanged="SetScanMode" AriaLabel="@L["ModKeys.scanMode"].Value" Items="@ScanModeItems" />
+                        </div>
+                        <p class="@("hint2" + (_modError == null ? "" : " neg"))" role="@(_modError == null ? null : "alert")">@(_modError ?? L["ModKeys.Restart"].Value)</p>
+                    </div>
+                </SettingsRow>
+            </section>
+
+            <section class="sgrp" id="kapsam" aria-labelledby="s-kapsam">
+                <h2 id="s-kapsam">@L["Scope.Title"]</h2>
+                <p class="gsub">@L["Settings.ScopeDesc"]</p>
+                <SettingsRow Label="@L["Scope.Players"].Value">
+                    <Segmented TValue="string" Value="@scope.Mode" ValueChanged="SetMode" AriaLabel="@L["Scope.Players"].Value" Items="@ModeItems" />
+                </SettingsRow>
+                @if (scope.Mode == ScopeSettings.Selected && Owners.Count > 0)
+                {
+                    <SettingsRow Label="@L["Settings.SelectedPlayers"].Value" Wide="true">
+                        <div class="cks">
+                            @foreach (var owner in Owners)
+                            {
+                                var pid = owner.PlayerId;
+                                var on = scope.SelectedPlayerIds.Contains(pid, StringComparer.OrdinalIgnoreCase);
+                                <button type="button" class="ck" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => TogglePlayer(pid, !on)">
+                                    <span class="sq">@if (on) { <Icon Name="check" Size="14" /> }</span>@(owner.PlayerName ?? pid)
+                                </button>
+                            }
+                        </div>
+                    </SettingsRow>
+                }
+                <SettingsRow Label="@L["Scope.Locations"].Value" Description="@L["Settings.LocationsDesc"].Value" Wide="true">
+                    <div class="cks">
+                        @foreach (var kind in Enum.GetValues<LocationKind>())
+                        {
+                            var location = kind;
+                            var on = scope.Locations.Contains(location);
+                            <button type="button" class="ck" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => ToggleLocation(location, !on)">
+                                <span class="sq">@if (on) { <Icon Name="check" Size="14" /> }</span>@Terms.Location(location)
+                            </button>
+                        }
+                    </div>
+                </SettingsRow>
+                <SettingsRow Label="@L["Settings.SharedAreas"].Value" Description="@L["Scope.ShareGuild"].Value">
+                    <Segmented TValue="bool" Value="@scope.ShareGuildLocations" ValueChanged="SetShareGuild" AriaLabel="@L["Settings.SharedAreas"].Value" Items="@SharedItems" />
+                </SettingsRow>
+            </section>
+
+            <section class="sgrp" id="planlayici" aria-labelledby="s-planlayici">
+                <h2 id="s-planlayici">@L["Settings.Sec.Planner"]</h2>
+                <p class="gsub">@L["Settings.PlannerDesc"]</p>
+                <SettingsRow Label="@L["Settings.Improve"].Value" Description="@L["Settings.SolverHint"].Value">
+                    <Segmented TValue="int" Value="@planner.TimeLimitSeconds" ValueChanged="SetTimeLimit" AriaLabel="@L["Settings.Improve"].Value" Items="@TimeItems" />
+                </SettingsRow>
+                <SettingsRow Label="@L["Settings.Wild"].Value">
+                    <Segmented TValue="int" Value="@SettingsPlannerOptions.WildChoice(planner)" ValueChanged="SetWild" AriaLabel="@L["Settings.Wild"].Value" Items="@WildItems" />
+                </SettingsRow>
+                <SettingsRow Label="@L["Plan.MaxSteps"].Value">
+                    <Segmented TValue="int" Value="@planner.MaxSteps" ValueChanged="SetSteps" AriaLabel="@L["Plan.MaxSteps"].Value" Items="@StepItems" />
+                </SettingsRow>
+                <SettingsRow Label="@L["Settings.Cake"].Value">
+                    <Segmented TValue="bool" Value="@planner.AllowSpecialCake" ValueChanged="SetCake" AriaLabel="@L["Settings.Cake"].Value" Items="@CakeItems" />
+                </SettingsRow>
+            </section>
+
+            <section class="sgrp" id="guncelleme" aria-labelledby="s-guncelleme">
+                <h2 id="s-guncelleme">@L["Settings.Updates"]</h2>
+                <UpdatesSection />
+            </section>
+
+            <section class="sgrp" id="veri" aria-labelledby="s-veri">
+                <h2 id="s-veri">@L["Settings.Sec.Data"]</h2>
+                <dl class="kv">
+                    <dt>@L["Settings.GameVersion"]</dt><dd>@Data.Meta.GameVersion · @L["Settings.GameBuild"] @Data.Meta.GameBuild</dd>
+                    <dt>@L["Settings.GeneratedAt"]</dt><dd>@Data.Meta.GeneratedAtUtc</dd>
+                    <dt>@L["Settings.Counts"]</dt><dd>@string.Format(L["Settings.CountsValue"].Value, Data.Pals.Count, Data.Passives.Count, Data.Actives.Count)</dd>
+                    <dt>@L["Settings.Sources"]</dt><dd>@string.Join(", ", Data.Meta.Sources.Select(s => $"{s.Name} {s.DbVersion} ({(s.Commit.Length > 8 ? s.Commit[..8] : s.Commit)})"))</dd>
+                </dl>
+                <div class="adds">
+                    <button type="button" class="btn2" @onclick="OpenLogs"><Icon Name="shelf" Size="14" />@L["Settings.OpenLogs"]</button>
+                    <button type="button" class="btn2" @onclick="ShowLicensesAsync">@L["Settings.Licenses"]</button>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly (string Id, string Key)[] Sections =
+    [
+        ("genel", "Settings.Sec.General"), ("kaynak", "Settings.Sec.Sources"), ("kapsam", "Scope.Title"),
+        ("planlayici", "Settings.Sec.Planner"), ("guncelleme", "Settings.Updates"), ("veri", "Settings.Sec.Data"),
+    ];
+
+    private ElementReference _content;
+    private DotNetObjectReference<Settings>? _self;
+    private IJSObjectReference? _handle;
+    private string _current = "genel";
+    private bool _scrolledToFragment;
+
+    private IReadOnlyList<SegmentedItem<string>> LanguageItems => [new("en", "English", true), new("tr", "Türkçe", true)];
+    private IReadOnlyList<SegmentedItem<string>> ModeItems =>
+        [new(ScopeSettings.Me, L["Scope.Mine"].Value, true), new(ScopeSettings.Selected, L["Scope.Selected"].Value, true), new(ScopeSettings.All, L["Scope.All"].Value, true)];
+    private IReadOnlyList<SegmentedItem<bool>> SharedItems => [new(true, L["Settings.Shared.Count"].Value, true), new(false, L["Settings.Shared.ByOwner"].Value, true)];
+    private IReadOnlyList<SegmentedItem<int>> TimeItems =>
+        SettingsPlannerOptions.TimeLimits.Select(s => new SegmentedItem<int>(s, s == 0 ? L["Common.Off"].Value : L["Settings.Seconds", s].Value, true)).ToList();
+    private IReadOnlyList<SegmentedItem<int>> WildItems =>
+        SettingsPlannerOptions.WildChoices.Select(w => new SegmentedItem<int>(w, w == 0 ? L["Common.None"].Value : w == 3 ? "3+" : w.ToString(CultureInfo.InvariantCulture), true)).ToList();
+    private IReadOnlyList<SegmentedItem<int>> StepItems =>
+        SettingsPlannerOptions.StepChoices.Select(s => new SegmentedItem<int>(s, s.ToString(CultureInfo.InvariantCulture), true)).ToList();
+    private IReadOnlyList<SegmentedItem<bool>> CakeItems => [new(false, L["Common.None"].Value, true), new(true, L["Settings.Cake.Special"].Value, true)];
+    private IReadOnlyList<SegmentedItem<string>> ScanModeItems =>
+        [new(BridgeSettings.Smart, L["ModKeys.Smart"].Value, true), new(BridgeSettings.Full, L["ModKeys.Full"].Value, true)];
+    private static IReadOnlyList<DropdownItem<string>> KeyItems => BridgeSettings.KnownKeys.Select(k => new DropdownItem<string>(k, k)).ToList();
+
+    private List<PalOwner> Owners =>
+        Repository.Current.Pals
+            .Where(p => p.Owner != null)
+            .Select(p => p.Owner!)
+            .GroupBy(o => o.PlayerId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(o => o.PlayerName ?? o.PlayerId, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    // "Alice · 352 Pals" for each known player; the first entry is "unknown".
+    private IReadOnlyList<DropdownItem<string>> MeItems() =>
+        Owners.Select(o => new DropdownItem<string>(o.PlayerId, $"{o.PlayerName ?? o.PlayerId} · {L["Sync.Pals", Repository.Current.Pals.Count(p => p.Owner != null && string.Equals(p.Owner.PlayerId, o.PlayerId, StringComparison.OrdinalIgnoreCase))].Value}"))
+            .Prepend(new DropdownItem<string>("", L["Common.Unknown"].Value)).ToList();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _mod = ModSettingsStore.Load();
+        Repository.Changed += OnOwnedChanged;
+        Store.Changed += OnSettingsChanged;
+        Sync.StatusesChanged += OnSyncChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnOwnedChanged(object? sender, OwnedPalSnapshot snapshot) => InvokeAsync(StateHasChanged);
+    private void OnSettingsChanged(object? sender, AppSettings settings) => InvokeAsync(StateHasChanged);
+    private void OnSyncChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    // /settings#kaynak (from the sync badge) scrolls to the section.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        InvokeAsync(async () =>
+        {
+            if (FragmentOf(e.Location) is { } id && Sections.Any(s => s.Id == id)) await ScrollToAsync(id);
+        });
+
+    private static string? FragmentOf(string uri)
+    {
+        var hash = uri.IndexOf('#');
+        return hash < 0 ? null : uri[(hash + 1)..];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        _handle = await JS.InvokeAsync<IJSObjectReference>("pbGuideReader.attach", _content, _self, Sections.Select(s => s.Id).ToArray());
+        if (!_scrolledToFragment && FragmentOf(Navigation.Uri) is { } id && Sections.Any(s => s.Id == id))
+        {
+            _scrolledToFragment = true;
+            await ScrollToAsync(id);
+        }
+    }
+
+    /// <summary>Called by the scroll listener: the section in view.</summary>
+    [JSInvokable]
+    public void OnScrolled(string? id, int percent)
+    {
+        if (id == null || id == _current) return;
+        _current = id;
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Called by the shared scroll helper on Esc; the settings page has nothing to close.</summary>
+    [JSInvokable]
+    public void OnEscape()
+    {
+    }
+
+    private async Task ScrollToAsync(string id)
+    {
+        _current = id;
+        await JS.InvokeVoidAsync("pbGuideReader.scrollTo", _content, id);
+    }
+
+    private void SetMe(string id) =>
+        Store.Update(s => s with { Scope = s.Scope with { MyPlayerId = id.Length == 0 ? null : id } });
+
+    private void SetMode(string mode) =>
+        Store.Update(s => s with { Scope = s.Scope with { Mode = mode } });
+
+    private void TogglePlayer(string id, bool selected) =>
+        Store.Update(s =>
+        {
+            var ids = s.Scope.SelectedPlayerIds.Where(x => !string.Equals(x, id, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (selected) ids.Add(id);
+            return s with { Scope = s.Scope with { SelectedPlayerIds = ids } };
+        });
+
+    private void ToggleLocation(LocationKind kind, bool included) =>
+        Store.Update(s =>
+        {
+            var kinds = s.Scope.Locations.Where(k => k != kind).ToList();
+            if (included) kinds.Add(kind);
+            return s with { Scope = s.Scope with { Locations = kinds } };
+        });
+
+    private void SetShareGuild(bool on) =>
+        Store.Update(s => s with { Scope = s.Scope with { ShareGuildLocations = on } });
+
+    private void SetTimeLimit(int seconds) => Store.Update(s => s with { Planner = SettingsPlannerOptions.WithTimeLimit(s.Planner, seconds) });
+    private void SetWild(int choice) => Store.Update(s => s with { Planner = SettingsPlannerOptions.WithWild(s.Planner, choice) });
+    private void SetSteps(int steps) => Store.Update(s => s with { Planner = SettingsPlannerOptions.WithSteps(s.Planner, steps) });
+    private void SetCake(bool special) => Store.Update(s => s with { Planner = SettingsPlannerOptions.WithSpecialCake(s.Planner, special) });
+
+    private sealed record ModKeyAction(string Setting, Func<BridgeSettings, string> Get, Func<BridgeSettings, string, BridgeSettings> Set);
+
+    private static readonly ModKeyAction[] ModKeyActions =
+    [
+        new("scanKey", s => s.ScanKey, (s, v) => s with { ScanKey = v }),
+        new("probeKey", s => s.ProbeKey, (s, v) => s with { ProbeKey = v }),
+        new("clearKey", s => s.ClearKey, (s, v) => s with { ClearKey = v }),
+    ];
+
+    private BridgeSettings _mod = new();
+    private string? _modError;
+
+    private IReadOnlyList<string> ModifiersOf(ModKeyAction action) =>
+        BridgeSettings.TryParseShortcut(action.Get(_mod))?.Modifiers ?? [];
+
+    private string KeyOf(ModKeyAction action) => BridgeSettings.TryParseShortcut(action.Get(_mod))?.Key ?? "F9";
+
+    private void SetShortcut(ModKeyAction action, string modifier, bool on)
+    {
+        var modifiers = ModifiersOf(action).Where(m => m != modifier).ToList();
+        if (on) modifiers.Add(modifier);
+        SaveMod(action.Set(_mod, BridgeSettings.Compose(modifiers, KeyOf(action))));
+    }
+
+    private void SetKey(ModKeyAction action, string key) =>
+        SaveMod(action.Set(_mod, BridgeSettings.Compose(ModifiersOf(action), key)));
+
+    private void SetScanMode(string mode) => SaveMod(_mod with { ScanMode = mode });
+
+    // Saved at once; takes effect when the game is restarted (the mod reads the file at start-up). Duplicates and bad names are not saved.
+    private void SaveMod(BridgeSettings next)
+    {
+        var problems = next.Validate();
+        if (problems.Count > 0)
+        {
+            _modError = problems.Contains("duplicate") ? L["ModKeys.Duplicate"].Value : L["ModKeys.Invalid"].Value;
+            return;
+        }
+
+        try
+        {
+            ModSettingsStore.Save(next);
+            _mod = next;
+            _modError = null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            _modError = ex.Message;
+        }
+    }
+
+    // The fonts and data sources the app ships with and their licences.
+    private async Task ShowLicensesAsync()
+    {
+        var lines = new List<string> { "<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.LicensesFonts"].Value) + "</b><br>IBM Plex Sans, IBM Plex Mono · SIL Open Font License 1.1</p>" };
+        lines.Add("<p><b>PalCalc</b> (Tyler Camp) · MIT<br><a href=\"https://github.com/tylercamp/palcalc\" target=\"_blank\" rel=\"noopener\">github.com/tylercamp/palcalc</a></p>");
+        lines.Add("<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.Sources"].Value) + "</b><br>" +
+                  string.Join("<br>", Data.Meta.Sources.Select(s => System.Net.WebUtility.HtmlEncode($"{s.Name} {s.DbVersion}"))) + "</p>");
+        await Dialogs.ShowMessageBoxAsync(L["Settings.Licenses"].Value, new MarkupString(string.Concat(lines)), yesText: L["Common.Close"].Value);
+    }
+
+    private static void OpenLogs()
+    {
+        System.IO.Directory.CreateDirectory(AppServices.LogFolder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = AppServices.LogFolder,
+            UseShellExecute = true,
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Repository.Changed -= OnOwnedChanged;
+        Store.Changed -= OnSettingsChanged;
+        Sync.StatusesChanged -= OnSyncChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+        if (_handle != null)
+        {
+            try { await _handle.InvokeVoidAsync("dispose"); }
+            catch (JSDisconnectedException) { }
+        }
+
+        _self?.Dispose();
+        base.Dispose();
+    }
+}

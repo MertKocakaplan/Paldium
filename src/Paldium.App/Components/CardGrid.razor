@@ -1,0 +1,193 @@
+@typeparam TItem
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div @ref="_scrollRef"
+     class="@($"gw{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    @if (Items.Count == 0)
+    {
+        @EmptyContent
+    }
+    else
+    {
+        var rows = BuildRows();
+        var rowHeight = (float)(EffectiveCardHeight() + EffectiveCardGap());
+        <div class="@($"gal-list{(Dense ? " yogun" : "")}")"
+             role="list"
+             aria-label="@AriaLabel"
+             @onkeydown="OnKeyDownAsync">
+            <Virtualize Items="@rows" Context="row" ItemSize="@rowHeight" OverscanCount="3">
+                <ul class="@($"gal{(Dense ? " yogun" : "")}")"
+                    style="@($"--cols:{_columns.ToString(CultureInfo.InvariantCulture)}")"
+                    role="presentation">
+                    @foreach (var cell in row)
+                    {
+                        <CascadingValue Value="cell.Slot">
+                            @ItemTemplate(cell.Item)
+                        </CascadingValue>
+                    }
+                </ul>
+            </Virtualize>
+        </div>
+    }
+</div>
+
+@code {
+    public sealed record GridCell(TItem Item, CardGridSlot Slot);
+
+    private ElementReference _scrollRef;
+    private DotNetObjectReference<CardGrid<TItem>>? _dotNetRef;
+    private int _columns = 4;
+    private int _activeIndex;
+    private int? _pendingFocusIndex;
+    private double? _pendingScrollTop;
+    private bool _prevDense;
+    private int _prevMin;
+    private int _prevGap;
+    private string? _prevSelectedKey;
+    private bool _observing;
+
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public bool Dense { get; set; }
+    [Parameter] public int CardMin { get; set; }
+    [Parameter] public int CardHeight { get; set; }
+    [Parameter] public int CardGap { get; set; }
+    [Parameter] public Func<TItem, string>? KeySelector { get; set; }
+    [Parameter] public string? SelectedKey { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Items.Count == 0)
+        {
+            _activeIndex = 0;
+        }
+        else if (_activeIndex >= Items.Count)
+        {
+            _activeIndex = Items.Count - 1;
+        }
+
+        if (!string.Equals(SelectedKey, _prevSelectedKey, StringComparison.Ordinal))
+        {
+            _prevSelectedKey = SelectedKey;
+            if (!string.IsNullOrEmpty(SelectedKey) && KeySelector != null)
+            {
+                for (var i = 0; i < Items.Count; i++)
+                {
+                    if (string.Equals(KeySelector(Items[i]), SelectedKey, StringComparison.Ordinal))
+                    {
+                        _activeIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var min = EffectiveCardMin();
+        var gap = EffectiveCardGap();
+        if (firstRender || !_observing || _prevDense != Dense || _prevMin != min || _prevGap != gap)
+        {
+            _prevDense = Dense;
+            _prevMin = min;
+            _prevGap = gap;
+            _observing = true;
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            var cols = await JS.InvokeAsync<int>("pbGridColumns.observe", _scrollRef, _dotNetRef, min, gap);
+            if (cols > 0 && cols != _columns)
+            {
+                _columns = cols;
+                StateHasChanged();
+            }
+        }
+
+        if (_pendingFocusIndex is { } focusIdx)
+        {
+            var scrollTop = _pendingScrollTop;
+            _pendingFocusIndex = null;
+            _pendingScrollTop = null;
+            await JS.InvokeVoidAsync("pbFocusGridCard", _scrollRef, focusIdx, scrollTop);
+        }
+    }
+
+    [JSInvokable]
+    public void OnColumnsChanged(int columns)
+    {
+        if (columns > 0 && columns != _columns)
+        {
+            _columns = columns;
+            StateHasChanged();
+        }
+    }
+
+    private int EffectiveCardMin() => CardMin > 0 ? CardMin : (Dense ? 136 : 200);
+    private int EffectiveCardHeight() => CardHeight > 0 ? CardHeight : (Dense ? 194 : 324);
+    private int EffectiveCardGap() => CardGap > 0 ? CardGap : (Dense ? 10 : 14);
+
+    private List<IReadOnlyList<GridCell>> BuildRows()
+    {
+        var cols = Math.Max(1, _columns);
+        var rows = new List<IReadOnlyList<GridCell>>((Items.Count + cols - 1) / cols);
+        for (var start = 0; start < Items.Count; start += cols)
+        {
+            var count = Math.Min(cols, Items.Count - start);
+            var row = new GridCell[count];
+            for (var c = 0; c < count; c++)
+            {
+                var idx = start + c;
+                row[c] = new GridCell(Items[idx], new CardGridSlot(idx, idx == _activeIndex, OnCardFocused));
+            }
+            rows.Add(row);
+        }
+        return rows;
+    }
+
+    private void OnCardFocused(int index)
+    {
+        if (index >= 0 && index < Items.Count)
+            _activeIndex = index;
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (Items.Count == 0 || e.CtrlKey || e.AltKey || e.MetaKey) return;
+        var cols = Math.Max(1, _columns);
+        var current = Math.Clamp(_activeIndex, 0, Items.Count - 1);
+        int? next = e.Key switch
+        {
+            "ArrowRight" => Math.Min(Items.Count - 1, current + 1),
+            "ArrowLeft" => Math.Max(0, current - 1),
+            "ArrowDown" => Math.Min(Items.Count - 1, current + cols),
+            "ArrowUp" => Math.Max(0, current - cols),
+            "Home" => 0,
+            "End" => Items.Count - 1,
+            _ => null,
+        };
+        if (next is not { } target || target == current) return;
+
+        _activeIndex = target;
+        var rowHeight = EffectiveCardHeight() + EffectiveCardGap();
+        var rowDelta = Math.Abs(target / cols - current / cols);
+        _pendingScrollTop = rowDelta > 2 ? (target / cols) * rowHeight : -1;
+        _pendingFocusIndex = target;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_observing)
+        {
+            try { await JS.InvokeVoidAsync("pbGridColumns.unobserve", _scrollRef); }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+        _dotNetRef?.Dispose();
+    }
+}

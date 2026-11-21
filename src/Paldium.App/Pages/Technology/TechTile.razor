@@ -1,0 +1,35 @@
+@namespace Paldium.App.Pages.TechnologyParts
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+
+@* One technology of a level row (screens/technology.md, tile): icon, name (two lines), the points badge and a lock when it has a prerequisite. *@
+@{
+    var name = Tech.Names.Get(Lang);
+    var requirement = TechnologyModel.HasPrerequisite(Tech) ? string.Join(" · ", RequirementLines()) : null;
+    var tooltip = requirement == null ? name : name + " · " + requirement;
+}
+<button type="button" class="@($"tcb{(Tech.Ancient ? " anc" : "")}{(Selected ? " sel" : "")}")" title="@tooltip" data-tech="@Tech.Id" @onclick="() => OnSelect.InvokeAsync(Tech.Id)">
+    @if (TechnologyModel.IconOf(Tech) is { } icon)
+    {
+        <img class="tci" src="@("gamedata/" + icon)" width="40" height="40" alt="" loading="lazy" />
+    }
+    else
+    {
+        <span class="tci none" aria-hidden="true"></span>
+    }
+    <span class="tcn">@name</span>
+    <span class="tcp num" title="@(Tech.Ancient ? L["Tech.AncientTip", Tech.Cost].Value : null)">@(Tech.Ancient ? "◆ " : "")@Tech.Cost</span>
+    @if (requirement != null)
+    {
+        <span class="tck" aria-label="@requirement"><Icon Name="lock" Size="14" /></span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public TechnologyInfo Tech { get; set; } = default!;
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, TechnologyInfo> ById { get; set; } = new Dictionary<string, TechnologyInfo>();
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+
+    private IEnumerable<string> RequirementLines() => TechnologyText.Requirements(Tech, ById, Lang, L);
+}

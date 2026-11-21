@@ -1,0 +1,25 @@
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+
+<span class="@($"pin{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+      style="@SizeStyle()"
+      title="@Title"
+      aria-hidden="@(AriaLabel == null ? "true" : null)"
+      role="@(AriaLabel != null ? "img" : null)"
+      aria-label="@AriaLabel">
+    <Icon Name="@IconName()" Size="@IconSize()" />
+</span>
+
+@code {
+    [Parameter] public LocationKind Kind { get; set; }
+    [Parameter] public int Size { get; set; } = 39;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string IconName() => Kind == LocationKind.Party ? "list" : "pin";
+
+    private int IconSize() => Size <= 34 ? 14 : 16;
+
+    private string? SizeStyle() => Size == 39 ? null : $"--pin-w:{Size}px;--pin-h:{Math.Max(28, (int)Math.Round(Size * 0.85))}px";
+}

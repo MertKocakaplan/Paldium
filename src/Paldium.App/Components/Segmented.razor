@@ -1,0 +1,96 @@
+@typeparam TValue
+
+<div class="@CssClass()" role="radiogroup" aria-label="@AriaLabel">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var idx = i;
+        var item = Items[idx];
+        var selected = EqualityComparer<TValue>.Default.Equals(item.Value, Value);
+        var tabIdx = selected || (!HasSelected() && idx == FirstEnabledIndex()) ? 0 : -1;
+        <button type="button"
+                @ref="_buttons[idx]"
+                role="radio"
+                class="@(item.IsWord ? "w" : null)"
+                disabled="@item.Disabled"
+                aria-checked="@(selected ? "true" : "false")"
+                aria-selected="@(selected ? "true" : null)"
+                tabindex="@tabIdx"
+                @onclick="() => SelectAsync(idx)"
+                @onkeydown="e => OnKeyDownAsync(e, idx)">@item.Label</button>
+    }
+</div>
+
+@code {
+    private readonly Dictionary<int, ElementReference> _buttons = new();
+
+    [Parameter, EditorRequired] public IReadOnlyList<SegmentedItem<TValue>> Items { get; set; } = [];
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public bool Mini { get; set; }
+    [Parameter] public bool Numeric { get; set; }
+    [Parameter] public bool Flag { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string CssClass()
+    {
+        var list = new List<string>(5) { "seg" };
+        if (Mini) list.Add("mini");
+        if (Numeric) list.Add("num-seg");
+        if (Flag) list.Add("flagged");
+        if (!string.IsNullOrEmpty(Class)) list.Add(Class);
+        return string.Join(' ', list);
+    }
+
+    private bool HasSelected() => Items.Any(i => EqualityComparer<TValue>.Default.Equals(i.Value, Value));
+
+    private int FirstEnabledIndex()
+    {
+        for (var i = 0; i < Items.Count; i++)
+        {
+            if (!Items[i].Disabled) return i;
+        }
+        return 0;
+    }
+
+    private async Task SelectAsync(int idx)
+    {
+        if (idx < 0 || idx >= Items.Count || Items[idx].Disabled) return;
+        await ValueChanged.InvokeAsync(Items[idx].Value);
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e, int idx)
+    {
+        int step = e.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => 1,
+            "ArrowLeft" or "ArrowUp" => -1,
+            "Home" => -Items.Count,
+            "End" => Items.Count,
+            _ => 0,
+        };
+        if (step == 0 || Items.Count == 0) return;
+
+        int next;
+        if (Math.Abs(step) >= Items.Count)
+        {
+            next = step < 0
+                ? Enumerable.Range(0, Items.Count).FirstOrDefault(i => !Items[i].Disabled, idx)
+                : Enumerable.Range(0, Items.Count).Reverse().FirstOrDefault(i => !Items[i].Disabled, idx);
+        }
+        else
+        {
+            next = idx;
+            for (var n = 0; n < Items.Count; n++)
+            {
+                next = (next + step + Items.Count) % Items.Count;
+                if (!Items[next].Disabled) break;
+            }
+        }
+
+        if (next == idx || Items[next].Disabled) return;
+        await ValueChanged.InvokeAsync(Items[next].Value);
+        if (_buttons.TryGetValue(next, out var el))
+            await el.FocusAsync();
+    }
+}

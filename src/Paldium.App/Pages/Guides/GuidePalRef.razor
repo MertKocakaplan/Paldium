@@ -1,0 +1,23 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* A Pal inside a figure or a list: icon and bold name linking to the Paldex (mockup .palref). *@
+@if (_pal != null)
+{
+    <a class="palref" href="@Links.Pal(_pal.Id)">
+        <img class="pal" src="@("gamedata/" + _pal.IconPath)" width="22" height="22" alt="" />
+        <b>@_pal.DisplayName(Lang)</b>
+    </a>
+}
+
+@code {
+    private PalSpecies? _pal;
+
+    [Parameter] public string Id { get; set; } = "";
+
+    protected override void OnParametersSet()
+    {
+        try { _pal = Data.Pal(Id); }
+        catch (KeyNotFoundException) { _pal = null; }
+    }
+}

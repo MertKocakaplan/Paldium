@@ -1,0 +1,58 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject NavigationManager Navigation
+
+@if (IsEmpty)
+{
+    <span class="empty">@L["Plan.NoPassives"]</span>
+}
+else if (_passive != null)
+{
+    var rank = _passive.Rank;
+    if (Clickable)
+    {
+        <a class="@NodeClass(rank)" href="@Links.Passive(_passive.Id)">
+            <RankGlyph Rank="@rank" Size="16" />
+            <span class="pl-nm">@_passive.Names.Get(Lang)</span>
+        </a>
+    }
+    else
+    {
+        <span class="@NodeClass(rank)">
+            <RankGlyph Rank="@rank" Size="16" />
+            <span class="pl-nm">@_passive.Names.Get(Lang)</span>
+        </span>
+    }
+}
+else if (!string.IsNullOrEmpty(PassiveId))
+{
+    <span class="@(Want ? "want" : "other")">
+        <RankGlyph Rank="1" Size="16" />
+        <span class="pl-nm">@PassiveId</span>
+    </span>
+}
+
+@code {
+    private PassiveSkill? _passive;
+
+    [Parameter] public string? PassiveId { get; set; }
+    [Parameter] public PassiveSkill? Passive { get; set; }
+    [Parameter] public bool Want { get; set; }
+    [Parameter] public string Variant { get; set; } = "node";
+    [Parameter] public bool Clickable { get; set; }
+    [Parameter] public bool IsEmpty { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _passive = Passive;
+        if (_passive == null && !string.IsNullOrEmpty(PassiveId))
+        {
+            try { _passive = Data.Passive(PassiveId); }
+            catch (KeyNotFoundException) { _passive = null; }
+        }
+    }
+
+    private string NodeClass(int rank) => rank < 0
+        ? (Want ? "want neg" : "neg")
+        : (Want ? "want" : "other");
+}

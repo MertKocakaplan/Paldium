@@ -1,0 +1,21 @@
+@* One setting (mockup .srow): the name and a sentence on the left, the control on the right. *@
+<div class="@("srow" + (Wide ? " wide" : ""))">
+    <div class="sl">
+        <b>@Label</b>
+        @if (!string.IsNullOrEmpty(Description))
+        {
+            <span>@Description</span>
+        }
+    </div>
+    <div class="sc">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>The control is taller than one line (check boxes): the label aligns to the top.</summary>
+    [Parameter] public bool Wide { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

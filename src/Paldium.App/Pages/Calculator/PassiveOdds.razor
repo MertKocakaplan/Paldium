@@ -1,0 +1,349 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Probability
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IPassiveOddsCalculator Odds
+@inject CalculatorStateService CalcState
+
+@{
+    var maxPassives = Data.Mechanics.MaxPassives;
+    var activeCakeId = CalcState.OddsSpecialCake ? "Cake05" : null;
+    var altCakeId = CalcState.OddsSpecialCake ? null : "Cake05";
+
+    var isAllEmpty = CalcState.OddsPassivesA.Count == 0
+        && CalcState.OddsPassivesB.Count == 0
+        && CalcState.OddsUnknownA == 0
+        && CalcState.OddsUnknownB == 0
+        && CalcState.OddsDesired.Count == 0;
+
+    var result = Odds.Compute(new PassiveOddsQuery(
+        CalcState.OddsPassivesA,
+        CalcState.OddsPassivesB,
+        CalcState.OddsDesired,
+        CalcState.OddsMaxUnwanted,
+        activeCakeId,
+        CalcState.OddsUnknownA,
+        CalcState.OddsUnknownB));
+
+    var altResult = Odds.Compute(new PassiveOddsQuery(
+        CalcState.OddsPassivesA,
+        CalcState.OddsPassivesB,
+        CalcState.OddsDesired,
+        CalcState.OddsMaxUnwanted,
+        altCakeId,
+        CalcState.OddsUnknownA,
+        CalcState.OddsUnknownB));
+
+    var breakdown = PassiveOddsFormula.Evaluate(
+        Data,
+        CalcState.OddsPassivesA,
+        CalcState.OddsPassivesB,
+        CalcState.OddsDesired,
+        CalcState.OddsMaxUnwanted,
+        activeCakeId,
+        CalcState.OddsUnknownA,
+        CalcState.OddsUnknownB);
+
+    var displayProb = isAllEmpty ? 0 : result.ProbabilityPerEgg;
+}
+
+<div class="olas p">
+    <div class="inputs">
+        @RenderParentCard(
+            L["Odds.ParentATitle"].Value,
+            CalcState.OddsPassivesA,
+            CalcState.OddsUnknownA,
+            maxPassives,
+            isA: true)
+
+        @RenderParentCard(
+            L["Odds.ParentBTitle"].Value,
+            CalcState.OddsPassivesB,
+            CalcState.OddsUnknownB,
+            maxPassives,
+            isA: false)
+
+        <section class="pcol want">
+            <div class="hd">
+                <h2>@L["Odds.DesiredShortTitle"]</h2>
+                <button type="button" class="ghostb" @onclick="UseParentsPositive">@L["Odds.UseParentsPositive"]</button>
+            </div>
+            <div class="sock">
+                @for (var i = 0; i < CalcState.OddsDesired.Count; i++)
+                {
+                    var idx = i;
+                    var pid = CalcState.OddsDesired[idx];
+                    var passive = TryPassive(pid);
+                    var name = passive?.Names.Get(Lang) ?? pid;
+                    var rank = passive?.Rank ?? 1;
+                    var missing = breakdown.MissingDesiredIds.Contains(pid, StringComparer.OrdinalIgnoreCase);
+                    var negClass = rank < 0 ? " neg" : "";
+                    var zeroClass = missing ? " zero" : "";
+                    var exclude = CalcState.OddsDesired.Where((_, j) => j != idx).ToList();
+
+                    <div class="@($"srow{negClass}{zeroClass}")">
+                        <PassivePicker Exclude="@exclude" OnPick="id => ReplacePassive(CalcState.OddsDesired, idx, id)">
+                            <button type="button" class="sock-main" @onclick="context">
+                                <RankGlyph Rank="@rank" Size="16" />
+                                <span class="n">@name</span>
+                            </button>
+                        </PassivePicker>
+                        <button type="button"
+                                class="x"
+                                title="@L["Common.Remove"].Value"
+                                aria-label="@($"{L["Common.Remove"].Value}: {name}")"
+                                @onclick="() => RemoveAt(CalcState.OddsDesired, idx)">
+                            <Icon Name="x" Size="14" />
+                        </button>
+                    </div>
+                }
+
+                @if (CalcState.OddsDesired.Count < maxPassives)
+                {
+                    <PassivePicker Exclude="@CalcState.OddsDesired" OnPick="id => AddPassive(CalcState.OddsDesired, id, maxPassives)">
+                        <button type="button" class="add" @onclick="context">
+                            <Icon Name="plus" Size="14" />
+                            <span class="n">@L["PassivePicker.Add"]</span>
+                        </button>
+                    </PassivePicker>
+                }
+            </div>
+
+            <div class="ctlrow">
+                <div class="ctl">
+                    <span class="l">@L["Odds.MaxUnwantedShort"]</span>
+                    <Segmented TValue="int"
+                               Items="@MaxUnwantedItems()"
+                               Value="@CalcState.OddsMaxUnwanted"
+                               ValueChanged="v => CalcState.OddsMaxUnwanted = Math.Clamp(v, 0, 3)"
+                               Numeric="true"
+                               AriaLabel="@L["Odds.MaxUnwanted"].Value" />
+                </div>
+
+                <div class="ctl">
+                    <span class="l">@L["Odds.SpecialCakeShort"]</span>
+                    <Segmented TValue="bool"
+                               Items="@CakeToggleItems()"
+                               Value="@CalcState.OddsSpecialCake"
+                               ValueChanged="v => CalcState.OddsSpecialCake = v"
+                               AriaLabel="@L["Odds.SpecialCake"].Value" />
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="out">
+        <div class="res">
+            <div>
+                <span class="k">@L["Odds.PerEggShort"]</span>
+                <b class="big num">@(isAllEmpty ? "—" : FormatResultPct(result.ProbabilityPerEgg))</b>
+            </div>
+            <div>
+                <span class="k">@L["Odds.ExpectedShort"]</span>
+                <b class="big num">@(isAllEmpty ? "—" : Expected(result.ExpectedEggs))</b>
+                @if (!isAllEmpty && !double.IsPositiveInfinity(result.ExpectedEggs))
+                {
+                    <span class="k">@L["Plan.EggsWord"]</span>
+                }
+            </div>
+            <div class="alt">
+                <span class="k">@(CalcState.OddsSpecialCake ? L["Odds.WithoutSpecialCake"] : L["Odds.WithSpecialCake"])</span>
+                <b class="num">@(isAllEmpty ? "—" : FormatAltSummary(altResult))</b>
+            </div>
+        </div>
+
+        <EggsHundred Probability="@displayProb" DesiredCount="@CalcState.OddsDesired.Count" />
+
+        <div class="how">
+            <h3>@L["Odds.HowCalculated"]</h3>
+            <WeightBars />
+
+            @if (!isAllEmpty && breakdown.DominantTerm != null)
+            {
+                <FormulaFigure DominantTerm="@breakdown.DominantTerm"
+                               HasMultipleTerms="@breakdown.HasMultipleTerms"
+                               TotalProbability="@breakdown.TotalProbability" />
+            }
+
+            <p>
+                @BuildSummary(isAllEmpty, breakdown, altResult)
+                <a href="guides/02-passive-inheritance">@L["Odds.MoreInGuide"]</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RenderFragment RenderParentCard(string title, List<string> passives, int unknown, int maxPassives, bool isA) => __builder =>
+    {
+        var freeSlots = Math.Max(0, maxPassives - passives.Count - unknown);
+        <section class="pcol">
+            <div class="hd">
+                <h2>@title</h2>
+                <PalPicker Mode="PalPicker.PickerMode.Owned" OwnedValueChanged="p => FillFromOwned(isA, p, maxPassives)">
+                    <button type="button" class="ghostb" @onclick="context">
+                        @L["Odds.FillFromOwned"]<Icon Name="chevron-down" Size="14" />
+                    </button>
+                </PalPicker>
+            </div>
+
+            <div class="sock">
+                @for (var i = 0; i < passives.Count; i++)
+                {
+                    var idx = i;
+                    var pid = passives[idx];
+                    var passive = TryPassive(pid);
+                    var name = passive?.Names.Get(Lang) ?? pid;
+                    var rank = passive?.Rank ?? 1;
+                    var negClass = rank < 0 ? " neg" : "";
+                    var exclude = passives.Where((_, j) => j != idx).ToList();
+
+                    <div class="@($"srow{negClass}")">
+                        <PassivePicker Exclude="@exclude" OnPick="id => ReplacePassive(passives, idx, id)">
+                            <button type="button" class="sock-main" @onclick="context">
+                                <RankGlyph Rank="@rank" Size="16" />
+                                <span class="n">@name</span>
+                            </button>
+                        </PassivePicker>
+                        <button type="button"
+                                class="x"
+                                title="@L["Common.Remove"].Value"
+                                aria-label="@($"{L["Common.Remove"].Value}: {name}")"
+                                @onclick="() => RemoveAt(passives, idx)">
+                            <Icon Name="x" Size="14" />
+                        </button>
+                    </div>
+                }
+
+                @for (var s = 0; s < freeSlots; s++)
+                {
+                    <PassivePicker Exclude="@passives" OnPick="id => AddPassive(passives, id, maxPassives - unknown)">
+                        <button type="button" class="add" @onclick="context">
+                            <Icon Name="plus" Size="14" />
+                            <span class="n">@L["PassivePicker.Add"]</span>
+                        </button>
+                    </PassivePicker>
+                }
+            </div>
+
+            <div class="unk">
+                <span>@L["Odds.UnknownPassive"]</span>
+                <Stepper Value="@unknown"
+                         ValueChanged="v => SetUnknown(isA, v, maxPassives - passives.Count)"
+                         Min="0"
+                         Max="@Math.Max(0, maxPassives - passives.Count)"
+                         EmptyText=""
+                         AriaLabel="@($"{title}: {L["Odds.UnknownPassive"].Value}")" />
+            </div>
+        </section>
+    };
+
+    private void FillFromOwned(bool isA, OwnedPal? pal, int maxPassives)
+    {
+        if (pal == null) return;
+        var list = pal.Passives.Take(maxPassives).ToList();
+        if (isA)
+        {
+            CalcState.OddsPassivesA = list;
+            CalcState.OddsUnknownA = 0;
+        }
+        else
+        {
+            CalcState.OddsPassivesB = list;
+            CalcState.OddsUnknownB = 0;
+        }
+    }
+
+    private void SetUnknown(bool isA, int value, int maxAllowed)
+    {
+        var clamped = Math.Clamp(value, 0, Math.Max(0, maxAllowed));
+        if (isA) CalcState.OddsUnknownA = clamped;
+        else CalcState.OddsUnknownB = clamped;
+    }
+
+    private static void AddPassive(List<string> list, string id, int cap)
+    {
+        if (list.Count >= cap) return;
+        if (list.Contains(id, StringComparer.OrdinalIgnoreCase)) return;
+        list.Add(id);
+    }
+
+    private static void ReplacePassive(List<string> list, int index, string id)
+    {
+        if (index < 0 || index >= list.Count) return;
+        if (list.Where((_, i) => i != index).Contains(id, StringComparer.OrdinalIgnoreCase)) return;
+        list[index] = id;
+    }
+
+    private static void RemoveAt(List<string> list, int index)
+    {
+        if (index < 0 || index >= list.Count) return;
+        list.RemoveAt(index);
+    }
+
+    private void UseParentsPositive()
+    {
+        CalcState.OddsDesired = CalcState.OddsPassivesA
+            .Concat(CalcState.OddsPassivesB)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(id => TryPassive(id)?.Rank > 0)
+            .Take(Data.Mechanics.MaxPassives)
+            .ToList();
+    }
+
+    private string BuildSummary(bool isAllEmpty, PassiveOddsBreakdown b, PassiveOddsResult altResult)
+    {
+        if (isAllEmpty) return L["Odds.EmptyHint"].Value + " ";
+
+        var parts = new List<string>
+        {
+            L["Odds.PoolSummary", b.PoolSize, b.DesiredInPoolCount, b.UnwantedInPoolCount].Value
+        };
+
+        if (b.UnknownUnwantedCount > 0)
+            parts.Add(L["Odds.PoolSummaryUnknown", b.UnknownUnwantedCount].Value);
+
+        if (b.MissingDesiredIds.Count > 0)
+            parts.Add(L[PassiveOddsWarnings.DesiredMissing].Value);
+        else if (!CalcState.OddsSpecialCake && double.IsPositiveInfinity(altResult.ExpectedEggs))
+            parts.Add(L["Odds.CakeNeedsFour"].Value);
+
+        return string.Join(" ", parts) + " ";
+    }
+
+    private IReadOnlyList<SegmentedItem<int>> MaxUnwantedItems() =>
+    [
+        new(0, "0"),
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3"),
+    ];
+
+    private IReadOnlyList<SegmentedItem<bool>> CakeToggleItems() =>
+    [
+        new(false, L["Odds.CakeNo"].Value, IsWord: true),
+        new(true, L["Odds.CakeYes"].Value, IsWord: true),
+    ];
+
+    private PassiveSkill? TryPassive(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private string FormatResultPct(double p)
+    {
+        var culture = CultureInfo.GetCultureInfo(Lang);
+        if (p <= 0) return 0.0.ToString("P1", culture);
+        if (p < 0.001) return p.ToString("P2", culture);
+        return p.ToString("P1", culture);
+    }
+
+    private string Expected(double v) =>
+        double.IsPositiveInfinity(v) ? L["Odds.Impossible"].Value : "~" + v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private string FormatAltSummary(PassiveOddsResult alt) =>
+        double.IsPositiveInfinity(alt.ExpectedEggs)
+            ? L["Odds.Impossible"].Value
+            : $"{FormatResultPct(alt.ProbabilityPerEgg)} · {Expected(alt.ExpectedEggs)}";
+}

@@ -1,0 +1,90 @@
+﻿@namespace Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Breeding
+@inherits LocalizedComponentBase
+@inject IMutationCalculator MutationCalc
+@inject CalculatorStateService CalcState
+
+@{
+    var aFilled = Pair.OwnedA != null || (!CalcState.OwnedModeA && Pair.SpeciesA != null);
+    var bFilled = Pair.OwnedB != null || (!CalcState.OwnedModeB && Pair.SpeciesB != null);
+    var hasBothSpecies = Pair.SpeciesA != null && Pair.SpeciesB != null;
+    var noEgg = hasBothSpecies && Pair.SameGender;
+    var outcomes = hasBothSpecies && !noEgg
+        ? MutationCalc.MutationOutcomes(Pair.SpeciesA!.Id, Pair.SpeciesB!.Id)
+        : [];
+    var pathA = aFilled
+        ? "M268 138 H310 Q328 138 328 156 V250"
+        : "M268 108 H310 Q328 108 328 126 V250";
+    var pathB = bFilled
+        ? "M268 368 H310 Q328 368 328 350 V294"
+        : "M268 348 H310 Q328 348 328 330 V294";
+    var edgeACls = aFilled ? "edge now" : "edge ghost";
+    var edgeBCls = bFilled ? "edge now" : "edge ghost";
+    var edgeOutCls = hasBothSpecies && !noEgg ? "edge now" : "edge ghost";
+    var joinCls = hasBothSpecies && !noEgg ? "join now" : "join";
+}
+
+<div class="canvas">
+    <div class="canvas-inner" style="--canvas-w:740px;--canvas-h:470px">
+        <svg class="edges" aria-hidden="true">
+            <path class="@edgeACls" d="@pathA" />
+            <path class="@edgeBCls" d="@pathB" />
+            <path class="@edgeOutCls" d="M344 272 H376" />
+        </svg>
+
+        <ParentSlot Label="@L["Pair.ParentA"].Value"
+                    LabelY="12"
+                    NodeY="48"
+                    OwnedMode="@CalcState.OwnedModeA"
+                    OwnedModeChanged="owned => { CalcState.SetOwnedMode(true, owned); return OnChanged.InvokeAsync(); }"
+                    Species="@Pair.SpeciesA"
+                    SpeciesChanged="pal => { CalcState.SetSpecies(true, pal); return OnChanged.InvokeAsync(); }"
+                    OwnedPal="@Pair.OwnedA"
+                    OwnedPalChanged="pal => { CalcState.SetOwned(true, pal); return OnChanged.InvokeAsync(); }"
+                    AutoFocusEmpty="@(!aFilled && !bFilled)"
+                    DimEmpty="false"
+                    EmptyHelpText="@L["Calculator.EmptyHelpA"].Value" />
+
+        <ParentSlot Label="@L["Pair.ParentB"].Value"
+                    LabelY="252"
+                    NodeY="288"
+                    OwnedMode="@CalcState.OwnedModeB"
+                    OwnedModeChanged="owned => { CalcState.SetOwnedMode(false, owned); return OnChanged.InvokeAsync(); }"
+                    Species="@Pair.SpeciesB"
+                    SpeciesChanged="pal => { CalcState.SetSpecies(false, pal); return OnChanged.InvokeAsync(); }"
+                    OwnedPal="@Pair.OwnedB"
+                    OwnedPalChanged="pal => { CalcState.SetOwned(false, pal); return OnChanged.InvokeAsync(); }"
+                    AutoFocusEmpty="false"
+                    DimEmpty="@(!bFilled)"
+                    EmptyHelpText="@L["Calculator.EmptyHelpB"].Value" />
+
+        <div class="@joinCls" style="--x:328px;--y:272px">
+            <Icon Name="egg" Class="eg" />
+        </div>
+
+        <div class="@($"slot-empty child{(hasBothSpecies && !noEgg ? " mutc" : "")}")" style="--x:376px;--y:208px">
+            @if (noEgg)
+            {
+                <b>@L["Calculator.ErrNoEggTitle"]</b>
+                <span>@(Pair.ConflictingGender == Gender.Female ? L["Calculator.ErrBothFemale"].Value : L["Calculator.ErrBothMale"].Value)</span>
+            }
+            else if (hasBothSpecies)
+            {
+                <b>@L["Mutation.CountTitle", outcomes.Count]</b>
+                <span>@L["Mutation.InRightPanelNormal", Pair.FallbackChild?.DisplayName(Lang) ?? "—"]</span>
+            }
+            else
+            {
+                <b>@L["Mutation.EmptyBoxTitle"]</b>
+                <span>@L["Mutation.EmptyBoxSub"]</span>
+            }
+        </div>
+    </div>
+</div>
+
+<CalculatorStrip OnChanged="OnChanged" />
+
+@code {
+    [Parameter, EditorRequired] public PairResolution Pair { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+}

@@ -1,0 +1,118 @@
+@typeparam TValue
+
+<span class="@($"dd-wrap{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    <button type="button"
+            class="@TriggerClass"
+            aria-haspopup="@(ChildContent != null ? "dialog" : "listbox")"
+            aria-expanded="@(_open ? "true" : "false")"
+            aria-label="@AriaLabel"
+            disabled="@Disabled"
+            @onclick="ToggleAsync">
+        @if (TriggerContent != null)
+        {
+            @TriggerContent
+        }
+        else
+        {
+            @if (!string.IsNullOrEmpty(Icon))
+            {
+                <Icon Name="@Icon" Size="14" />
+            }
+            <span class="dd-txt">@ButtonLabel()</span>
+        }
+        @if (ShowChevron)
+        {
+            <Icon Name="@(_open ? "chevron-up" : "chevron-down")" Size="14" />
+        }
+    </button>
+
+    <MudPopover Open="_open"
+                Elevation="0"
+                Fixed="true"
+                AnchorOrigin="@AnchorOrigin"
+                TransformOrigin="@TransformOrigin"
+                OverflowBehavior="OverflowBehavior.FlipOnOpen">
+        @if (ChildContent != null)
+        {
+            <div @onkeydown="OnKeyDownAsync" tabindex="-1">
+                @ChildContent
+            </div>
+        }
+        else
+        {
+            <div class="cpop" role="listbox" aria-label="@(AriaLabel ?? Label)" @onkeydown="OnKeyDownAsync" tabindex="-1">
+                @foreach (var item in Items)
+                {
+                    var selected = EqualityComparer<TValue>.Default.Equals(item.Value, Value);
+                    <button type="button"
+                            class="mi"
+                            role="option"
+                            disabled="@item.Disabled"
+                            aria-selected="@(selected ? "true" : "false")"
+                            @onclick="() => SelectAsync(item.Value)">
+                        <span>@item.Label</span>
+                        @if (!string.IsNullOrEmpty(item.Meta))
+                        {
+                            <span class="m num">@item.Meta</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </MudPopover>
+</span>
+<MudOverlay Visible="_open" VisibleChanged="SetOpenAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+
+@code {
+    private bool _open;
+
+    [Parameter] public IReadOnlyList<DropdownItem<TValue>> Items { get; set; } = [];
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string TriggerClass { get; set; } = "dd";
+    [Parameter] public bool ShowChevron { get; set; } = true;
+    [Parameter] public RenderFragment? TriggerContent { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public Origin AnchorOrigin { get; set; } = Origin.BottomLeft;
+    [Parameter] public Origin TransformOrigin { get; set; } = Origin.TopLeft;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (OpenChanged.HasDelegate)
+            _open = Open;
+    }
+
+    public async Task CloseAsync() => await SetOpenAsync(false);
+
+    private string ButtonLabel()
+    {
+        if (!string.IsNullOrEmpty(Label)) return Label;
+        var current = Items.FirstOrDefault(i => EqualityComparer<TValue>.Default.Equals(i.Value, Value));
+        return current?.Label ?? string.Empty;
+    }
+
+    private Task ToggleAsync() => SetOpenAsync(!_open);
+
+    private async Task SetOpenAsync(bool value)
+    {
+        _open = value;
+        if (OpenChanged.HasDelegate)
+            await OpenChanged.InvokeAsync(value);
+    }
+
+    private async Task SelectAsync(TValue value)
+    {
+        await ValueChanged.InvokeAsync(value);
+        await SetOpenAsync(false);
+    }
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? SetOpenAsync(false) : Task.CompletedTask;
+}

@@ -1,0 +1,36 @@
+@inherits LocalizedComponentBase
+
+<CardGrid TItem="OwnedPal"
+          Items="@Items"
+          Dense="@Dense"
+          KeySelector="static p => p.Uid"
+          SelectedKey="@SelectedKey"
+          AriaLabel="@L["MyPals.CardsListAria"].Value"
+          EmptyContent="@EmptyContent">
+    <ItemTemplate Context="pal">
+        <PalCard Pal="@pal"
+                 Dense="@Dense"
+                 Selected="@string.Equals(SelectedKey, pal.Uid, StringComparison.Ordinal)"
+                 InScope="@(IsInScope?.Invoke(pal) ?? true)"
+                 WantedPassives="@WantedPassives"
+                 OnOpen="OnOpen"
+                 OnPlanBreed="OnPlanBreed"
+                 OnOpenPaldex="OnOpenPaldex"
+                 OnTogglePlan="OnTogglePlan"
+                 OnRemoveManual="OnRemoveManual" />
+    </ItemTemplate>
+</CardGrid>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<OwnedPal> Items { get; set; } = [];
+    [Parameter] public bool Dense { get; set; }
+    [Parameter] public string? SelectedKey { get; set; }
+    [Parameter] public Func<OwnedPal, bool>? IsInScope { get; set; }
+    [Parameter] public IReadOnlyCollection<string>? WantedPassives { get; set; }
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnOpen { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnPlanBreed { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnOpenPaldex { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnTogglePlan { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnRemoveManual { get; set; }
+}

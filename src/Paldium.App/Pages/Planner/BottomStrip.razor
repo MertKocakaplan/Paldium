@@ -1,0 +1,416 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Domain
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@if (!Computing && !EditingInputs && Plan != null)
+{
+    var steps = PlanText.StepsOf(Plan);
+    var currentIdx = PlanText.CurrentStepIndex(steps, Done);
+    <div class="strip">
+        <span class="prog">
+            @if (currentIdx >= 0)
+            {
+                <span>@L["Plan.StepProgress", currentIdx + 1, steps.Count]</span>
+            }
+            else
+            {
+                <span>@L["Plan.AllStepsDone", steps.Count]</span>
+            }
+            @for (var i = 0; i < steps.Count; i++)
+            {
+                var dotClass = Done.Contains(i) ? "done" : (i == currentIdx ? "on" : "");
+                <i class="@dotClass"></i>
+            }
+        </span>
+
+        @if (currentIdx >= 0 && currentIdx < steps.Count)
+        {
+            var step = steps[currentIdx];
+            var (parentA, parentB) = PlanText.ParentsInUse(Plan, step, FlexChoices);
+            <div class="next">
+                <span class="k">@L["Plan.NextStepLabel"]</span>
+                <span class="p">
+                    <PalIcon PalId="@parentA.SpeciesId" Size="26" />
+                    <span>@ParentName(parentA)</span>
+                    <GenderIcon Gender="@NodeGender(parentA)" Size="14" />
+                </span>
+                <span>+</span>
+                <span class="p">
+                    <PalIcon PalId="@parentB.SpeciesId" Size="26" />
+                    <span>@ParentName(parentB)</span>
+                    <GenderIcon Gender="@NodeGender(parentB)" Size="14" />
+                </span>
+                <Icon Name="arrow-right" Class="arrowi" Size="16" />
+                <span class="p">
+                    <PalIcon PalId="@step.ChildSpeciesId" Size="26" />
+                    <span>@SpeciesName(step.ChildSpeciesId)</span>
+                    <GenderIcon Gender="@ReqGender(step.ChildGender)" Size="14" />
+                </span>
+                <span class="k num" aria-label="@L["Plan.ExpectedEggsAria", Eggs(step.ExpectedEggs)].Value">
+                    <Icon Name="egg" />
+                    @("~" + Eggs(step.ExpectedEggs))
+                </span>
+            </div>
+        }
+
+        <span class="sp"></span>
+
+        <button type="button" class="ghostb" @onclick="OnOpenGlance">
+            <Icon Name="eye" Size="16" />
+            <span>@L["Plan.Glance"]</span>
+        </button>
+
+        @if (currentIdx >= 0 && IsFlexibleStep(steps[currentIdx]))
+        {
+            @* T105: a step whose child can be either gender asks which one hatched; the choice decides the next step's partner. *@
+            <span class="flexask" role="group" aria-label="@L["Plan.Flex.Which"].Value">
+                <span class="k">@L["Plan.Flex.Which"]</span>
+                <button type="button" class="btn2" @onclick="() => CompleteFlexAsync(currentIdx, Gender.Male)">
+                    <GenderIcon Gender="Gender.Male" Size="14" /> @L["Common.Male"]
+                </button>
+                <button type="button" class="btn2" @onclick="() => CompleteFlexAsync(currentIdx, Gender.Female)">
+                    <GenderIcon Gender="Gender.Female" Size="14" /> @L["Common.Female"]
+                </button>
+            </span>
+        }
+        else if (currentIdx >= 0)
+        {
+            <button type="button" class="solve" @onclick="() => OnCompleteNextStep.InvokeAsync(currentIdx)">
+                <Icon Name="check" Size="16" />
+                <span>@L["Plan.StepDone"]</span>
+            </button>
+        }
+        else
+        {
+            <button type="button" class="solve done-btn" title="@L["Plan.FinishTitle"].Value" @onclick="OnFinish">
+                <Icon Name="check" Size="16" />
+                <span>@L["Plan.Completed"]</span>
+            </button>
+        }
+    </div>
+}
+else
+{
+    <div class="strip">
+        <div class="@($"ctl{(WildFlag ? " flag" : "")}")">
+            <span class="l">@L["Plan.WildPalsShort"]</span>
+            <Segmented TValue="int"
+                       Items="@WildItems()"
+                       Value="@EffectiveWild()"
+                       ValueChanged="SetWildAsync"
+                       Numeric="true"
+                       AriaLabel="@L["Plan.AllowWild"].Value" />
+        </div>
+
+        <div class="@($"ctl{(StepsFlag ? " flag" : "")}")">
+            <span class="l">@L["Plan.MaxSteps"]</span>
+            <Segmented TValue="int"
+                       Items="@StepItems()"
+                       Value="@Query.MaxSteps"
+                       ValueChanged="SetMaxStepsAsync"
+                       Numeric="true"
+                       AriaLabel="@L["Plan.MaxSteps"].Value" />
+        </div>
+
+        <div class="@($"ctl{(LegendaryFlag ? " flag" : "")}")">
+            <span class="l">@L["Plan.LegendaryWildShort"]</span>
+            <Segmented TValue="bool"
+                       Items="@LegendaryItems()"
+                       Value="@Query.ExcludeLegendaryWild"
+                       ValueChanged="SetExcludeLegendaryAsync"
+                       Numeric="true"
+                       AriaLabel="@L["Plan.ExcludeLegendary"].Value" />
+        </div>
+
+        <div class="@($"ctl{(ScopeFlag ? " flag" : "")}")">
+            <span class="l">@L["Plan.ScopeLabel"]</span>
+            <ScopeMenu ShortSummary="@Compact" OnOpenChanged="OnPickerOpenChanged" />
+        </div>
+
+        <span class="dd-wrap">
+            <button type="button"
+                    class="ghostb"
+                    aria-haspopup="dialog"
+                    aria-expanded="@(_moreOpen ? "true" : "false")"
+                    @onclick="ToggleMoreAsync">
+                <span>@L["Plan.MoreOptions"]</span>
+                @if (ExclusionOps.Count(Query) > 0) { <span class="cnt num">@ExclusionOps.Count(Query)</span> }
+                <Icon Name="@(_moreOpen ? "chevron-up" : "chevron-down")" Size="14" />
+            </button>
+
+            <MudPopover Open="_moreOpen"
+                        Elevation="0"
+                        Fixed="true"
+                        AnchorOrigin="Origin.TopRight"
+                        TransformOrigin="Origin.BottomRight"
+                        OverflowBehavior="OverflowBehavior.FlipOnOpen">
+                <div class="pop-panel" @onkeydown="OnMoreKeyDownAsync" tabindex="-1">
+                    <div class="pop-panel-head">
+                        <span>@L["Plan.MoreOptionsTitle"]</span>
+                    </div>
+
+                    <div class="pop-row">
+                        <span class="pop-row-lbl">@L["Plan.MaxUnwanted"]</span>
+                        <Segmented TValue="int"
+                                   Items="@UnwantedItems()"
+                                   Value="@Query.MaxUnwanted"
+                                   ValueChanged="v => UpdateAsync(Query with { MaxUnwanted = v })"
+                                   Numeric="true"
+                                   Mini="true"
+                                   AriaLabel="@L["Plan.MaxUnwanted"].Value" />
+                    </div>
+
+                    @if (Query.AllowWild)
+                    {
+                        <div class="pop-row">
+                            <span class="pop-row-lbl">@L["Plan.WildUnwanted"]</span>
+                            <Segmented TValue="int"
+                                       Items="@WildUnwantedItems()"
+                                       Value="@Query.WildAssumedUnwanted"
+                                       ValueChanged="v => UpdateAsync(Query with { WildAssumedUnwanted = v })"
+                                       Numeric="true"
+                                       Mini="true"
+                                       AriaLabel="@L["Plan.WildUnwanted"].Value" />
+                        </div>
+                    }
+
+                    <div class="pop-row">
+                        <span class="pop-row-lbl">@L["Odds.SpecialCake"]</span>
+                        <Segmented TValue="bool"
+                                   Items="@OnOffItems()"
+                                   Value="@Query.AllowSpecialCake"
+                                   ValueChanged="v => UpdateAsync(Query with { AllowSpecialCake = v })"
+                                   Mini="true"
+                                   AriaLabel="@L["Odds.SpecialCake"].Value" />
+                    </div>
+
+                    <div class="pop-row">
+                        <span class="pop-row-lbl">@L["Plan.RequirePreferredAtLeastOne"]</span>
+                        <Segmented TValue="bool"
+                                   Items="@PreferredItems()"
+                                   Value="@Query.RequirePreferred"
+                                   ValueChanged="v => UpdateAsync(Query with { RequirePreferred = v })"
+                                   Mini="true"
+                                   AriaLabel="@L["Plan.RequirePreferredAtLeastOne"].Value" />
+                    </div>
+
+                    <div class="pop-row">
+                        <span class="pop-row-lbl">@L["Plan.ExhaustiveShort"]</span>
+                        <Segmented TValue="bool"
+                                   Items="@ExhaustiveItems()"
+                                   Value="@Query.Exhaustive"
+                                   ValueChanged="v => UpdateAsync(Query with { Exhaustive = v })"
+                                   Mini="true"
+                                   AriaLabel="@L["Plan.ExhaustiveShort"].Value" />
+                        <span class="pop-row-help">@L["Plan.ExhaustiveHint"]</span>
+                    </div>
+
+                    @if (!Query.Exhaustive)
+                    {
+                        <div class="pop-row">
+                            <span class="pop-row-lbl">@L["Plan.TimeLimit"]</span>
+                            <Segmented TValue="int"
+                                       Items="@TimeLimitItems()"
+                                       Value="@Query.TimeLimitSeconds"
+                                       ValueChanged="v => UpdateAsync(Query with { TimeLimitSeconds = v })"
+                                       Numeric="true"
+                                       Mini="true"
+                                       AriaLabel="@L["Plan.TimeLimit"].Value" />
+                        </div>
+                    }
+
+                    <ExclusionList Query="@Query" QueryChanged="QueryChanged" Inline="true" />
+
+                    <div class="pop-foot">
+                        <button type="button" class="btn2" @onclick="CloseMoreAsync">@L["Common.Close"]</button>
+                    </div>
+                </div>
+            </MudPopover>
+        </span>
+
+        <span class="sp"></span>
+
+        @if (Computing)
+        {
+            <button type="button" class="solve stop" @onclick="OnCancel">
+                <Icon Name="stop" Size="16" />
+                <span>@L["Plan.Stop"]</span>
+            </button>
+        }
+        else
+        {
+            @if (string.IsNullOrEmpty(Query.TargetId))
+            {
+                <span class="note-k">@L["Plan.SelectTargetFirst"]</span>
+            }
+            <button type="button"
+                    class="solve"
+                    disabled="@string.IsNullOrEmpty(Query.TargetId)"
+                    @onclick="OnCompute">
+                <span>@L["Plan.Solve"]</span>
+                <kbd>Enter</kbd>
+            </button>
+        }
+    </div>
+    <MudOverlay Visible="_moreOpen" VisibleChanged="SetMoreOpenAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+}
+
+@code {
+    private bool _moreOpen;
+    private bool _wasInputView = true;
+
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public bool Computing { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool EditingInputs { get; set; }
+    [Parameter] public BreedingPlan? Plan { get; set; }
+    [Parameter] public IReadOnlySet<int> Done { get; set; } = new HashSet<int>();
+    [Parameter] public bool WildFlag { get; set; }
+    [Parameter] public bool StepsFlag { get; set; }
+    [Parameter] public bool LegendaryFlag { get; set; }
+    [Parameter] public bool ScopeFlag { get; set; }
+    [Parameter] public EventCallback OnCompute { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<int> OnCompleteNextStep { get; set; }
+
+    /// <summary>Every step is done and "Done" is pressed: the plan is finished (T116).</summary>
+    [Parameter] public EventCallback OnFinish { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, Gender> FlexChoices { get; set; } = new Dictionary<int, Gender>();
+    [Parameter] public EventCallback<(int Index, Gender Gender)> OnCompleteFlexStep { get; set; }
+
+    private bool IsFlexibleStep(BreedStep step) => step.ChildGender == GenderReq.Any && !ReferenceEquals(step, Plan?.Root);
+
+    private Task CompleteFlexAsync(int index, Gender gender) => OnCompleteFlexStep.InvokeAsync((index, gender));
+    [Parameter] public EventCallback OnOpenGlance { get; set; }
+    [Parameter] public EventCallback<bool> OnPickerOpenChanged { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The strip has two views; the menus of the input view (Other, scope) vanish with it, so the page is told they are closed.
+        var resultView = !Computing && !EditingInputs && Plan != null;
+        var leftInputView = resultView && _wasInputView;
+        _wasInputView = !resultView;
+        var closeMore = (Computing || resultView) && _moreOpen;
+        if (closeMore) _moreOpen = false;
+        if (closeMore || leftInputView) await OnPickerOpenChanged.InvokeAsync(false);
+    }
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string ParentName(PlanNode n) => n switch
+    {
+        OwnedLeaf { Pal.Nickname: { } nick } => nick,
+        _ => SpeciesName(n.SpeciesId),
+    };
+
+    private static Gender? NodeGender(PlanNode n) => n switch
+    {
+        OwnedLeaf o => o.Pal.Gender,
+        _ => ReqGender(n.Gender),
+    };
+
+    private static Gender? ReqGender(GenderReq req) => req switch
+    {
+        GenderReq.Male => Gender.Male,
+        GenderReq.Female => Gender.Female,
+        _ => null,
+    };
+
+    private string Eggs(double v) => v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private int EffectiveWild() => SettingsPlannerOptions.WildChoice(Query);
+
+    private SegmentedItem<int>[] WildItems() =>
+    [
+        new(0, L["Common.None"].Value, IsWord: true),
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3+"),
+    ];
+
+    private SegmentedItem<int>[] StepItems() =>
+    [
+        new(4, "4"),
+        new(6, "6"),
+        new(8, "8"),
+        new(10, "10"),
+    ];
+
+    private SegmentedItem<bool>[] LegendaryItems() =>
+    [
+        new(true, L["Plan.Skip"].Value, IsWord: true, Disabled: !Query.AllowWild),
+        new(false, L["Plan.Use"].Value, IsWord: true, Disabled: !Query.AllowWild),
+    ];
+
+    private SegmentedItem<int>[] UnwantedItems() =>
+    [
+        new(0, "0"),
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3"),
+    ];
+
+    private SegmentedItem<int>[] WildUnwantedItems() =>
+    [
+        new(0, "0"),
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3"),
+        new(4, "4"),
+    ];
+
+    private SegmentedItem<bool>[] OnOffItems() =>
+    [
+        new(false, L["Plan.Off"].Value, IsWord: true),
+        new(true, L["Plan.On"].Value, IsWord: true),
+    ];
+
+    private SegmentedItem<bool>[] PreferredItems()
+    {
+        var disabled = Query.PreferredUids.Count == 0;
+        return
+        [
+            new(false, L["Plan.Optional"].Value, IsWord: true, Disabled: disabled),
+            new(true, L["Plan.Required"].Value, IsWord: true, Disabled: disabled),
+        ];
+    }
+
+    private SegmentedItem<bool>[] ExhaustiveItems() =>
+    [
+        new(false, L["Plan.FastSearch"].Value, IsWord: true),
+        new(true, L["Plan.ExhaustiveSearch"].Value, IsWord: true),
+    ];
+
+    private SegmentedItem<int>[] TimeLimitItems() =>
+        SettingsPlannerOptions.TimeLimits
+            .Select(s => s == 0 ? new SegmentedItem<int>(s, L["Common.Off"].Value, IsWord: true) : new SegmentedItem<int>(s, L["Settings.Seconds", s].Value))
+            .ToArray();
+
+    private Task UpdateAsync(PlannerSettings next) => QueryChanged.InvokeAsync(next);
+
+    private Task SetWildAsync(int val) => UpdateAsync(SettingsPlannerOptions.WithWild(Query, val));
+
+    private Task SetMaxStepsAsync(int steps) => UpdateAsync(Query with { MaxSteps = steps });
+
+    private Task SetExcludeLegendaryAsync(bool skip) => UpdateAsync(Query with { ExcludeLegendaryWild = skip });
+
+    private Task ToggleMoreAsync() => SetMoreOpenAsync(!_moreOpen);
+
+    private Task CloseMoreAsync() => SetMoreOpenAsync(false);
+
+    private async Task SetMoreOpenAsync(bool open)
+    {
+        _moreOpen = open;
+        await OnPickerOpenChanged.InvokeAsync(open);
+    }
+
+    private Task OnMoreKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseMoreAsync() : Task.CompletedTask;
+}

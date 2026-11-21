@@ -1,0 +1,42 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+@inject CalculatorStateService CalcState
+
+<div class="strip">
+    <div class="ctl">
+        <span class="l">@L["Mutation.Cake"]</span>
+        <Segmented TValue="string"
+                   Items="@CakeItems()"
+                   Value="@CalcState.Cake"
+                   ValueChanged="SetCakeAsync"
+                   AriaLabel="@L["Mutation.Cake"].Value" />
+    </div>
+
+    <button type="button" class="ghostb" @onclick="SwapAsync">⇄ @L["Pair.Swap"]</button>
+
+    <span class="sp"></span>
+    <span class="note-k">@L["Calculator.PersistNote"]</span>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<SegmentedItem<string>> CakeItems() =>
+    [
+        new(CalculatorStateService.CakeNone, L["Calculator.CakeNone"].Value, IsWord: true),
+        new(CalculatorStateService.CakeNormal, L["Calculator.CakeNormal"].Value, IsWord: true),
+        new(CalculatorStateService.CakeSpecial, L["Calculator.CakeSpecial"].Value, IsWord: true),
+    ];
+
+    private Task SetCakeAsync(string cake)
+    {
+        CalcState.Cake = cake;
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task SwapAsync()
+    {
+        CalcState.SwapParents();
+        return OnChanged.InvokeAsync();
+    }
+}

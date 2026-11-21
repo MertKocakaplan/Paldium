@@ -1,0 +1,36 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* 3x3 element checkbox tile grid for Paldex (x.css .els9 / .et). *@
+<div class="@($"els9{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" role="group" aria-label="@AriaLabel">
+    @foreach (var element in Data.Elements)
+    {
+        var id = element.Id;
+        var selected = Selected.Contains(id, StringComparer.OrdinalIgnoreCase);
+        var cls = $"et el-{id.ToLowerInvariant()}";
+        <button type="button"
+                class="@cls"
+                role="checkbox"
+                aria-checked="@(selected ? "true" : "false")"
+                @onclick="() => ToggleAsync(id)">
+            <img src="@("gamedata/" + element.IconPath)" width="16" height="16" alt="" />
+            <span>@element.Names.Get(Lang)</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Selected { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<string>> SelectedChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task ToggleAsync(string id)
+    {
+        var next = Selected.ToList();
+        var existing = next.FindIndex(e => e.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0) next.RemoveAt(existing);
+        else next.Add(id);
+        return SelectedChanged.InvokeAsync(next);
+    }
+}

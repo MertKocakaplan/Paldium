@@ -1,0 +1,414 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Breeding
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IBreedingCalculator Breeding
+@inject OwnedScopeService Scope
+@inject CalculatorStateService CalcState
+
+@{
+    var effectiveFilter = CalcState.TargetFilter ?? (_anyOwnedCount > 0 ? FilterAnyOwned : FilterAll);
+}
+
+<div class="pmain p">
+    <div class="tbar">
+        <div class="tgt">
+            @if (_target != null)
+            {
+                <PalIcon Pal="_target" Size="40" />
+                <div>
+                    <b>
+                        <a href="@($"paldex?pal={Uri.EscapeDataString(_target.Id)}")" class="pal-link">@_target.DisplayName(Lang)</a>
+                    </b>
+                    <span class="m">@($"#{_target.DexLabel} · {ElementsText(_target)} · {L["Target.PairCount", _allRows.Count].Value}")</span>
+                </div>
+                <PalPicker Value="_target" ValueChanged="SetTargetAsync" AllowClear="false">
+                    <button type="button" class="ghostb" @onclick="context">
+                        @L["Target.Change"]<Icon Name="chevron-down" Size="14" />
+                    </button>
+                </PalPicker>
+            }
+            else
+            {
+                <div>
+                    <b>@L["Target.Label"]</b>
+                    <span class="m">@L["Target.Hint"]</span>
+                </div>
+                <PalPicker Value="_target" ValueChanged="SetTargetAsync" AllowClear="false">
+                    <button type="button" class="btn acc" @onclick="context">
+                        @L["Target.PickTarget"]<Icon Name="chevron-down" Size="14" />
+                    </button>
+                </PalPicker>
+            }
+        </div>
+
+        @if (_target != null)
+        {
+            <Segmented TValue="int"
+                       Items="@FilterItems()"
+                       Value="@effectiveFilter"
+                       ValueChanged="SetFilterAsync"
+                       AriaLabel="@L["Target.Label"].Value" />
+
+            <SearchField Class="sm"
+                         Value="@CalcState.TargetSearch"
+                         ValueChanged="SetSearchAsync"
+                         Placeholder="@L["Target.Search"].Value"
+                         AriaLabel="@L["Target.Search"].Value" />
+        }
+    </div>
+
+    @if (_target == null)
+    {
+        <div class="pmain-empty">
+            <p>@L["Target.Hint"]</p>
+        </div>
+    }
+    else
+    {
+        @if (_target.BreedingFlags.SameSpeciesOnly)
+        {
+            <div class="info pmain-note">
+                <Icon Name="info" Size="16" />
+                <span>@L["Target.SameSpeciesOnly"]</span>
+            </div>
+        }
+
+        @if (_tableRows.Count == 0)
+        {
+            <div class="pmain-empty">
+                <p>@L["Target.NoPairs"]</p>
+                @if (effectiveFilter != FilterAll || !string.IsNullOrWhiteSpace(CalcState.TargetSearch))
+                {
+                    <button type="button" class="ghostb" @onclick="ResetFiltersAsync">@L["Common.ResetFilters"]</button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="tw">
+                <table class="pairs-t">
+                    <colgroup>
+                        <col class="col-parent" />
+                        <col class="col-own" />
+                        <col class="col-plus" />
+                        <col class="col-parent" />
+                        <col class="col-own" />
+                        <col class="col-act" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>@L["Target.ColParent"]</th>
+                            <th>@L["Target.ColOwned"]</th>
+                            <th><span class="sr">+</span></th>
+                            <th>@L["Target.ColParent"]</th>
+                            <th>@L["Target.ColOwned"]</th>
+                            <th><span class="sr">@L["Common.Actions"]</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <Virtualize Items="_tableRows" Context="item" ItemSize="56" OverscanCount="8" SpacerElement="tr">
+                            @if (item.IsGroup)
+                            {
+                                <tr class="grp"><td colspan="6">@item.GroupLabel</td></tr>
+                            }
+                            else if (item.Row is { } row)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="pal">
+                                            <PalIcon Pal="row.A" Size="32" />
+                                            <span class="t">
+                                                <a href="@($"paldex?pal={Uri.EscapeDataString(row.A.Id)}")" class="pal-link">@row.A.DisplayName(Lang)</a>
+                                            </span>
+                                            <span class="s">
+                                                <span>@ParentSubText(row.A)</span>
+                                                @if (ToGender(row.AReq) is { } ga)
+                                                {
+                                                    <GenderIcon Gender="ga" Size="12" />
+                                                }
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="o"><OwnedCountBadge Stats="@row.StatsA" /></td>
+                                    <td class="plus" aria-hidden="true">+</td>
+                                    <td>
+                                        <div class="pal">
+                                            <PalIcon Pal="row.B" Size="32" />
+                                            <span class="t">
+                                                <a href="@($"paldex?pal={Uri.EscapeDataString(row.B.Id)}")" class="pal-link">@row.B.DisplayName(Lang)</a>
+                                            </span>
+                                            <span class="s">
+                                                <span>@ParentSubText(row.B)</span>
+                                                @if (ToGender(row.BReq) is { } gb)
+                                                {
+                                                    <GenderIcon Gender="gb" Size="12" />
+                                                }
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="o"><OwnedCountBadge Stats="@row.StatsB" /></td>
+                                    <td class="r">
+                                        <button type="button" class="ghostb" @onclick="() => OpenPairAsync(row)">
+                                            @L["Target.PairToChildBtn"]
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </Virtualize>
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int FilterAll = 0;
+    private const int FilterAnyOwned = 1;
+    private const int FilterBothOwned = 2;
+
+    private sealed record PairRow(
+        PalSpecies A,
+        PalSpecies B,
+        GenderReq AReq,
+        GenderReq BReq,
+        OwnedSpeciesStats StatsA,
+        OwnedSpeciesStats StatsB,
+        int Tier);
+
+    private sealed record TableItem(bool IsGroup, string? GroupLabel, PairRow? Row);
+
+    [Parameter] public string? TargetId { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private PalSpecies? _target;
+    private string? _handledTargetId;
+    private IReadOnlyDictionary<string, OwnedSpeciesStats> _ownedStats = new Dictionary<string, OwnedSpeciesStats>();
+    private List<ParentPair> _rawPairs = [];
+    private List<PairRow> _allRows = [];
+    private List<TableItem> _tableRows = [];
+    private int _anyOwnedCount;
+    private int _bothOwnedCount;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        var effectiveId = TargetId ?? CalcState.TargetSpeciesId;
+        if (!string.IsNullOrEmpty(effectiveId)
+            && !string.Equals(effectiveId, _handledTargetId, StringComparison.OrdinalIgnoreCase)
+            && Data.TryNormalizePalId(effectiveId, out var normalized))
+        {
+            LoadTarget(Data.Pal(normalized));
+        }
+    }
+
+    protected override void OnUiLanguageChanged()
+    {
+        RebuildView();
+        base.OnUiLanguageChanged();
+    }
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e) =>
+        InvokeAsync(() =>
+        {
+            if (_target != null)
+            {
+                RebuildRowsFromRaw();
+                RebuildView();
+                StateHasChanged();
+            }
+        });
+
+    private Task SetTargetAsync(PalSpecies? pal)
+    {
+        LoadTarget(pal);
+        return Task.CompletedTask;
+    }
+
+    private void LoadTarget(PalSpecies? pal)
+    {
+        _target = pal;
+        _handledTargetId = pal?.Id;
+        CalcState.TargetSpeciesId = pal?.Id;
+        _rawPairs = pal == null ? [] : Breeding.GetParents(pal.Id).ToList();
+        RebuildRowsFromRaw();
+        RebuildView();
+    }
+
+    private void RebuildRowsFromRaw()
+    {
+        _ownedStats = OwnedSpeciesStats.Compute(Scope.ScopedPals);
+        var list = new List<PairRow>(_rawPairs.Count);
+        var anyCount = 0;
+        var bothCount = 0;
+
+        foreach (var p in _rawPairs)
+        {
+            var spA = Data.Pal(p.A);
+            var spB = Data.Pal(p.B);
+            var stA = _ownedStats.GetValueOrDefault(spA.Id) ?? OwnedSpeciesStats.None;
+            var stB = _ownedStats.GetValueOrDefault(spB.Id) ?? OwnedSpeciesStats.None;
+            var reqA = p.AReq;
+            var reqB = p.BReq;
+
+            // If only B is owned, place B in the first column so owned parents stay visually aligned.
+            if (stA.Total == 0 && stB.Total > 0)
+            {
+                (spA, spB) = (spB, spA);
+                (stA, stB) = (stB, stA);
+                (reqA, reqB) = (reqB, reqA);
+            }
+
+            var tier = (stA.Total > 0 && stB.Total > 0) ? 2 : (stA.Total > 0 || stB.Total > 0) ? 1 : 0;
+            if (tier >= 1) anyCount++;
+            if (tier == 2) bothCount++;
+            list.Add(new PairRow(spA, spB, reqA, reqB, stA, stB, tier));
+        }
+
+        var compare = CultureInfo.GetCultureInfo(Lang).CompareInfo;
+        list.Sort((x, y) =>
+        {
+            var c = y.Tier.CompareTo(x.Tier);
+            if (c != 0) return c;
+
+            var sameX = string.Equals(x.A.Id, x.B.Id, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            var sameY = string.Equals(y.A.Id, y.B.Id, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            c = sameX.CompareTo(sameY);
+            if (c != 0) return c;
+
+            c = x.A.DexNo.CompareTo(y.A.DexNo);
+            if (c != 0) return c;
+            c = x.A.IsVariant.CompareTo(y.A.IsVariant);
+            if (c != 0) return c;
+            c = x.B.DexNo.CompareTo(y.B.DexNo);
+            if (c != 0) return c;
+            c = x.B.IsVariant.CompareTo(y.B.IsVariant);
+            if (c != 0) return c;
+
+            var na = compare.Compare(x.A.DisplayName(Lang), y.A.DisplayName(Lang), CompareOptions.IgnoreCase);
+            return na != 0 ? na : compare.Compare(x.B.DisplayName(Lang), y.B.DisplayName(Lang), CompareOptions.IgnoreCase);
+        });
+
+        _allRows = list;
+        _anyOwnedCount = anyCount;
+        _bothOwnedCount = bothCount;
+    }
+
+    private void RebuildView()
+    {
+        var filter = CalcState.TargetFilter ?? (_anyOwnedCount > 0 ? FilterAnyOwned : FilterAll);
+        IEnumerable<PairRow> rows = _allRows;
+
+        rows = filter switch
+        {
+            FilterAnyOwned => rows.Where(r => r.Tier >= 1),
+            FilterBothOwned => rows.Where(r => r.Tier == 2),
+            _ => rows,
+        };
+
+        if (!string.IsNullOrWhiteSpace(CalcState.TargetSearch))
+            rows = rows.Where(r => PalTextSearch.Matches(r.A, CalcState.TargetSearch) || PalTextSearch.Matches(r.B, CalcState.TargetSearch));
+
+        var filtered = rows.ToList();
+        var items = new List<TableItem>(filtered.Count + 4);
+        var both = filtered.Where(r => r.Tier == 2).ToList();
+        var one = filtered.Where(r => r.Tier == 1).ToList();
+        var none = filtered.Where(r => r.Tier == 0).ToList();
+
+        if (both.Count > 0)
+        {
+            items.Add(new TableItem(true, L["Target.GroupBothOwned", both.Count].Value, null));
+            items.AddRange(both.Select(r => new TableItem(false, null, r)));
+        }
+        if (one.Count > 0)
+        {
+            items.Add(new TableItem(true, L["Target.GroupOneOwned", one.Count].Value, null));
+            items.AddRange(one.Select(r => new TableItem(false, null, r)));
+        }
+        if (none.Count > 0)
+        {
+            if (both.Count > 0 || one.Count > 0)
+                items.Add(new TableItem(true, L["Target.GroupNoneOwned", none.Count].Value, null));
+            items.AddRange(none.Select(r => new TableItem(false, null, r)));
+        }
+
+        _tableRows = items;
+    }
+
+    private Task SetFilterAsync(int filter)
+    {
+        CalcState.TargetFilter = filter;
+        RebuildView();
+        return Task.CompletedTask;
+    }
+
+    private Task SetSearchAsync(string text)
+    {
+        CalcState.TargetSearch = text;
+        RebuildView();
+        return Task.CompletedTask;
+    }
+
+    private Task ResetFiltersAsync()
+    {
+        CalcState.TargetFilter = FilterAll;
+        CalcState.TargetSearch = string.Empty;
+        RebuildView();
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenPairAsync(PairRow row)
+    {
+        // "Both owned": open in owned mode with the two Pals selected, so the passive odds panel opens too.
+        if (row.Tier == 2 && CalcState.TryOpenOwnedPair(row.A.Id, row.AReq, row.B.Id, row.BReq, Scope.ScopedPals))
+        {
+            CalcState.Mode = CalculatorStateService.ModePair;
+            await OnChanged.InvokeAsync();
+            return;
+        }
+
+        CalcState.OwnedModeA = false;
+        CalcState.OwnedModeB = false;
+        CalcState.OwnedAKey = null;
+        CalcState.OwnedBKey = null;
+        CalcState.SpeciesAId = row.A.Id;
+        CalcState.SpeciesBId = row.B.Id;
+        CalcState.Mode = CalculatorStateService.ModePair;
+        await OnChanged.InvokeAsync();
+    }
+
+    private IReadOnlyList<SegmentedItem<int>> FilterItems() =>
+    [
+        new(FilterAll, L["Target.FilterAll", _allRows.Count].Value, IsWord: true),
+        new(FilterAnyOwned, L["Target.FilterAnyOwned", _anyOwnedCount].Value, IsWord: true),
+        new(FilterBothOwned, L["Target.FilterBothOwned", _bothOwnedCount].Value, IsWord: true),
+    ];
+
+    private string ElementsText(PalSpecies pal) =>
+        string.Join(" / ", pal.Elements.Select(e =>
+            Data.Elements.FirstOrDefault(x => string.Equals(x.Id, e, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? e));
+
+    private string ParentSubText(PalSpecies pal) =>
+        $"#{pal.DexLabel} · {ElementsText(pal)}";
+
+    private static Gender? ToGender(GenderReq req) => req switch
+    {
+        GenderReq.Male => Gender.Male,
+        GenderReq.Female => Gender.Female,
+        _ => null,
+    };
+}

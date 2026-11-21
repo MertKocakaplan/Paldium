@@ -1,0 +1,141 @@
+@using Paldium.Core.Owned
+@implements IDisposable
+@inherits LocalizedComponentBase
+@inject SettingsStore Store
+@inject IOwnedPalRepository Repository
+
+@* The ownership scope: who counts, which places count. Used by Settings and by the quick scope menu (T64); a change goes through the settings store,
+   so OwnedScopeService raises Changed and every page updates. *@
+@{
+    var scope = Store.Current.Scope;
+}
+    <div class="scope-sec">
+        <div class="scope-lbl">@L["Scope.Title"]</div>
+        <div class="seg" role="radiogroup" aria-label="@L["Scope.Title"].Value">
+            @foreach (var opt in new[] { (ScopeSettings.Me, L["Scope.Mine"].Value), (ScopeSettings.Selected, L["Scope.Selected"].Value), (ScopeSettings.All, L["Scope.All"].Value) })
+            {
+                var active = scope.Mode == opt.Item1;
+                <button type="button" class="w" role="radio" aria-checked="@(active ? "true" : "false")" aria-selected="@(active ? "true" : null)" @onclick="() => SetMode(opt.Item1)">@opt.Item2</button>
+            }
+        </div>
+    </div>
+
+    @if (Owners.Count > 0)
+    {
+        <div class="scope-sec">
+            <div class="scope-lbl">@L["Scope.IAm"]</div>
+            <div class="scope-list" role="radiogroup" aria-label="@L["Scope.IAm"].Value">
+                @{
+                    var unknownMe = string.IsNullOrEmpty(scope.MyPlayerId);
+                }
+                <button type="button" class="scope-opt" role="radio" aria-checked="@(unknownMe ? "true" : "false")" @onclick="() => SetMe(string.Empty)">
+                    <span class="scope-dot" aria-hidden="true"></span>
+                    <span>@L["Common.Unknown"]</span>
+                </button>
+                @foreach (var owner in Owners)
+                {
+                    var pid = owner.PlayerId;
+                    var isMe = string.Equals(scope.MyPlayerId, pid, StringComparison.OrdinalIgnoreCase);
+                    <button type="button" class="scope-opt" role="radio" aria-checked="@(isMe ? "true" : "false")" @onclick="() => SetMe(pid)">
+                        <span class="scope-dot" aria-hidden="true"></span>
+                        <span>@(owner.PlayerName ?? pid)</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (scope.Mode == ScopeSettings.Selected)
+        {
+            <div class="scope-sec">
+                <div class="scope-lbl">@L["Scope.Players"]</div>
+                <div class="scope-list">
+                    @foreach (var owner in Owners)
+                    {
+                        var pid = owner.PlayerId;
+                        var on = scope.SelectedPlayerIds.Contains(pid, StringComparer.OrdinalIgnoreCase);
+                        <button type="button" class="scope-opt" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => TogglePlayer(pid, !on)">
+                            <span class="scope-sq" aria-hidden="true">@if (on) { <Icon Name="check" Size="14" /> }</span>
+                            <span>@(owner.PlayerName ?? pid)</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    <div class="scope-sec">
+        <div class="scope-lbl">@L["Scope.Locations"]</div>
+        <div class="scope-list">
+            @foreach (var kind in Enum.GetValues<LocationKind>())
+            {
+                var location = kind;
+                var on = scope.Locations.Contains(location);
+                <button type="button" class="scope-opt" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => ToggleLocation(location, !on)">
+                    <span class="scope-sq" aria-hidden="true">@if (on) { <Icon Name="check" Size="14" /> }</span>
+                    <span>@Terms.Location(location)</span>
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="pop-row">
+        <span class="pop-row-lbl">@L["Scope.ShareGuild"]</span>
+        <div class="seg mini" role="radiogroup" aria-label="@L["Scope.ShareGuild"].Value">
+            <button type="button" class="w" role="radio" aria-checked="@(scope.ShareGuildLocations ? "true" : "false")" aria-selected="@(scope.ShareGuildLocations ? "true" : null)" @onclick="() => SetShareGuild(true)">@L["Common.Yes"]</button>
+            <button type="button" class="w" role="radio" aria-checked="@(!scope.ShareGuildLocations ? "true" : "false")" aria-selected="@(!scope.ShareGuildLocations ? "true" : null)" @onclick="() => SetShareGuild(false)">@L["Common.No"]</button>
+        </div>
+    </div>
+
+@code {
+    private List<PalOwner> Owners =>
+        Repository.Current.Pals
+            .Where(p => p.Owner != null)
+            .Select(p => p.Owner!)
+            .GroupBy(o => o.PlayerId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(o => o.PlayerName ?? o.PlayerId, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Repository.Changed += OnOwnedChanged;
+        Store.Changed += OnSettingsChanged;
+    }
+
+    private void OnOwnedChanged(object? sender, OwnedPalSnapshot snapshot) => InvokeAsync(StateHasChanged);
+
+    private void OnSettingsChanged(object? sender, AppSettings settings) => InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        Repository.Changed -= OnOwnedChanged;
+        Store.Changed -= OnSettingsChanged;
+        base.Dispose();
+    }
+
+    private void SetMe(string id) =>
+        Store.Update(s => s with { Scope = s.Scope with { MyPlayerId = id.Length == 0 ? null : id } });
+
+    private void SetMode(string mode) =>
+        Store.Update(s => s with { Scope = s.Scope with { Mode = mode } });
+
+    private void TogglePlayer(string id, bool selected) =>
+        Store.Update(s =>
+        {
+            var ids = s.Scope.SelectedPlayerIds.Where(x => !string.Equals(x, id, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (selected) ids.Add(id);
+            return s with { Scope = s.Scope with { SelectedPlayerIds = ids } };
+        });
+
+    private void SetShareGuild(bool on) =>
+        Store.Update(s => s with { Scope = s.Scope with { ShareGuildLocations = on } });
+
+    private void ToggleLocation(LocationKind kind, bool included) =>
+        Store.Update(s =>
+        {
+            var kinds = s.Scope.Locations.Where(k => k != kind).ToList();
+            if (included) kinds.Add(kind);
+            return s with { Scope = s.Scope with { Locations = kinds } };
+        });
+}

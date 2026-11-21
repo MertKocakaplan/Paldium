@@ -1,0 +1,226 @@
+@namespace Paldium.App.Pages.PlannerParts
+@inject IGameData Data
+@inject Paldium.Core.Breeding.IBreedingCalculator Breeding
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+
+@{ var view = PlanText.ChooseCanvas(Computing, Plan != null, EditingInputs, EmptyResult, Target != null); }
+<div class="canvas">
+    @if (view == PlanText.CanvasView.Skeleton)
+    {
+        <div class="canvas-inner canvas-skeleton">
+            <GhostNode X="24" Y="16" Height="187" />
+            <GhostNode X="24" Y="224" Height="162" />
+            <GhostNode X="360" Y="112" Height="186" />
+            <GhostNode X="360" Y="320" Height="177" />
+
+            <TargetNode Target="@Target"
+                        Query="@Query"
+                        QueryChanged="QueryChanged"
+                        OnPickerOpenChanged="OnTargetPickerOpenChanged"
+                        X="680"
+                        Y="144" />
+        </div>
+    }
+    else if (view == PlanText.CanvasView.Tree && Plan != null)
+    {
+        var steps = PlanText.StepsOf(Plan);
+        var currentIdx = PlanText.CurrentStepIndex(steps, Done);
+        var altNodes = new HashSet<PlanNode>(ReferenceEqualityComparer.Instance);
+        foreach (var wildNode in NodeAlternatives.Walk(Plan.Root).OfType<WildLeaf>())
+            if (AltCountOf(wildNode) > 0) altNodes.Add(wildNode);
+        var tree = PlanTreeLayout.Build(Plan, currentIdx, GoneUids, altNodes);
+        var wanted = new HashSet<string>(Query.DesiredPassives, StringComparer.OrdinalIgnoreCase);
+        var extraHeight = Compact ? Math.Max(tree.TotalHeight + 240, 880) : tree.TotalHeight;
+
+        <div class="@($"canvas-inner{(Computing ? " loading" : "")}")"
+             style="@($"--canvas-w:{tree.TotalWidth}px;--canvas-h:{extraHeight}px")">
+            @* No viewBox: the canvas stretches the svg to the window (min-width 100%), and a viewBox would scale the lines away from the nodes, which sit in plain pixels. *@
+            <svg class="edges"
+                 width="@tree.TotalWidth"
+                 height="@tree.TotalHeight"
+                 aria-hidden="true">
+                <g class="edges-g">
+                    @foreach (var edge in tree.Edges)
+                    {
+                        <path class="@($"edge{(edge.Current ? " now" : "")}{(edge.Ghost ? " ghost" : "")}")" d="@edge.D" />
+                    }
+                </g>
+            </svg>
+
+            @foreach (var join in tree.Joins)
+            {
+                <EggJoin X="@join.X" Y="@join.Y" Eggs="@join.Eggs" Current="@join.Current" />
+            }
+
+            @foreach (var item in tree.Nodes)
+            {
+                <TreeNode Node="@item.Node"
+                          StepNumber="@item.StepNumber"
+                          WantedPassives="@wanted"
+                          X="@item.X"
+                          Y="@item.Y"
+                          Current="@item.Current"
+                          Gone="@item.Gone"
+                          Flex="@item.Flex"
+                          Selected="@ReferenceEquals(item.Node, SelectedNode)"
+                          UseCount="@UseCountOf(item.Node)"
+                          SamePal="@IsSamePal(item.Node)"
+                          AltSpeciesCount="@AltCountOf(item.Node)"
+                          OnSelect="OnSelectNode" />
+            }
+
+            <TargetNode Target="@Target"
+                        Query="@Query"
+                        QueryChanged="QueryChanged"
+                        OnPickerOpenChanged="OnTargetPickerOpenChanged"
+                        X="@tree.TargetX"
+                        Y="@tree.TargetY" />
+
+            @if (Compact)
+            {
+                <div class="canvas-extra" style="@($"--top:{tree.BottomY + 28}px")">
+                    <PlanChecklist Plan="@Plan"
+                                   Done="@Done"
+                                   OnToggleStep="OnToggleStep" />
+                    @if (Notes.Count > 0)
+                    {
+                        <NotesPanel Notes="@Notes"
+                                    OnSelectPlan="OnSelectExtraPlan" />
+                    }
+                </div>
+            }
+        </div>
+        @if (ShowImproveToast)
+        {
+            <ImproveToast OldEggs="@ImproveOldEggs"
+                          NewEggs="@ImproveNewEggs"
+                          OnShow="OnShowImprovedPlan"
+                          OnDismiss="OnDismissImprovedPlan" />
+        }
+
+        @if (IsStale && !Computing)
+        {
+            <StaleBand OutOfScopeLeaves="@OutOfScopeLeaves"
+                       LastSyncAgo="@LastSyncAgo"
+                       OnRecompute="OnRecompute" />
+        }
+
+        @if (!string.IsNullOrEmpty(BandText))
+        {
+            <div class="band ok" role="status">
+                <Icon Name="check" Size="16" />
+                <span>@BandText</span>
+                <button type="button" class="ghostb" @onclick="OnUndoBand">
+                    <Icon Name="undo" Size="14" />
+                    <span>@L["Plan.Band.Undo"]</span>
+                </button>
+            </div>
+        }
+    }
+    else if (view == PlanText.CanvasView.Diagnosis)
+    {
+        <div class="canvas-inner canvas-diag">
+            <DiagnosisPanel Items="@Diagnostics"
+                            OnFix="OnApplyDiagnosticFix" />
+
+            <TargetNode Target="@Target"
+                        Query="@Query"
+                        QueryChanged="QueryChanged"
+                        OnPickerOpenChanged="OnTargetPickerOpenChanged"
+                        X="680"
+                        Y="96" />
+        </div>
+    }
+    else
+    {
+        <div class="canvas-inner">
+            @{
+                var hasTarget = Target != null;
+                var dx = Compact ? -16 : 0;
+                var targetX = hasTarget ? 536 : 360;
+                var targetY = hasTarget ? 96 : 48;
+                var lineY = hasTarget ? 254 : 206;
+            }
+            <svg class="edges" aria-hidden="true">
+                <path class="edge ghost" d="@($"M{268 + dx} {lineY} H {targetX + dx}")" />
+            </svg>
+
+            <EmptySlot Query="@Query"
+                       QueryChanged="QueryChanged"
+                       HasTarget="@hasTarget"
+                       DraggingUid="@DraggingUid"
+                       OnDragConsumed="OnDragConsumed"
+                       OnPickerOpenChanged="OnSlotPickerOpenChanged" />
+
+            <TargetNode Target="@Target"
+                        Query="@Query"
+                        QueryChanged="QueryChanged"
+                        OnPickerOpenChanged="OnTargetPickerOpenChanged"
+                        X="@targetX"
+                        Y="@targetY" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public PalSpecies? Target { get; set; }
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool Computing { get; set; }
+    /// <summary>A calculation finished and found no plan (a real empty result, not a reset or a cancelled run): the diagnosis shows.</summary>
+    [Parameter] public bool EmptyResult { get; set; }
+    /// <summary>"Edit target" after a plan was found: the canvas shows the input view (start Pal and target) like before the first calculation.</summary>
+    [Parameter] public bool EditingInputs { get; set; }
+    [Parameter] public BreedingPlan? Plan { get; set; }
+    [Parameter] public IReadOnlySet<int> Done { get; set; } = new HashSet<int>();
+    [Parameter] public IReadOnlyList<PlanText.PlanNoteEntry> Notes { get; set; } = [];
+    [Parameter] public IReadOnlySet<string>? GoneUids { get; set; }
+    [Parameter] public IReadOnlyList<PlanText.DiagnosticEntry> Diagnostics { get; set; } = [];
+    [Parameter] public EventCallback<PlanText.DiagnosticEntry> OnApplyDiagnosticFix { get; set; }
+    [Parameter] public bool IsStale { get; set; }
+    [Parameter] public IReadOnlyList<PlanText.OutOfScopeLeaf> OutOfScopeLeaves { get; set; } = [];
+    [Parameter] public string? LastSyncAgo { get; set; }
+    [Parameter] public EventCallback OnRecompute { get; set; }
+    [Parameter] public bool ShowImproveToast { get; set; }
+    [Parameter] public double ImproveOldEggs { get; set; }
+    [Parameter] public double ImproveNewEggs { get; set; }
+    [Parameter] public EventCallback OnShowImprovedPlan { get; set; }
+    [Parameter] public EventCallback OnDismissImprovedPlan { get; set; }
+    [Parameter] public string? DraggingUid { get; set; }
+    [Parameter] public EventCallback OnDragConsumed { get; set; }
+    [Parameter] public EventCallback<bool> OnSlotPickerOpenChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnTargetPickerOpenChanged { get; set; }
+    [Parameter] public EventCallback<int> OnToggleStep { get; set; }
+    /// <summary>The node whose panel is open (T103); the node carries a ring.</summary>
+    [Parameter] public PlanNode? SelectedNode { get; set; }
+
+    private IReadOnlyDictionary<string, int>? _useCounts;
+    private BreedingPlan? _useCountsOf;
+
+    private int UseCountOf(PlanNode node)
+    {
+        if (node is not OwnedLeaf o || Plan == null) return 1;
+        if (!ReferenceEquals(_useCountsOf, Plan)) { _useCounts = NodeAlternatives.UseCounts(Plan); _useCountsOf = Plan; }
+        return _useCounts!.GetValueOrDefault(o.Pal.Uid, 1);
+    }
+
+    private bool IsSamePal(PlanNode node) =>
+        node is OwnedLeaf o && SelectedNode is OwnedLeaf sel && !ReferenceEquals(node, sel) && sel.Pal.Uid == o.Pal.Uid;
+
+    private readonly Dictionary<PlanNode, int> _altCounts = new(ReferenceEqualityComparer.Instance);
+
+    private int AltCountOf(PlanNode node)
+    {
+        if (node is not WildLeaf wild || Plan == null) return 0;
+        if (!_altCounts.TryGetValue(node, out var n))
+            _altCounts[node] = n = NodeAlternatives.SameStepSpecies(Data, Breeding, Query, Plan, wild).Count;
+        return n;
+    }
+    [Parameter] public EventCallback<PlanNode> OnSelectNode { get; set; }
+    /// <summary>"Recalculated with this Pal" band with an undo (T103).</summary>
+    [Parameter] public string? BandText { get; set; }
+    [Parameter] public EventCallback OnUndoBand { get; set; }
+    [Parameter] public EventCallback<ExtraPlan> OnSelectExtraPlan { get; set; }
+}

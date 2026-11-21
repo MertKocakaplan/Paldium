@@ -1,0 +1,57 @@
+@inherits LocalizedComponentBase
+
+@if (Drawer)
+{
+    <Drawer Side="left"
+            Width="288"
+            Open="@Open"
+            OpenChanged="@OpenChanged"
+            AriaLabel="@(AriaLabel ?? L["Filters.Title"].Value)">
+        <aside class="rail" aria-label="@(AriaLabel ?? L["Filters.Title"].Value)">
+            @RailHeader()
+            @ChildContent
+        </aside>
+    </Drawer>
+}
+else
+{
+    <aside class="@($"rail{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+           aria-label="@(AriaLabel ?? L["Filters.Title"].Value)">
+        @RailHeader()
+        @ChildContent
+    </aside>
+    @if (!string.IsNullOrEmpty(PanelKey))
+    {
+        <PanelResizer Key="@PanelKey" />
+    }
+}
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public bool AnyActive { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+    [Parameter] public bool Drawer { get; set; }
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+    /// <summary>The page key of the width kept in the settings (T102); empty: not resizable.</summary>
+    [Parameter] public string? PanelKey { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private RenderFragment RailHeader() => __builder =>
+    {
+        <div class="hd">
+            <h2>@(Title ?? L["Filters.Title"].Value)</h2>
+            <button type="button"
+                    class="clr"
+                    disabled="@(!AnyActive)"
+                    aria-disabled="@(!AnyActive ? "true" : "false")"
+                    @onclick="ClearAsync">
+                @L["Filters.Clear"]
+            </button>
+        </div>
+    };
+
+    private Task ClearAsync() => AnyActive ? OnClear.InvokeAsync() : Task.CompletedTask;
+}

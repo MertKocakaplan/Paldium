@@ -1,0 +1,58 @@
+@inherits LocalizedComponentBase
+
+<div class="@($"stepper{(IsActive ? " on" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+     role="group"
+     aria-label="@AriaLabel">
+    <button type="button"
+            aria-label="@(DecreaseLabel ?? L["Common.Decrease"].Value)"
+            disabled="@(Value <= Min)"
+            @onclick="DecreaseAsync">
+        <Icon Name="minus" Size="14" />
+    </button>
+    <b class="@(ShowEmpty ? "empty" : null)"
+       aria-live="polite"
+       tabindex="0"
+       role="spinbutton"
+       aria-label="@AriaLabel"
+       aria-valuemin="@Min"
+       aria-valuemax="@Max"
+       aria-valuenow="@Value"
+       @onkeydown="OnKeyDownAsync">
+        @(ShowEmpty ? EmptyText : Value.ToString(CultureInfo.InvariantCulture))
+    </b>
+    <button type="button"
+            aria-label="@(IncreaseLabel ?? L["Common.Increase"].Value)"
+            disabled="@(Value >= Max)"
+            @onclick="IncreaseAsync">
+        <Icon Name="plus" Size="14" />
+    </button>
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+    [Parameter] public int Min { get; set; }
+    [Parameter] public int Max { get; set; } = 300;
+    [Parameter] public int Step { get; set; } = 1;
+    [Parameter] public string EmptyText { get; set; } = "—";
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? DecreaseLabel { get; set; }
+    [Parameter] public string? IncreaseLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool ShowEmpty => !string.IsNullOrEmpty(EmptyText) && Value <= Min;
+    private bool IsActive => Value > Min;
+
+    private Task DecreaseAsync() => ValueChanged.InvokeAsync(Math.Max(Min, Value - Step));
+
+    private Task IncreaseAsync() => ValueChanged.InvokeAsync(Math.Min(Max, Value + Step));
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) => e.Key switch
+    {
+        "ArrowUp" or "ArrowRight" => IncreaseAsync(),
+        "ArrowDown" or "ArrowLeft" => DecreaseAsync(),
+        "Home" => ValueChanged.InvokeAsync(Min),
+        "End" => ValueChanged.InvokeAsync(Max),
+        _ => Task.CompletedTask,
+    };
+}

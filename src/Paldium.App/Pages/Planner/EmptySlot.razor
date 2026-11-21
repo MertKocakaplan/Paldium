@@ -1,0 +1,131 @@
+@namespace Paldium.App.Pages.PlannerParts
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IOwnedPalRepository Repository
+
+@if (StartOwned() is { } owned)
+{
+    var name = owned.Nickname ?? SpeciesName(owned.SpeciesId);
+    <div class="node" style="@($"--x:40px;--y:{FilledTopY}px")" aria-label="@L["Plan.StartSlotTitle"].Value">
+        <div class="top">
+            <PalIcon PalId="@owned.SpeciesId" Size="40" />
+            <div class="top-tx">
+                <div class="t">
+                    <span class="t-nm">@name</span>
+                    <GenderIcon Gender="@owned.Gender" Size="14" />
+                </div>
+                <div class="m">@L["Plan.StartOwnedTag"] · @L["MyPals.ColLevel"] @owned.Level</div>
+            </div>
+            <button type="button"
+                    class="slot-clr"
+                    aria-label="@L["Plan.ClearStart"].Value"
+                    title="@L["Plan.ClearStart"].Value"
+                    @onclick="ClearStartAsync">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+        <div class="loc">
+            @if (Paldium.Core.Domain.PalLocation.IsPaged(owned.Location.Kind) && owned.Location.SlotIndex is { } slot and >= 0)
+            {
+                <BoxMap Slot="@slot" Cell="5" Gap="1" />
+            }
+            else
+            {
+                <LocationTile Kind="@owned.Location.Kind" Size="33" />
+            }
+            <span><b>@LocationText.ShortPlace(owned, Terms, L)</b>@LocationText.Format(owned, Terms, L)</span>
+        </div>
+    </div>
+}
+else if (StartSpecies() is { } sp)
+{
+    <div class="node" style="@($"--x:40px;--y:{FilledTopY}px")" aria-label="@L["Plan.StartSlotTitle"].Value">
+        <div class="top">
+            <PalIcon Pal="sp" Size="40" />
+            <div class="top-tx">
+                <div class="t">@sp.DisplayName(Lang)</div>
+                <div class="m">@L["Plan.StartSpeciesTag"] · <span class="num">#@sp.DexNo</span></div>
+            </div>
+            <button type="button"
+                    class="slot-clr"
+                    aria-label="@L["Plan.ClearStart"].Value"
+                    title="@L["Plan.ClearStart"].Value"
+                    @onclick="ClearStartAsync">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="@($"slot-empty{(_dragOver ? " over" : "")}")"
+         style="@($"--x:40px;--y:{EmptyTopY}px")"
+         @ondragover="OnDragOver"
+         @ondragover:preventDefault="true"
+         @ondragleave="OnDragLeave"
+         @ondrop="OnDropAsync"
+         @ondrop:preventDefault="true">
+        <PalPicker Mode="PalPicker.PickerMode.Owned"
+                   AllowClear="false"
+                   OwnedValueChanged="OnPickOwnedAsync"
+                   OnOpenChanged="OnPickerOpenChanged">
+            <button type="button" class="slot-pick" @onclick="context">
+                <b>@L["Plan.StartSlotTitle"]</b>
+                <span>@(HasTarget ? L["Plan.StartSlotTextTarget"] : L["Plan.StartSlotTextEmpty"])</span>
+            </button>
+        </PalPicker>
+    </div>
+}
+
+@code {
+    private bool _dragOver;
+
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public bool HasTarget { get; set; }
+    [Parameter] public string? DraggingUid { get; set; }
+    [Parameter] public EventCallback OnDragConsumed { get; set; }
+    [Parameter] public EventCallback<bool> OnPickerOpenChanged { get; set; }
+
+    private int EmptyTopY => HasTarget ? 208 : 160;
+    private int FilledTopY => HasTarget ? 192 : 144;
+
+    private OwnedPal? StartOwned() =>
+        Query.StartMode == "owned" && !string.IsNullOrEmpty(Query.StartOwnedUid)
+            ? Repository.Current.Find(Query.StartOwnedUid)
+            : null;
+
+    private PalSpecies? StartSpecies()
+    {
+        if (Query.StartMode != "species" || string.IsNullOrEmpty(Query.StartSpeciesId)) return null;
+        try { return Data.Pal(Query.StartSpeciesId); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private void OnDragOver() => _dragOver = true;
+
+    private void OnDragLeave() => _dragOver = false;
+
+    private async Task OnDropAsync()
+    {
+        _dragOver = false;
+        if (string.IsNullOrEmpty(DraggingUid)) return;
+        var uid = DraggingUid;
+        await OnDragConsumed.InvokeAsync();
+        await QueryChanged.InvokeAsync(Query with { StartMode = "owned", StartOwnedUid = uid, StartSpeciesId = null });
+    }
+
+    private Task OnPickOwnedAsync(OwnedPal? pal) =>
+        QueryChanged.InvokeAsync(pal == null
+            ? Query with { StartMode = "none", StartOwnedUid = null }
+            : Query with { StartMode = "owned", StartOwnedUid = pal.SelectionKey, StartSpeciesId = null });
+
+    private Task ClearStartAsync() =>
+        QueryChanged.InvokeAsync(Query with { StartMode = "none", StartOwnedUid = null, StartSpeciesId = null });
+}

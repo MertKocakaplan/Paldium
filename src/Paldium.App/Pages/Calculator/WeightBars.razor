@@ -1,0 +1,73 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@{
+    var inherit = BuildBars(Data.Mechanics.PassiveInheritWeights, 1, Data.Mechanics.MaxPassives);
+    var random = BuildBars(Data.Mechanics.PassiveRandomAddWeights, 0, Data.Mechanics.MaxPassives - 1);
+}
+
+<div class="charts">
+    <figure>
+        <div class="vbars">
+            @foreach (var bar in inherit)
+            {
+                <div class="vb">
+                    <span class="v num">@FormatPct(bar.Ratio)</span>
+                    <i style="@($"--h:{bar.HeightPx}px")"></i>
+                    <span class="x">@bar.Key.ToString(CultureInfo.InvariantCulture)</span>
+                </div>
+            }
+        </div>
+        <figcaption>@L["Odds.ChartInheritCaption"]</figcaption>
+    </figure>
+
+    <figure>
+        <div class="vbars">
+            @foreach (var bar in random)
+            {
+                <div class="vb">
+                    <span class="v num">@FormatPct(bar.Ratio)</span>
+                    <i style="@($"--h:{bar.HeightPx}px")"></i>
+                    <span class="x">@bar.Key.ToString(CultureInfo.InvariantCulture)</span>
+                </div>
+            }
+        </div>
+        <figcaption>@L["Odds.ChartRandomCaption"]</figcaption>
+    </figure>
+</div>
+
+@code {
+    private sealed record WeightBar(int Key, double Ratio, int HeightPx);
+
+    private static List<WeightBar> BuildBars(IReadOnlyDictionary<int, int> weights, int min, int max)
+    {
+        var raw = new List<(int Key, int Weight)>();
+        var total = 0;
+        var maxWeight = 0;
+        for (var i = min; i <= max; i++)
+        {
+            var w = weights.TryGetValue(i, out var val) ? Math.Max(0, val) : 0;
+            raw.Add((i, w));
+            total += w;
+            if (w > maxWeight) maxWeight = w;
+        }
+
+        if (total <= 0) total = 1;
+        if (maxWeight <= 0) maxWeight = 1;
+
+        return raw
+            .Select(r => new WeightBar(
+                r.Key,
+                r.Weight / (double)total,
+                (int)Math.Round(88.0 * r.Weight / maxWeight)))
+            .ToList();
+    }
+
+    private string FormatPct(double ratio)
+    {
+        var pct = ratio * 100.0;
+        var fmt = Math.Abs(pct - Math.Round(pct)) < 0.05 ? "P0" : "P1";
+        return ratio.ToString(fmt, CultureInfo.GetCultureInfo(Lang));
+    }
+}

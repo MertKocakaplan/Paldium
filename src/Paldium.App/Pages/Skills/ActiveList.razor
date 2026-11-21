@@ -1,0 +1,236 @@
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@if (Results.Count == 0)
+{
+    <div class="tw">
+        @RenderEmpty()
+    </div>
+}
+else
+{
+    var maxPower = Math.Max(1, Data.Actives.Select(a => a.Power).DefaultIfEmpty(700).Max());
+    <div class="tw">
+        <table class="yt at">
+            <colgroup>
+                <col class="col-anm" />
+                <col />
+                <col class="col-acd" />
+                <col class="col-ainh" />
+                <col class="col-afr" />
+                <col class="col-alrn" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th aria-sort="@AriaSortFor(ActiveSortKey.Name)">
+                        <button type="button" @onclick="() => ToggleSort(ActiveSortKey.Name)">
+                            @L["Skills.ColName"]
+                            @SortIcon(ActiveSortKey.Name)
+                        </button>
+                    </th>
+                    <th aria-sort="@AriaSortFor(ActiveSortKey.Power)">
+                        <button type="button" @onclick="() => ToggleSort(ActiveSortKey.Power)">
+                            @L["Skills.ColPower"]
+                            @SortIcon(ActiveSortKey.Power)
+                        </button>
+                    </th>
+                    <th class="c" aria-sort="@AriaSortFor(ActiveSortKey.Cooldown)">
+                        <button type="button" @onclick="() => ToggleSort(ActiveSortKey.Cooldown)">
+                            @L["Skills.ColCooldown"]
+                            @SortIcon(ActiveSortKey.Cooldown)
+                        </button>
+                    </th>
+                    <th class="c">@L["Skills.ColInherit"]</th>
+                    <th class="c">@L["Skills.ColFruitShort"]</th>
+                    <th class="c" title="@L["Skills.LearnersHeaderTip"].Value">@L["Skills.ColLearners"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                <Virtualize Items="@(Results as ICollection<ActiveSkill> ?? Results.ToList())"
+                            Context="skill"
+                            ItemSize="56"
+                            OverscanCount="10"
+                            SpacerElement="tr">
+                    @{
+                        var el = FindElement(skill.Element);
+                        var elName = el?.Names.Get(Lang) ?? skill.Element;
+                        var elIcon = el != null ? "gamedata/" + el.IconPath : $"gamedata/icons/elements/{skill.Element}.png";
+                        var pct = Math.Clamp((int)Math.Round(skill.Power * 100.0 / maxPower), 0, 100);
+                        var learners = LearnerCounts.GetValueOrDefault(skill.Id);
+                    }
+                    <tr>
+                        <td>
+                            <div class="pn">
+                                <img src="@elIcon" width="18" height="18" alt="@elName" title="@elName" />
+                                <span class="t">@skill.Names.Get(Lang)</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="pw">
+                                <span class="@($"bar el-{skill.Element.ToLowerInvariant()}")">
+                                    <i style="@($"--pct:{pct.ToString(CultureInfo.InvariantCulture)}%")"></i>
+                                </span>
+                                <b class="num">@skill.Power.ToString(CultureInfo.InvariantCulture)</b>
+                            </div>
+                        </td>
+                        <td class="c num">@L["Skills.CooldownSecShort", skill.CooldownSeconds.ToString("0.#", CultureInfo.GetCultureInfo(Lang))]</td>
+                        <td class="c">
+                            @if (skill.CanInherit)
+                            {
+                                <span title="@L["Common.Yes"].Value"><Icon Name="check" Size="14" /></span>
+                            }
+                            else
+                            {
+                                <span class="no" title="@L["Common.No"].Value">—</span>
+                            }
+                        </td>
+                        <td class="c">
+                            @if (skill.HasSkillFruit)
+                            {
+                                <span title="@L["Common.Yes"].Value"><Icon Name="check" Size="14" /></span>
+                            }
+                            else
+                            {
+                                <span class="no" title="@L["Common.No"].Value">—</span>
+                            }
+                        </td>
+                        <td class="c">
+                            @if (learners > 0)
+                            {
+                                <a class="ownl" href="@($"paldex?active={Uri.EscapeDataString(skill.Id)}")">@learners.ToString(CultureInfo.InvariantCulture)</a>
+                            }
+                            else
+                            {
+                                <span class="no">0</span>
+                            }
+                        </td>
+                    </tr>
+                </Virtualize>
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ActiveSkill> Results { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, int> LearnerCounts { get; set; } = new Dictionary<string, int>();
+    [Parameter, EditorRequired] public ActiveFilter Filter { get; set; } = new();
+    [Parameter, EditorRequired] public ActiveSort Sort { get; set; } = new();
+    [Parameter] public EventCallback<ActiveSort> SortChanged { get; set; }
+    [Parameter] public EventCallback<ActiveFilter> FilterChanged { get; set; }
+    [Parameter] public EventCallback OnClearAll { get; set; }
+
+    private ElementInfo? FindElement(string id) =>
+        Data.Elements.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private string? AriaSortFor(ActiveSortKey key) => Sort.Key != key
+        ? null
+        : Sort.Descending ? "descending" : "ascending";
+
+    private RenderFragment SortIcon(ActiveSortKey key) => __builder =>
+    {
+        if (Sort.Key == key)
+        {
+            <Icon Name="@(Sort.Descending ? "arrow-down" : "arrow-up")" Size="14" />
+        }
+        else
+        {
+            <Icon Name="sort" Size="14" />
+        }
+    };
+
+    private Task ToggleSort(ActiveSortKey key)
+    {
+        var next = Sort.Key == key
+            ? Sort with { Descending = !Sort.Descending }
+            : new ActiveSort { Key = key, Descending = key == ActiveSortKey.Power };
+        return SortChanged.InvokeAsync(next);
+    }
+
+    private RenderFragment RenderEmpty() => __builder =>
+    {
+        var specs = BuildRemovalSpecs();
+        var clauses = specs.Select(s => new FilterClause<ActiveSkill>(s.Key, s.Predicate)).ToList();
+        var counts = FilterRemovalHelper.ComputeRemovals(Data.Actives, clauses);
+        var removals = specs.Select((s, i) => new EmptyRemovalItem(
+            s.Key,
+            s.Label,
+            L["Skills.EmptyActivesRemaining", counts[i].RemainingCount].Value,
+            counts[i].RemainingCount))
+            .ToList();
+
+        <EmptyResult Title="@L["Skills.EmptyActivesTitle"].Value"
+                     Reason="@L["Empty.DefaultReason"].Value"
+                     Removals="@removals"
+                     OnRemove="key => RemoveClauseAsync(specs, key)"
+                     OnClearAll="OnClearAll" />
+    };
+
+    private sealed record ActiveClauseSpec(
+        string Key,
+        string Label,
+        Func<ActiveSkill, bool> Predicate,
+        Func<Task> RemoveAsync);
+
+    private List<ActiveClauseSpec> BuildRemovalSpecs()
+    {
+        var list = new List<ActiveClauseSpec>();
+        var f = Filter;
+
+        if (!string.IsNullOrWhiteSpace(f.Text))
+        {
+            var q = f.Text.Trim();
+            list.Add(new(
+                "text",
+                $"{L["Filters.Search"].Value}: {q}",
+                a => SkillQuery.Matches(a, new ActiveFilter { Text = q }),
+                () => FilterChanged.InvokeAsync(f with { Text = null })));
+        }
+
+        if (f.Elements.Count > 0)
+        {
+            var names = string.Join(", ", f.Elements.Select(id => FindElement(id)?.Names.Get(Lang) ?? id));
+            list.Add(new(
+                "elements",
+                L["Paldex.ChipElement", names].Value,
+                a => f.Elements.Contains(a.Element, StringComparer.OrdinalIgnoreCase),
+                () => FilterChanged.InvokeAsync(f with { Elements = [] })));
+        }
+
+        if (f.MinPower != null || f.MaxPower != null)
+        {
+            var maxAll = Data.Actives.Select(a => a.Power).DefaultIfEmpty(700).Max();
+            var lo = f.MinPower ?? 0;
+            var hi = f.MaxPower ?? maxAll;
+            list.Add(new(
+                "power",
+                $"{L["Skills.ColPower"].Value}: {lo.ToString(CultureInfo.InvariantCulture)}–{hi.ToString(CultureInfo.InvariantCulture)}",
+                a => (f.MinPower == null || a.Power >= f.MinPower) && (f.MaxPower == null || a.Power <= f.MaxPower),
+                () => FilterChanged.InvokeAsync(f with { MinPower = null, MaxPower = null })));
+        }
+
+        if (f.Inheritable is { } inh)
+        {
+            list.Add(new(
+                "inheritable",
+                L["Skills.ColInherit"].Value,
+                a => a.CanInherit == inh,
+                () => FilterChanged.InvokeAsync(f with { Inheritable = null })));
+        }
+
+        if (f.HasSkillFruit is { } fruit)
+        {
+            list.Add(new(
+                "fruit",
+                L["Skills.HasFruitFilter"].Value,
+                a => a.HasSkillFruit == fruit,
+                () => FilterChanged.InvokeAsync(f with { HasSkillFruit = null })));
+        }
+
+        return list;
+    }
+
+    private static Task RemoveClauseAsync(List<ActiveClauseSpec> specs, string key) =>
+        specs.FirstOrDefault(s => s.Key == key)?.RemoveAsync() ?? Task.CompletedTask;
+}

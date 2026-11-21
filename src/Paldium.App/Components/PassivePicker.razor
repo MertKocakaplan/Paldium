@@ -1,0 +1,137 @@
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+
+<span class="@($"dd-wrap{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    @if (ChildContent != null)
+    {
+        @ChildContent(ToggleAsync)
+    }
+    else
+    {
+        <button type="button" class="dd" aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")" @onclick="ToggleAsync">
+            <Icon Name="plus" Size="14" />
+            <span class="dd-txt">@L["PassivePicker.Add"]</span>
+            <Icon Name="chevron-down" Size="14" />
+        </button>
+    }
+    @RenderPopover()
+</span>
+<MudOverlay Visible="_open" VisibleChanged="SetOpenAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+
+@code {
+    private bool _open;
+    private string _query = string.Empty;
+    private Dictionary<string, int>? _ownedCounts;
+
+    [Parameter] public IReadOnlyList<string> Exclude { get; set; } = [];
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+    [Parameter] public EventCallback<bool> OnOpenChanged { get; set; }
+    [Parameter] public RenderFragment<Func<Task>>? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private RenderFragment RenderPopover() => __builder =>
+    {
+        <MudPopover Open="_open" Elevation="0" Fixed="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipOnOpen">
+            <div class="picker-pop" @onkeydown="OnPopKeyDownAsync" tabindex="-1">
+                <SearchField Value="@_query"
+                             ValueChanged="q => _query = q"
+                             Placeholder="@L["PassivePicker.Search"].Value"
+                             AutoFocus="true"
+                             OnSubmit="SubmitTopAsync"
+                             OnEscape="CloseAsync" />
+                @{
+                    var matches = MatchingPassives();
+                }
+                @if (matches.Count == 0)
+                {
+                    <div class="picks-empty">@L["PassivePicker.NoResults"]</div>
+                }
+                else
+                {
+                    <div class="picks" role="listbox" aria-label="@L["PassivePicker.Add"].Value">
+                        @foreach (var p in matches)
+                        {
+                            var captured = p;
+                            var count = OwnedCountOf(captured.Id);
+                            <button type="button"
+                                    class="@($"pk{(captured.Rank < 0 ? " neg" : "")}")"
+                                    role="option"
+                                    @onclick="() => SelectAsync(captured)">
+                                <RankGlyph Rank="captured.Rank" Size="16" />
+                                <span class="t">@captured.Names.Get(Lang)</span>
+                                <span class="m num">@L["Plan.SocketOwnedCount", count]</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </MudPopover>
+    };
+
+    private List<PassiveSkill> MatchingPassives()
+    {
+        var excluded = Exclude;
+        return SkillQuery
+            .Passives(Data, new PassiveFilter { Text = _query }, new PassiveSort(), Lang)
+            .Where(p => !excluded.Contains(p.Id, StringComparer.Ordinal))
+            .Take(60)
+            .ToList();
+    }
+
+    private int OwnedCountOf(string passiveId)
+    {
+        if (_ownedCounts == null)
+        {
+            _ownedCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pal in Scope.ScopedPals)
+            {
+                foreach (var p in pal.Passives.Distinct(StringComparer.OrdinalIgnoreCase))
+                    _ownedCounts[p] = _ownedCounts.GetValueOrDefault(p) + 1;
+            }
+        }
+        return _ownedCounts.GetValueOrDefault(passiveId);
+    }
+
+    private async Task ToggleAsync() => await SetOpenAsync(!_open);
+
+    private async Task SetOpenAsync(bool open)
+    {
+        if (open)
+        {
+            _query = string.Empty;
+            _ownedCounts = null;
+        }
+        _open = open;
+        await OnOpenChanged.InvokeAsync(open);
+    }
+
+    private Task CloseAsync() => SetOpenAsync(false);
+
+    public override void Dispose()
+    {
+        if (_open)
+        {
+            _open = false;
+            _ = OnOpenChanged.InvokeAsync(false);
+        }
+        base.Dispose();
+    }
+
+    private Task OnPopKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task SubmitTopAsync()
+    {
+        var first = MatchingPassives().FirstOrDefault();
+        if (first != null) await SelectAsync(first);
+    }
+
+    private async Task SelectAsync(PassiveSkill passive)
+    {
+        await SetOpenAsync(false);
+        await OnPick.InvokeAsync(passive.Id);
+    }
+}

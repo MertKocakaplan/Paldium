@@ -1,0 +1,45 @@
+@inherits LocalizedComponentBase
+
+<section class="@($"empty{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" aria-labelledby="em-h">
+    <h2 id="em-h">@Title</h2>
+    @if (!string.IsNullOrEmpty(Reason))
+    {
+        <p class="sub">@Reason</p>
+    }
+    @if (Removals.Count > 0)
+    {
+        <ul>
+            @foreach (var item in Removals)
+            {
+                var captured = item.Key;
+                <li>
+                    <span>@item.FilterLabel</span>
+                    <span class="n">@item.RemainingText</span>
+                    <button type="button" class="btn2" @onclick="() => OnRemove.InvokeAsync(captured)">
+                        @L["Common.Remove"]
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+    <div class="foot">
+        @if (OnClearAll.HasDelegate)
+        {
+            <button type="button" class="btn2" @onclick="OnClearAll">@L["Filters.ClearFilters"]</button>
+        }
+        @if (ExtraAction != null)
+        {
+            @ExtraAction
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Reason { get; set; }
+    [Parameter] public IReadOnlyList<EmptyRemovalItem> Removals { get; set; } = [];
+    [Parameter] public EventCallback<string> OnRemove { get; set; }
+    [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public RenderFragment? ExtraAction { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

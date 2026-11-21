@@ -1,0 +1,25 @@
+@inherits LocalizedComponentBase
+
+@if (Gender is Core.Domain.Gender.Male)
+{
+    <svg class="@($"g g-m{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" style="@SizeVar" viewBox="0 0 24 24" role="img" aria-label="@(AriaLabel ?? L["Common.Male"].Value)">
+        <circle cx="10" cy="14" r="6" />
+        <path d="M14.5 9.5 20 4M15 4h5v5" />
+    </svg>
+}
+else if (Gender is Core.Domain.Gender.Female)
+{
+    <svg class="@($"g g-f{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" style="@SizeVar" viewBox="0 0 24 24" role="img" aria-label="@(AriaLabel ?? L["Common.Female"].Value)">
+        <circle cx="12" cy="9" r="6" />
+        <path d="M12 15v7M9 19h6" />
+    </svg>
+}
+
+@code {
+    [Parameter] public Gender? Gender { get; set; }
+    [Parameter] public int Size { get; set; } = 14;
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string? SizeVar => Size == 14 ? null : $"--size:{Size.ToString(CultureInfo.InvariantCulture)}px";
+}

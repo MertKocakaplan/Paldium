@@ -1,0 +1,6 @@
+<Project>
+  <!-- The release version. build/publish.ps1 reads it. src/Directory.Build.props imports this file; external/palcalc is unaffected. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

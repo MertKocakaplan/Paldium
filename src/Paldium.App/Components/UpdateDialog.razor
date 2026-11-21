@@ -1,0 +1,127 @@
+@implements IDisposable
+@inherits LocalizedComponentBase
+@inject UpdateService Updates
+
+@* The update box (screens/update.md): the new version, its notes, and the buttons; while an update is prepared it shows the progress. *@
+@if (Updates.DialogOpen && Updates.Available is { } release)
+{
+    var progress = Updates.Progress;
+    var busy = progress.Phase != UpdatePhase.Idle;
+    <div class="updscrim" @onclick="Close">
+        <div class="upd" role="dialog" aria-modal="true" aria-labelledby="upd-title" @onclick:stopPropagation="true" @onkeydown="OnKeyDown" tabindex="-1">
+            <h2 id="upd-title">@L["Update.Title", release.Version]</h2>
+            <p class="m">@L["Update.Sub", Updates.CurrentVersion, Ago(release.PublishedAt), SizeText(release.AssetSize)]</p>
+            @if (!string.IsNullOrWhiteSpace(release.Notes))
+            {
+                <div class="updnotes">@((MarkupString)UpdateNotes.ToHtml(release.Notes))</div>
+            }
+
+            @if (_errorKey != null)
+            {
+                <p class="upderr" role="alert">@L[_errorKey]</p>
+            }
+
+            @if (busy)
+            {
+                <div class="updprog" role="status">
+                    @if (progress.Phase == UpdatePhase.Downloading)
+                    {
+                        <div class="updbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@progress.Percent"><i style="@("width:" + progress.Percent + "%")"></i></div>
+                        <span class="m num">@L["Update.Downloading", SizeText(progress.BytesRead) + " / " + SizeText(progress.TotalBytes)]</span>
+                    }
+                    else
+                    {
+                        <span class="m">@L[progress.Phase == UpdatePhase.Verifying ? "Update.Verifying" : "Update.Restarting"]</span>
+                    }
+                </div>
+                <div class="updact">
+                    @if (progress.Phase == UpdatePhase.Downloading)
+                    {
+                        <button type="button" class="btn2" @onclick="Updates.CancelDownload">@L["Update.Cancel"]</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="updact">
+                    @if (release.AssetUrl == null || _errorKey == UpdateException.NotWritable)
+                    {
+                        <a class="btn2 acc" href="@release.PageUrl" target="_blank" rel="noopener">@L["Update.OpenRelease"]</a>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn2 acc" @onclick="InstallAsync">@L[_errorKey == UpdateException.DownloadFailed ? "Update.Retry" : "Update.Install"]</button>
+                    }
+                    <button type="button" class="btn2" @onclick="Close">@L["Update.Later"]</button>
+                    <button type="button" class="btn2" @onclick="() => Skip(release.Version)">@L["Update.Skip"]</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string? _errorKey;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Updates.Changed += OnChanged;
+    }
+
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private void Close() => Updates.CloseDialog();
+
+    private void Skip(string version)
+    {
+        Updates.Skip(version);
+        Updates.CloseDialog();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && Updates.Progress.Phase == UpdatePhase.Idle) Close();
+    }
+
+    private async Task InstallAsync()
+    {
+        if (Updates.Available is not { } release) return;
+        _errorKey = null;
+        try
+        {
+            var staged = await Task.Run(() => Updates.PrepareAsync(release));
+            Updates.LaunchUpdater(staged);
+            await Task.Delay(400);
+            var app = System.Windows.Application.Current;
+            app.Dispatcher.Invoke(app.Shutdown);
+        }
+        catch (UpdateException ex)
+        {
+            _errorKey = ex.Key;
+        }
+        catch (OperationCanceledException)
+        {
+            // "Cancel": the partial file is already gone.
+        }
+        StateHasChanged();
+    }
+
+    private string Ago(DateTimeOffset? at)
+    {
+        if (at == null) return "";
+        var span = DateTimeOffset.UtcNow - at.Value;
+        if (span < TimeSpan.FromMinutes(1)) return L["Sources.AgoNow"].Value;
+        if (span < TimeSpan.FromHours(1)) return L["Sources.AgoMinutes", (int)span.TotalMinutes].Value;
+        if (span < TimeSpan.FromDays(1)) return L["Sources.AgoHours", (int)span.TotalHours].Value;
+        return L["Sources.AgoDays", (int)span.TotalDays].Value;
+    }
+
+    public static string SizeText(long bytes) => bytes <= 0 ? "" : (bytes / 1048576.0).ToString(bytes >= 10485760 ? "0" : "0.#", System.Globalization.CultureInfo.InvariantCulture) + " MB";
+
+    public override void Dispose()
+    {
+        Updates.Changed -= OnChanged;
+        base.Dispose();
+    }
+}

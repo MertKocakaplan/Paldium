@@ -1,0 +1,254 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@using System.Net
+@using Paldium.Core.Breeding
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IBreedingCalculator Breeding
+@inject OwnedScopeService Scope
+
+@if (!HasBothParents)
+{
+    <div class="slot-empty child" style="--x:376px;--y:208px">
+        <b>@L["Pair.Child"]</b>
+        @L["Calculator.EmptyChildHint"]
+    </div>
+}
+else if (IsError)
+{
+    var suggestion = FindOppositeGenderFix();
+    <div class="node child err" style="--x:376px;--y:160px" role="alert" aria-labelledby="er-h">
+        <div class="top">
+            <span class="ph warn" aria-hidden="true">
+                <Icon Name="warn" Size="20" />
+            </span>
+            <div>
+                <div class="t" id="er-h">@L["Calculator.ErrNoEggTitle"]</div>
+                <div class="m">@ErrorSubtitle()</div>
+            </div>
+        </div>
+
+        <p class="why">@((MarkupString)ErrorWhyHtml())</p>
+
+        <ul class="fix">
+            <li>
+                @if (SameGender)
+                {
+                    <span>
+                        @L["Calculator.FixPickForB", GenderLower(suggestion.NeededGender)]
+                        <span class="m">@suggestion.Description</span>
+                    </span>
+                    <button type="button" class="btn2 acc" @onclick="() => ApplyPickFixAsync(suggestion)">@L["Calculator.FixPickButton"]</button>
+                }
+                else
+                {
+                    @* A recipe that depends on the genders and does not match: the genders are not the same, so "pick the opposite gender" would be wrong. *@
+                    <span>
+                        @L["Calculator.FixPickOtherB"]
+                        <span class="m">@L["Calculator.FixPickOtherBSub"]</span>
+                    </span>
+                    <button type="button" class="btn2 acc" @onclick="OnClearAndFocusB">@L["Calculator.FixPickButton"]</button>
+                }
+            </li>
+            <li>
+                <span>
+                    @L["Calculator.FixUseSpecies"]
+                    <span class="m">@L["Calculator.FixUseSpeciesSub"]</span>
+                </span>
+                <button type="button" class="btn2" @onclick="OnSwitchToSpeciesMode">@L["Calculator.FixUseSpeciesButton"]</button>
+            </li>
+        </ul>
+    </div>
+}
+else if (PrimaryChild is { } child)
+{
+    var pairCount = Breeding.GetParents(child.Id).Count;
+    var otherOutcomes = DistinctOtherChildren(child.Id);
+    <div class="node child now" style="--x:376px;--y:160px" aria-label="@L["Pair.Child"].Value">
+        <div class="top">
+            <PalIcon Pal="child" Size="56" />
+            <div>
+                <div class="t big">
+                    <a class="pal-link" href="@Links.Pal(child.Id)">@child.DisplayName(Lang)</a>
+                </div>
+                <div class="m">
+                    @L["Pair.Child"] · <span class="num">#@child.DexLabel</span> · @ElementsText(child)
+                </div>
+            </div>
+        </div>
+
+        <dl class="facts">
+            <dt>@Term("Egg")</dt>
+            <dd>@EggFact(child)</dd>
+
+            <dt>@L["Common.Gender"]</dt>
+            <dd>
+                <span class="ratio">
+                    <i class="m" style="@PctVar(child.MaleProbability)"></i>
+                    <i class="f" style="@PctVar(1.0 - child.MaleProbability)"></i>
+                </span>
+                <span class="num">
+                    @Percent(child.MaleProbability) <GenderIcon Gender="Gender.Male" Size="14" /> · @Percent(1.0 - child.MaleProbability) <GenderIcon Gender="Gender.Female" Size="14" />
+                </span>
+            </dd>
+
+            <dt>@L["Calculator.ProducesThisSpecies"]</dt>
+            <dd>
+                <button type="button" class="link-btn" @onclick="() => OnOpenParents.InvokeAsync(child.Id)">
+                    @L["Calculator.PairCountLink", pairCount]
+                </button>
+            </dd>
+        </dl>
+
+        @if (otherOutcomes.Count > 0)
+        {
+            <p class="m gender-alt">
+                @L["Calculator.GenderAltOutcome", string.Join(", ", otherOutcomes.Select(p => p.DisplayName(Lang)))]
+            </p>
+        }
+
+        <div class="acts">
+            <button type="button" class="btn2" @onclick="() => OnMakePlannerTarget.InvokeAsync(child.Id)">
+                @L["Calculator.MakePlannerTarget"]
+            </button>
+            <a class="ghostb" href="@Links.Pal(child.Id)">@L["Nav.Paldex"]</a>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed record OppositeFix(Gender NeededGender, OwnedPal? Candidate, string Description);
+
+    [Parameter] public PalSpecies? SpeciesA { get; set; }
+    [Parameter] public PalSpecies? SpeciesB { get; set; }
+    [Parameter] public OwnedPal? OwnedA { get; set; }
+    [Parameter] public OwnedPal? OwnedB { get; set; }
+    [Parameter] public IReadOnlyList<ChildOutcome> MatchingOutcomes { get; set; } = [];
+    [Parameter] public PalSpecies? SpeciesFallbackChild { get; set; }
+    [Parameter] public bool SameGender { get; set; }
+    [Parameter] public Gender? ConflictingGender { get; set; }
+    [Parameter] public EventCallback<string> OnOpenParents { get; set; }
+    [Parameter] public EventCallback<string> OnMakePlannerTarget { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnSelectSuggestedB { get; set; }
+    [Parameter] public EventCallback OnClearAndFocusB { get; set; }
+    [Parameter] public EventCallback OnSwitchToSpeciesMode { get; set; }
+
+    private bool HasBothParents => SpeciesA != null && SpeciesB != null;
+
+    private bool IsError => HasBothParents && (SameGender || MatchingOutcomes.Count == 0);
+
+    private PalSpecies? PrimaryChild => MatchingOutcomes.Count > 0
+        ? TryPal(MatchingOutcomes[0].ChildId)
+        : null;
+
+    private IReadOnlyList<PalSpecies> DistinctOtherChildren(string primaryId) => MatchingOutcomes
+        .Select(o => o.ChildId)
+        .Where(id => !string.Equals(id, primaryId, StringComparison.OrdinalIgnoreCase))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Select(TryPal)
+        .OfType<PalSpecies>()
+        .ToList();
+
+    private string ErrorSubtitle()
+    {
+        if (SameGender)
+        {
+            return ConflictingGender == Gender.Female
+                ? L["Calculator.ErrBothFemale"].Value
+                : L["Calculator.ErrBothMale"].Value;
+        }
+        return L["Pair.NoOutcome"].Value;
+    }
+
+    private string ErrorWhyHtml()
+    {
+        var childName = WebUtility.HtmlEncode(SpeciesFallbackChild?.DisplayName(Lang) ?? "—");
+        return SameGender
+            ? string.Format(CultureInfo.GetCultureInfo(Lang), L["Calculator.ErrSameGenderWhyHtml"].Value, childName)
+            : string.Format(CultureInfo.GetCultureInfo(Lang), L["Calculator.ErrRecipeMismatchWhyHtml"].Value, childName);
+    }
+
+    private OppositeFix FindOppositeGenderFix()
+    {
+        var needed = ConflictingGender == Gender.Female
+            ? Gender.Male
+            : (OwnedA?.Gender == Gender.Female ? Gender.Male : Gender.Female);
+        var genderWord = GenderLower(needed);
+        var bName = SpeciesB?.DisplayName(Lang) ?? "";
+
+        var oppositeAll = Scope.ScopedPals
+            .Where(p => p.Gender == needed)
+            .OrderByDescending(p => p.Passives.Count)
+            .ThenByDescending(p => p.Level)
+            .ThenBy(p => p.Uid, StringComparer.Ordinal)
+            .ToList();
+
+        var sameSpecies = SpeciesB == null
+            ? []
+            : oppositeAll.Where(p => string.Equals(p.SpeciesId, SpeciesB.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (sameSpecies.Count > 0)
+        {
+            return new OppositeFix(
+                needed,
+                sameSpecies[0],
+                L["Calculator.FixOwnedSameSpecies", sameSpecies.Count, genderWord, bName].Value);
+        }
+
+        var otherSpeciesNames = oppositeAll
+            .Select(p => TryPal(p.SpeciesId)?.DisplayName(Lang))
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToList();
+
+        if (otherSpeciesNames.Count > 0)
+        {
+            var namesText = otherSpeciesNames.Count == 1
+                ? otherSpeciesNames[0]
+                : L["Calculator.TwoNamesAnd", otherSpeciesNames[0], otherSpeciesNames[1]].Value;
+            // No opposite-gender Pal of B's species: do not assign a Pal of another species, let the user choose (the button opens the B picker).
+            return new OppositeFix(
+                needed,
+                null,
+                L["Calculator.FixOwnedOtherSpecies", genderWord, bName, namesText].Value);
+        }
+
+        return new OppositeFix(needed, null, L["Calculator.FixOwnedNone", genderWord].Value);
+    }
+
+    private Task ApplyPickFixAsync(OppositeFix fix) => fix.Candidate != null
+        ? OnSelectSuggestedB.InvokeAsync(fix.Candidate)
+        : OnClearAndFocusB.InvokeAsync();
+
+    private string GenderLower(Gender g) => g == Gender.Male
+        ? L["Common.MaleLower"].Value
+        : L["Common.FemaleLower"].Value;
+
+    private PalSpecies? TryPal(string id)
+    {
+        try { return Data.Pal(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private string ElementsText(PalSpecies species) =>
+        string.Join(" / ", species.Elements
+            .Select(id => Data.Elements.FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id));
+
+    private string EggFact(PalSpecies child)
+    {
+        var sizeKey = child.Egg.Size is "Large" or "Huge" ? child.Egg.Size : "Normal";
+        var sizeWord = L["Egg." + sizeKey].Value.ToLower(CultureInfo.GetCultureInfo(Lang));
+        var el = child.Egg.Element is { Length: > 0 } eid
+            ? Data.Elements.FirstOrDefault(e => e.Id.Equals(eid, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang)
+            : null;
+        return !string.IsNullOrEmpty(el) ? $"{el} · {sizeWord}" : Terms.EggName(child.Egg.Element, child.Egg.Size);
+    }
+
+    private static string PctVar(double ratio)
+    {
+        var pct = Math.Clamp(Math.Round(ratio * 100.0, MidpointRounding.AwayFromZero), 0, 100);
+        return $"--pct:{pct.ToString("0", CultureInfo.InvariantCulture)}%";
+    }
+
+    private string Percent(double value) => value.ToString("P0", CultureInfo.GetCultureInfo(Lang));
+}

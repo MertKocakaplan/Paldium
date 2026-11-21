@@ -1,0 +1,15 @@
+{
+  "file": "world-map.png",
+  "width": 2048,
+  "height": 2048,
+  "largeFile": "world-map-large.png",
+  "largeWidth": 4096,
+  "largeHeight": 4096,
+  "sourceWidth": 8192,
+  "sourceHeight": 8192,
+  "source": "Pal/Content/Pal/Texture/UI/Map/T_WorldMap (DT_WorldMapUIData row MainMap)",
+  "worldMinX": -1099400.0,
+  "worldMinY": -724400.0,
+  "worldMaxX": 349400.0,
+  "worldMaxY": 724400.0
+}

@@ -1,0 +1,28 @@
+@namespace Paldium.App.Pages.TechnologyParts
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+
+@* One level of the list: the level column (sticks to the top of the list while the row scrolls) and the technologies as wrapping tiles. *@
+<section class="tcr" id="@("tech-level-" + Row.Level)" aria-label="@L["Tech.Level", Row.Level].Value">
+    <div class="tcv">
+        <b class="num">@Row.Level</b>
+        <span class="m">@L["Tech.Points", Row.Points]</span>
+        @if (Row.AncientPoints > 0)
+        {
+            <span class="m anc">◆ @L["Tech.AncientPoints", Row.AncientPoints]</span>
+        }
+    </div>
+    <div class="tct">
+        @foreach (var tech in Row.Technologies)
+        {
+            <TechTile Tech="@tech" Selected="@(tech.Id == SelectedId)" ById="@ById" OnSelect="OnSelect" />
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public TechLevel Row { get; set; } = default!;
+    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, TechnologyInfo> ById { get; set; } = new Dictionary<string, TechnologyInfo>();
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+}

@@ -1,0 +1,170 @@
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+
+<SidePanel Open="@(Passive != null)"
+           Drawer="@Drawer"
+           Width="360"
+           Title="@L["Skills.InspectorTitle"].Value"
+           OnClose="OnClose">
+    <ChildContent>
+        @if (Passive is { } p)
+        {
+            var effects = SkillsText.SplitEffects(p.Descriptions.Get(Lang));
+            var visibleTags = SkillsText.VisibleTags(p).Select(t => SkillsText.TagLabel(t, L, Terms)).ToList();
+            var rankWord = SkillsText.RankTitle(p.Rank, L, Terms, withWorldTree: false);
+            var weightHint = SkillsText.WeightRelativeHint(p, Data, L);
+            var guaranteed = Data.Pals
+                .Where(sp => sp.GuaranteedPassives.Contains(p.Id, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(sp => sp.DexNo)
+                .ThenBy(sp => sp.TableOrder)
+                .ToList();
+            var owned = Scope.ScopedPals
+                .Where(op => op.Passives.Contains(p.Id, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(op => Data.TryNormalizePalId(op.SpeciesId, out var cid) ? Data.Pal(cid).DexNo : int.MaxValue)
+                .ThenByDescending(op => op.Level)
+                .ThenBy(op => op.Uid, StringComparer.Ordinal)
+                .ToList();
+
+            <div class="who">
+                <span class="rkbig"><RankGlyph Rank="@p.Rank" Size="26" /></span>
+                <div>
+                    <div class="t">@p.Names.Get(Lang)</div>
+                    <div class="m">
+                        @rankWord@(visibleTags.Count > 0 ? $" · {string.Join(", ", visibleTags)}" : "") · <span class="num">@p.Id</span>
+                    </div>
+                </div>
+            </div>
+
+            <ul class="effl">
+                @foreach (var line in effects)
+                {
+                    <li class="@(SkillsText.IsNegativeEffect(line) ? "neg" : null)">@line</li>
+                }
+            </ul>
+
+            <dl class="hw2">
+                <dt>@L["Skills.ColRandom"]</dt>
+                <dd>
+                    @if (p.CanAppearRandomly)
+                    {
+                        @L["Skills.RandomAppearDetail"]
+                        <text> · </text>
+                        @L["Skills.WeightLabel"]
+                        <text> </text>
+                        <b class="num">@p.RandomWeight.ToString(CultureInfo.InvariantCulture)</b>
+                        @if (!string.IsNullOrEmpty(weightHint))
+                        {
+                            <text> </text>
+                            <span class="m">(@weightHint)</span>
+                        }
+                    }
+                    else
+                    {
+                        @L["Skills.RandomNo"]
+                    }
+                </dd>
+
+                <dt>@L["Skills.ColSurgery"]</dt>
+                <dd>@SurgeryText(p)</dd>
+
+                <dt>@L["Skills.Inheritance"]</dt>
+                <dd>
+                    @L["Skills.InheritedFromParent"]
+                    <text> </text>
+                    <a href="@($"calculator?mode=olasilik&passive={Uri.EscapeDataString(p.Id)}")">@L["Skills.CalculateOdds"]</a>
+                </dd>
+            </dl>
+
+            <section>
+                <h3>@L["Skills.GuaranteedOnSpecies"]</h3>
+                <div class="gps">
+                    @if (guaranteed.Count == 0)
+                    {
+                        <span class="m">@L["Skills.GuaranteedNone"]</span>
+                    }
+                    else
+                    {
+                        @foreach (var sp in guaranteed)
+                        {
+                            <a class="gp" href="@Links.Pal(sp.Id)">
+                                <PalIcon Pal="sp" Size="24" />
+                                <span>@sp.Names.Get(Lang)</span>
+                            </a>
+                        }
+                    }
+                </div>
+            </section>
+
+            <section>
+                <h3>@L["Skills.OwnedSectionTitle", owned.Count]</h3>
+                @if (owned.Count == 0)
+                {
+                    <div class="gps"><span class="m">@L["Skills.OwnedPalsHint"]</span></div>
+                }
+                else
+                {
+                    @foreach (var op in owned)
+                    {
+                        var sp = ResolveSpecies(op.SpeciesId);
+                        var name = sp?.Names.Get(Lang) ?? op.SpeciesId;
+                        var hasBox = (Paldium.Core.Domain.PalLocation.IsPaged(op.Location.Kind) || op.Location.Kind == LocationKind.GlobalStorage)
+                            && op.Location.SlotIndex is >= 0 and < Paldium.Core.Domain.PalLocation.PageSize;
+                        <a class="mrow" href="@Links.OwnedPal(op.SelectionKey)">
+                            @if (hasBox)
+                            {
+                                <BoxMap Slot="@op.Location.SlotIndex" />
+                            }
+                            else
+                            {
+                                <LocationTile Kind="@op.Location.Kind" />
+                            }
+                            <span>
+                                <b>
+                                    @name
+                                    <GenderIcon Gender="@op.Gender" Size="12" />
+                                    · @L["Common.LevelShort", op.Level]
+                                </b>
+                                @LocationText.Format(op, Terms, L)
+                            </span>
+                        </a>
+                    }
+                }
+            </section>
+        }
+    </ChildContent>
+    <Footer>
+        @if (Passive != null)
+        {
+            <span class="sp"></span>
+            <a class="btn2" href="@($"mypals?passive={Uri.EscapeDataString(Passive.Id)}")">
+                @L["Skills.FilterInMyPals"]
+            </a>
+        }
+    </Footer>
+</SidePanel>
+
+@code {
+    [Parameter] public PassiveSkill? Passive { get; set; }
+    [Parameter] public bool Drawer { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string SurgeryText(PassiveSkill p)
+    {
+        if (!p.Surgery.Supported)
+            return L["Skills.SurgeryNo"].Value;
+
+        var parts = new List<string>(2) { L["Skills.SurgeryTableAvailable"].Value };
+        var item = SkillsText.SurgeryItemName(p, L, Terms, Lang);
+        if (!string.IsNullOrEmpty(item))
+            parts.Add($"{L["Skills.SurgeryItemLower"].Value}: {item}");
+        var text = string.Join("; ", parts);
+        if (p.Surgery.Cost > 0)
+            text += $" · {SkillsText.FormatCost(p.Surgery.Cost, Lang)} {L["Skills.GoldUnit"].Value}";
+        return text;
+    }
+
+    private PalSpecies? ResolveSpecies(string id) =>
+        Data.TryNormalizePalId(id, out var cid) ? Data.Pal(cid) : null;
+}

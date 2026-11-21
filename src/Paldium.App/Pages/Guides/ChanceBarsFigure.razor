@@ -1,0 +1,36 @@
+@using Paldium.Core.Probability
+@inherits LocalizedComponentBase
+@inject IPassiveOddsCalculator Odds
+
+@* The chance that exactly the wanted passives arrive when the pool holds only those (mockup .kbars). The numbers come from the odds calculator. *@
+@{
+    var rows = Rows();
+    var best = rows.Max(r => r.P);
+    var culture = CultureInfo.GetCultureInfo(Lang);
+}
+<figure class="worked">
+    <div class="kbars">
+        @foreach (var row in rows)
+        {
+            <div class="kb">
+                <span class="k">@L["Guide.Fig.Wanted", row.K]</span>
+                <span class="bar"><i style="@("width:" + (best <= 0 ? "0" : (row.P / best * 100).ToString("0.#", CultureInfo.InvariantCulture)) + "%")"></i></span>
+                <b class="num">@L["Guide.Fig.Percent", Math.Round(row.P * 100).ToString("0", culture)]</b>
+                <span class="m">@L["Guide.Fig.Eggs", row.Eggs.ToString("0.0", culture)]</span>
+            </div>
+        }
+    </div>
+    <figcaption>@L["Guide.Fig.ChanceCaption"]</figcaption>
+</figure>
+
+@code {
+    private IEnumerable<(int K, double P, double Eggs)> Rows()
+    {
+        for (var k = 1; k <= 4; k++)
+        {
+            var ids = Enumerable.Range(1, k).Select(i => "wanted" + i).ToList();
+            var result = Odds.Compute(new PassiveOddsQuery(ids, [], ids, 0));
+            yield return (k, result.ProbabilityPerEgg, result.ExpectedEggs);
+        }
+    }
+}

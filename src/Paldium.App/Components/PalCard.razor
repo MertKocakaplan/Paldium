@@ -1,0 +1,316 @@
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject PreferredPalActions PreferredActions
+
+@{
+    var species = TrySpecies(Pal.SpeciesId);
+    var speciesName = species?.Names.Get(Lang) ?? Pal.SpeciesId;
+    var el1 = species?.Elements.Count > 0 ? species.Elements[0].ToLowerInvariant() : "normal";
+    var el2 = species?.Elements.Count > 1 ? species.Elements[1].ToLowerInvariant() : el1;
+    var isFoil = Pal.Passives.Any(static p =>
+        string.Equals(p, "Legend", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(p, "Rare", StringComparison.OrdinalIgnoreCase));
+    var isOff = !InScope || Pal.IsExcluded;
+    var loc = Pal.Location;
+    var hasBox = (Paldium.Core.Domain.PalLocation.IsPaged(loc.Kind) || loc.Kind == LocationKind.GlobalStorage)
+        && loc.SlotIndex is { } slotIdx && slotIdx >= 0 && slotIdx < Paldium.Core.Domain.PalLocation.PageSize;
+    var fullLoc = LocationText.Format(Pal, Terms, L);
+    var (locPrimary, locSecondary) = ResolveLocationLines(hasBox);
+    var dotFlags = CollectDotFlags();
+    var ariaLabel = BuildAriaLabel(species, speciesName, fullLoc);
+    var tabIndex = GridSlot is null ? 0 : (GridSlot.IsTabStop ? 0 : -1);
+}
+
+<li class="@CardClass(el1, el2, isFoil, isOff)"
+    role="listitem"
+    data-card-index="@GridSlot?.Index"
+    aria-selected="@(Selected ? "true" : null)"
+    title="@(Dense ? DenseTooltip(fullLoc, dotFlags) : null)"
+    @oncontextmenu:preventDefault="true"
+    @oncontextmenu="OpenMenuAsync"
+    @onkeydown="OnKeyDownAsync">
+    <button type="button"
+            class="card-act"
+            tabindex="@tabIndex"
+            aria-label="@ariaLabel"
+            @onfocus="NotifyFocused"
+            @onclick="() => OnOpen.InvokeAsync(Pal)"></button>
+
+    <div class="ctop" aria-hidden="true">
+        <span class="t">
+            <span class="nm" title="@(!string.IsNullOrEmpty(Pal.Nickname) ? L["MyPals.NicknameTip", Pal.Nickname].Value : null)">@speciesName</span>
+            <GenderIcon Gender="@Pal.Gender" Size="@(Dense ? 12 : 14)" />
+            @if (Dense && dotFlags.Count > 0)
+            {
+                <span class="@($"mk{(Pal.IsEdited ? " ed" : "")}")" title="@string.Join(", ", dotFlags)"></span>
+            }
+        </span>
+        <span class="lv">
+            @if (!Dense)
+            {
+                <small>@L["MyPals.ColLevel"]</small>
+            }
+            @Pal.Level.ToString(CultureInfo.InvariantCulture)
+        </span>
+    </div>
+
+    <div class="art">
+        <span class="no" aria-hidden="true">@DexDisplay(species)</span>
+        <span class="tr" aria-hidden="true">
+            @if (Pal.Rank > 1)
+            {
+                <span class="stars" title="@L["MyPals.CondenseTip", Pal.Rank - 1].Value">@(new string('★', Math.Clamp(Pal.Rank - 1, 1, 4)))</span>
+            }
+            @if (species != null && species.Elements.Count > 0)
+            {
+                <span class="els">
+                    @foreach (var elId in species.Elements)
+                    {
+                        var info = FindElement(elId);
+                        var elName = info?.Names.Get(Lang) ?? elId;
+                        var elIcon = info != null ? $"gamedata/{info.IconPath}" : $"gamedata/icons/elements/{elId}.png";
+                        <img src="@elIcon"
+                             width="@(Dense ? 14 : 16)"
+                             height="@(Dense ? 14 : 16)"
+                             alt="@elName"
+                             title="@elName" />
+                    }
+                </span>
+            }
+        </span>
+
+        <PalIcon Pal="@species" PalId="@Pal.SpeciesId" Size="@(Dense ? 60 : 84)" Class="pal" />
+
+        <PalCardMenu Pal="@Pal"
+                     PalName="@speciesName"
+                     @bind-Open="_menuOpen"
+                     OnEdit="() => OnOpen.InvokeAsync(Pal)"
+                     OnPlanBreed="() => OnPlanBreed.InvokeAsync(Pal)"
+                     OnOpenPaldex="() => OnOpenPaldex.InvokeAsync(Pal)"
+                     OnTogglePlan="() => OnTogglePlan.InvokeAsync(Pal)"
+                     Preferred="@PreferredActions.IsPreferred(Pal)"
+                     OnTogglePreferred="() => PreferredActions.Toggle(Pal)"
+                     OnRemoveManual="() => OnRemoveManual.InvokeAsync(Pal)" />
+
+        @if (Dense)
+        {
+            <span class="bx" title="@fullLoc" aria-hidden="true">
+                @if (hasBox)
+                {
+                    <BoxMap Slot="@loc.SlotIndex" />
+                }
+                else
+                {
+                    <LocationTile Kind="@loc.Kind" Size="33" />
+                }
+            </span>
+        }
+        else if (Pal.IsEdited || Pal.IsOnExpedition || loc.Kind == LocationKind.GlobalStorage || isOff)
+        {
+            <span class="flags" aria-hidden="true">
+                @if (Pal.IsEdited)
+                {
+                    <Flag Text="@L["MyPals.FlagEdited"].Value" Kind="ed" />
+                }
+                @if (Pal.IsOnExpedition)
+                {
+                    <Flag Text="@L["MyPals.FlagExpedition"].Value" />
+                }
+                @if (loc.Kind == LocationKind.GlobalStorage)
+                {
+                    <Flag Text="@L["MyPals.FlagGeneticCopy"].Value" />
+                }
+                @if (isOff)
+                {
+                    <Flag Text="@L["MyPals.FlagOutOfPlan"].Value" Kind="off" />
+                }
+            </span>
+        }
+    </div>
+
+    @if (!Dense)
+    {
+        <div class="@($"ivband{(Pal.Ivs == null ? " unk" : "")}")" aria-hidden="true">
+            <span class="k">@L["MyPals.ColIvs"]</span>
+            <span>@L["MyPals.IvHpShort"]<b>@(Pal.Ivs?.Hp.ToString(CultureInfo.InvariantCulture) ?? "—")</b></span>
+            <span>@L["MyPals.IvAtkShort"]<b>@(Pal.Ivs?.Attack.ToString(CultureInfo.InvariantCulture) ?? "—")</b></span>
+            <span>@L["MyPals.IvDefShort"]<b>@(Pal.Ivs?.Defense.ToString(CultureInfo.InvariantCulture) ?? "—")</b></span>
+        </div>
+    }
+
+    <div class="csk" aria-hidden="true">
+        @for (var i = 0; i < 4; i++)
+        {
+            if (i < Pal.Passives.Count)
+            {
+                var id = Pal.Passives[i];
+                var skill = TryPassive(id);
+                var name = skill?.Names.Get(Lang) ?? id;
+                var rank = skill?.Rank ?? 1;
+                var cls = rank < 0 ? "neg" : $"r{Math.Clamp(rank, 1, 5)}";
+                if (IsWanted(id)) cls += " want";
+                <span class="@cls">
+                    <RankGlyph Rank="@rank" Size="@(Dense ? 12 : 13)" />
+                    <span class="n">@name</span>
+                </span>
+            }
+            else
+            {
+                <span class="bos">
+                    <span class="n">@(Dense ? "—" : L["MyPals.EmptySlot"].Value)</span>
+                </span>
+            }
+        }
+    </div>
+
+    @if (!Dense)
+    {
+        <div class="cfoot" aria-hidden="true">
+            @if (hasBox)
+            {
+                <BoxMap Slot="@loc.SlotIndex" />
+            }
+            else
+            {
+                <LocationTile Kind="@loc.Kind" Size="39" />
+            }
+            <span class="lc">
+                <b>@locPrimary</b>
+                <span>@locSecondary</span>
+            </span>
+        </div>
+    }
+</li>
+
+@code {
+    private bool _menuOpen;
+
+    [CascadingParameter] public CardGridSlot? GridSlot { get; set; }
+
+    [Parameter, EditorRequired] public OwnedPal Pal { get; set; } = default!;
+    [Parameter] public bool Dense { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool InScope { get; set; } = true;
+    [Parameter] public IReadOnlyCollection<string>? WantedPassives { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnOpen { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnPlanBreed { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnOpenPaldex { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnTogglePlan { get; set; }
+    [Parameter] public EventCallback<OwnedPal> OnRemoveManual { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string CardClass(string el1, string el2, bool isFoil, bool isOff)
+    {
+        var list = new List<string>(7) { "card", $"el-{el1}", $"el2-{el2}" };
+        if (isFoil) list.Add("foil");
+        if (isOff) list.Add("off");
+        if (_menuOpen) list.Add("hov");
+        if (!string.IsNullOrEmpty(Class)) list.Add(Class);
+        return string.Join(' ', list);
+    }
+
+    private PalSpecies? TrySpecies(string id)
+    {
+        try { return Data.Pal(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private PassiveSkill? TryPassive(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private ElementInfo? FindElement(string id) =>
+        Data.Elements.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private string DexDisplay(PalSpecies? species) => species == null
+        ? "#?"
+        : "#" + (string.IsNullOrEmpty(species.DexLabel)
+            ? species.DexNo.ToString(CultureInfo.InvariantCulture)
+            : species.DexLabel);
+
+    private bool IsWanted(string passiveId) =>
+        WantedPassives != null && WantedPassives.Contains(passiveId, StringComparer.OrdinalIgnoreCase);
+
+    private (string Primary, string Secondary) ResolveLocationLines(bool hasBox)
+    {
+        var loc = Pal.Location;
+        if (loc.Kind == LocationKind.Base && !string.IsNullOrEmpty(loc.BaseName))
+        {
+            var sec = Pal.IsOnExpedition ? $"{loc.BaseName} · {L["Pal.OnExpedition"].Value}" : loc.BaseName;
+            return (Terms.Location(LocationKind.Base), sec);
+        }
+        if (hasBox)
+            return (LocationText.ShortPlace(Pal, Terms, L), LocationText.TwoLine(Pal, Terms, L).Subtitle);
+        return LocationText.TwoLine(Pal, Terms, L);
+    }
+
+    private List<string> CollectDotFlags()
+    {
+        var list = new List<string>(4);
+        if (Pal.IsEdited) list.Add(L["MyPals.FlagEdited"].Value);
+        if (Pal.IsOnExpedition) list.Add(L["MyPals.FlagExpedition"].Value);
+        if (Pal.Location.Kind == LocationKind.GlobalStorage) list.Add(L["MyPals.FlagGeneticCopy"].Value);
+        if (!InScope || Pal.IsExcluded) list.Add(L["MyPals.FlagOutOfPlan"].Value);
+        return list;
+    }
+
+    private string DenseTooltip(string fullLoc, List<string> flags)
+    {
+        var ivText = Pal.Ivs is { } iv
+            ? $"IV {L["MyPals.IvHpShort"].Value} {iv.Hp}, {L["MyPals.IvAtkShort"].Value} {iv.Attack}, {L["MyPals.IvDefShort"].Value} {iv.Defense}"
+            : $"IV {L["MyPals.CardAriaIvsUnknown"].Value}";
+        var parts = new List<string> { ivText, fullLoc };
+        parts.AddRange(flags);
+        return string.Join(" · ", parts);
+    }
+
+    private string BuildAriaLabel(PalSpecies? species, string speciesName, string fullLoc)
+    {
+        var title = string.IsNullOrEmpty(Pal.Nickname) ? speciesName : $"{speciesName} ({Pal.Nickname})";
+        var gender = Pal.Gender switch
+        {
+            Gender.Male => L["Common.Male"].Value,
+            Gender.Female => L["Common.Female"].Value,
+            _ => L["Common.Unknown"].Value,
+        };
+        var elements = species != null && species.Elements.Count > 0
+            ? string.Join(" / ", species.Elements.Select(e => FindElement(e)?.Names.Get(Lang) ?? e))
+            : L["Common.Unknown"].Value;
+        var levelAndMeta = $"{gender}, {L["MyPals.AriaLevel", Pal.Level.ToString(CultureInfo.InvariantCulture)].Value}";
+        if (Pal.Rank > 1) levelAndMeta += $", ★{(Pal.Rank - 1).ToString(CultureInfo.InvariantCulture)}";
+        levelAndMeta += $", {elements}";
+
+        var passives = Pal.Passives.Count > 0
+            ? string.Join(", ", Pal.Passives.Select(p => TryPassive(p)?.Names.Get(Lang) ?? p))
+            : L["MyPals.CardAriaPassivesNone"].Value;
+        var ivText = Pal.Ivs is { } iv
+            ? L["MyPals.CardAriaIvs", iv.Hp, iv.Attack, iv.Defense].Value
+            : L["MyPals.CardAriaIvsUnknown"].Value;
+        var flags = CollectDotFlags();
+        var tail = flags.Count > 0 ? $"{fullLoc}. {string.Join(". ", flags)}" : fullLoc;
+        return L["MyPals.CardAria", title, levelAndMeta, passives, ivText, tail].Value;
+    }
+
+    private void NotifyFocused()
+    {
+        if (GridSlot != null)
+            GridSlot.NotifyFocused(GridSlot.Index);
+    }
+
+    private void OpenMenuAsync()
+    {
+        _menuOpen = true;
+    }
+
+    private void OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if ((e.ShiftKey && string.Equals(e.Key, "F10", StringComparison.OrdinalIgnoreCase)) ||
+            string.Equals(e.Key, "ContextMenu", StringComparison.OrdinalIgnoreCase))
+        {
+            _menuOpen = true;
+        }
+    }
+}

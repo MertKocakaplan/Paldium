@@ -1,0 +1,67 @@
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inherits LocalizedComponentBase
+@inject PanelWidths Widths
+@inject IJSRuntime JS
+
+@* The drag handle of a left panel (T102): a sibling of the panel inside the page's grid, placed at the panel's right edge. The width lives in
+   the CSS variable --panel-w of the grid (set by script while dragging); it is stored in the settings when the drag ends. *@
+<div @ref="_handle"
+     class="panel-resizer"
+     role="separator"
+     aria-orientation="vertical"
+     tabindex="0"
+     aria-label="@L["Panel.ResizeAria"].Value"
+     aria-valuemin="@PanelWidths.Min"
+     aria-valuemax="@PanelWidths.Max"
+     aria-valuenow="@_width"></div>
+
+@code {
+    private ElementReference _handle;
+    private IJSObjectReference? _script;
+    private DotNetObjectReference<PanelResizer>? _self;
+    private int _width;
+
+    /// <summary>The page ("planner", "mypals", "skills", "paldex").</summary>
+    [Parameter, EditorRequired] public string Key { get; set; } = "";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _width = Widths.Get(Key);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            _script = await JS.InvokeAsync<IJSObjectReference>("pbPanelResize.attach", _handle, _self,
+                new { min = PanelWidths.Min, max = PanelWidths.Max, minContent = PanelWidths.MinContent, width = _width, step = 16 });
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    /// <summary>The drag or a key press ended: store the width.</summary>
+    [JSInvokable]
+    public void OnResized(int width) => _width = Widths.Set(Key, width);
+
+    /// <summary>Double click: back to the default width.</summary>
+    [JSInvokable]
+    public int OnReset() => _width = Widths.Set(Key, PanelWidths.Default);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_script != null)
+        {
+            try { await _script.InvokeVoidAsync("dispose"); await _script.DisposeAsync(); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+
+        _self?.Dispose();
+        Dispose();
+    }
+}

@@ -1,0 +1,49 @@
+@inherits LocalizedComponentBase
+
+@* 4x2 passive rank checkbox tile grid (y.css .rks / .rk). *@
+<div class="@($"rks{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" role="group" aria-label="@AriaLabel">
+    @foreach (var rank in RankOrder)
+    {
+        var r = rank;
+        var selected = Selected.Contains(r);
+        <button type="button"
+                class="@($"rk{(selected ? " on" : "")}")"
+                role="checkbox"
+                aria-checked="@(selected ? "true" : "false")"
+                title="@TitleFor(r)"
+                aria-label="@TitleFor(r)"
+                @onclick="() => ToggleAsync(r)">
+            <RankGlyph Rank="@r" Size="16" />
+            <span class="num">@LabelFor(r)</span>
+        </button>
+    }
+</div>
+
+@code {
+    private static readonly int[] RankOrder = [5, 4, 3, 2, 1, -1, -2, -3];
+
+    [Parameter] public IReadOnlyList<int> Selected { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<int>> SelectedChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task ToggleAsync(int rank)
+    {
+        var next = Selected.ToList();
+        var idx = next.IndexOf(rank);
+        if (idx >= 0) next.RemoveAt(idx);
+        else next.Add(rank);
+        return SelectedChanged.InvokeAsync(next);
+    }
+
+    private static string LabelFor(int rank) => rank < 0
+        ? "−" + (-rank).ToString(CultureInfo.InvariantCulture)
+        : rank.ToString(CultureInfo.InvariantCulture);
+
+    private string TitleFor(int rank) => rank switch
+    {
+        5 => L["Skills.Rank5WorldTree"].Value,
+        < 0 => L["Skill.NegativeRankLabel", -rank].Value,
+        _ => L["Skill.RankLabel", rank].Value,
+    };
+}

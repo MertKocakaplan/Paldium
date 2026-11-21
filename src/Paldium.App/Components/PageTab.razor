@@ -1,0 +1,47 @@
+@implements IDisposable
+@inherits LocalizedComponentBase
+@inject NavigationManager Navigation
+
+@if (Disabled)
+{
+    <a href="@Href" tabindex="-1" aria-disabled="true" @onclick:preventDefault="true">@L[Label]</a>
+}
+else
+{
+    <a href="@Href" aria-current="@(IsActive() ? "page" : null)">@L[Label]</a>
+}
+
+@code {
+    /// <summary>Relative address of the page, e.g. <c>planner</c>.</summary>
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+
+    /// <summary>The <c>.resx</c> key of the page name (<c>Nav.*</c>).</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
+    private bool IsActive() => IsPathActive(Navigation.ToBaseRelativePath(Navigation.Uri), Href);
+
+    /// <summary>Prefix match on whole segments: <c>planner?target=X</c> is on <c>planner</c>; <c>guides/02-x</c> is on <c>guides</c>.</summary>
+    public static bool IsPathActive(string relativeUri, string href)
+    {
+        var end = relativeUri.IndexOfAny(['?', '#']);
+        var path = (end < 0 ? relativeUri : relativeUri[..end]).Trim('/');
+        return path.Equals(href, StringComparison.OrdinalIgnoreCase) || path.StartsWith(href + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        base.Dispose();
+    }
+}

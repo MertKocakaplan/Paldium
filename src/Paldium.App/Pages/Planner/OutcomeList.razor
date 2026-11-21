@@ -1,0 +1,66 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Domain
+@using Paldium.Core.Probability
+@inherits LocalizedComponentBase
+
+@* "Every egg" (T103, planner.md): the six classes an egg of the step falls into. The first version counts classes 1 and 2 as the plan's success
+   and uses fixed texts for what to do. *@
+<section class="dsec">
+    <h3>@L["Plan.Node.EveryEgg"]</h3>
+    <div class="big">
+        <b class="num ok">@Pct(Distribution.PlanSuccess)</b>
+        <span>@L["Plan.Node.BigLine", Eggs(StepEggs)]</span>
+    </div>
+    <div class="obar" aria-hidden="true">
+        <i class="ok" style="@($"width:{Distribution.PlanSuccess * 100:0.#}%")"></i>
+    </div>
+    <p class="h">@L["Plan.Node.BigHelp"]</p>
+    <ul class="orows">
+        @foreach (var row in Rows())
+        {
+            <li class="@row.Cls">
+                <span class="pc num">@Pct(row.P)</span>
+                <span class="tx">
+                    <b>
+                        @if (row.Gender) { if (Flexible) { <span class="flexg" aria-hidden="true">⚥</span> } else { <GenderIcon Gender="@row.Icon" Size="14" /> } }
+                        @row.Name
+                    </b>
+                    <span class="m">@row.Text</span>
+                </span>
+            </li>
+        }
+    </ul>
+</section>
+
+@code {
+    private sealed record Row(double P, string Cls, string Name, string Text, bool Gender, Gender? Icon);
+
+    [Parameter, EditorRequired] public OutcomeDistribution Distribution { get; set; } = default!;
+    [Parameter] public double StepEggs { get; set; }
+    [Parameter] public bool Flexible { get; set; }
+    [Parameter] public GenderReq WantedGender { get; set; }
+
+    private string Pct(double p) => p > 0 && p < 0.005 ? "<1%" : (p * 100).ToString("0", CultureInfo.GetCultureInfo(Lang)) + "%";
+
+    private string Eggs(double v) => "~" + v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private IEnumerable<Row> Rows()
+    {
+        var d = Distribution;
+        Gender? wanted = WantedGender switch { GenderReq.Male => Gender.Male, GenderReq.Female => Gender.Female, _ => null };
+        Gender? other = wanted switch { Gender.Male => Gender.Female, Gender.Female => Gender.Male, _ => null };
+        // Flexible gender (T105): the other gender is as good as the wanted one, so classes 3 and 4 join 1 and 2.
+        var wantedP = Flexible ? d.Wanted + d.OtherGender : d.Wanted;
+        var extraP = Flexible ? d.ExtraWanted + d.OtherGenderExtra : d.ExtraWanted;
+        yield return new Row(wantedP, "ok", L["Plan.Node.O.1"].Value, L[Flexible ? "Plan.Node.O.1t.Flex" : "Plan.Node.O.1t"].Value, true, wanted);
+        yield return new Row(extraP, "ok", L["Plan.Node.O.2"].Value, L["Plan.Node.O.2t"].Value, true, wanted);
+        if (!Flexible)
+        {
+            yield return new Row(d.OtherGenderExtra, "mid", L["Plan.Node.O.3"].Value, L["Plan.Node.O.3t"].Value, true, other);
+            yield return new Row(d.OtherGender, "mid", L["Plan.Node.O.4"].Value, L["Plan.Node.O.4t"].Value, true, other);
+        }
+
+        yield return new Row(d.ExtraUnwanted, "mid", L["Plan.Node.O.5"].Value, L["Plan.Node.O.5t"].Value, false, null);
+        yield return new Row(d.Missing, "no", L["Plan.Node.O.6"].Value, L["Plan.Node.O.6t"].Value, false, null);
+    }
+}

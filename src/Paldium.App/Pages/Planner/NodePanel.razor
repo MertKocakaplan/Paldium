@@ -1,0 +1,639 @@
+@namespace Paldium.App.Pages.PlannerParts
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using Paldium.Core.Breeding
+@using Paldium.Core.Owned
+@using Paldium.Core.Planning
+@using Paldium.Core.Probability
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IPassiveOddsCalculator Odds
+@inject IBreedingCalculator Breeding
+@inject OwnedScopeService Scope
+@inject IJSRuntime JS
+
+@* The node panel (T103, planner.md "Node panel"): describes the node, says what an egg of the step becomes and lets the user say which Pal
+   they have in hand. Header, a scrolling body and a sticky footer with the verdict and the primary action. *@
+@if (Node != null)
+{
+    var info = Info();
+    <aside class="@($"dp{(Compact ? " drawer" : "")}")" aria-label="@L["Plan.Node.PanelAria"].Value" @onkeydown="OnKeyDownAsync" tabindex="-1">
+        <div class="dph">
+            <PalIcon PalId="@Node.SpeciesId" Size="40" />
+            <div class="tx">
+                <h2 tabindex="-1" @ref="_title">
+                    <span class="nm">@info.Name</span>
+                    @if (info.Flexible) { <span class="flexg" role="img" aria-label="@L["Plan.EitherGender"].Value">⚥</span> }
+                    else { <GenderIcon Gender="@info.Gender" Size="16" /> }
+                </h2>
+                <div class="m">@info.Sub</div>
+                <a class="lnk" href="@Links.Pal(Node.SpeciesId)">@L["Plan.Node.OpenPaldex"]</a>
+            </div>
+            <button type="button" class="ib2" title="@L["Plan.Node.Close"].Value" aria-label="@L["Plan.Node.Close"].Value" @onclick="OnClose">
+                <Icon Name="x" Size="16" />
+            </button>
+        </div>
+
+        <div class="dpb">
+            @if (Node is WildLeaf or OwnedLeaf)
+            {
+                <ExcludeActions Node="@Node" Plan="@Plan" Query="@Query" OnExclude="OnExclude" />
+            }
+
+            @if (Node is BreedStep step)
+            {
+                @WantsSection(step)
+                @if (_hand == null) { @EggsSection(step) }
+                else { @HandList() }
+                @if (_tab != null) { @PickerSection() }
+            }
+            else if (Node is WildLeaf wild)
+            {
+                @CatchSection(wild)
+                @PickerSection()
+            }
+            else if (Node is OwnedLeaf owned)
+            {
+                @OwnedSection(owned)
+            }
+
+            @if (Node is BreedStep)
+            {
+                <ExcludeActions Node="@Node" Plan="@Plan" Query="@Query" OnExclude="OnExclude" />
+            }
+        </div>
+
+        <div class="dpf">
+            @if (Node is BreedStep && _tab == null)
+            {
+                <p class="ask">@L["Plan.Node.AskHatched"]</p>
+                <div class="acts">
+                    <button type="button" class="btn2 acc" @onclick='() => OpenTab("pick")'>@L["Plan.Node.PickMine"]</button>
+                    <button type="button" class="btn2" @onclick='() => OpenTab("enter")'>@L["Plan.Node.EnterPassives"]</button>
+                </div>
+            }
+            else if (_verdict != null)
+            {
+                @VerdictBox()
+            }
+            else if (_tab != null)
+            {
+                <p class="ask">@(_busy ? L["Plan.Node.Computing"].Value : L["Plan.Node.PickFirst"].Value)</p>
+            }
+            else if (Node is OwnedLeaf owned2)
+            {
+                <div class="acts">
+                    <a class="btn2 acc" href="@Links.OwnedPal(owned2.Pal.SelectionKey)">@L["Plan.Node.OpenInMyPals"]</a>
+                    <a class="btn2" href="@Links.Pal(Node.SpeciesId)">@L["Plan.Node.OpenPaldex"]</a>
+                </div>
+            }
+        </div>
+    </aside>
+}
+
+@code {
+    private ElementReference _title;
+    private PlanNode? _lastNode;
+    private string? _tab;                       // "pick" | "enter"
+    private OwnedPal? _hand;                    // the Pal the user has in hand (owned, or the manual draft being edited)
+    private bool _handIsDraft;
+    private Gender _draftGender = Gender.Male;
+    private List<string> _draftPassives = [];
+    private NodeAnalysis.Verdict? _verdict;
+    private bool _busy;
+    private readonly Dictionary<string, double?> _remaining = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _debounce;
+
+    [Parameter] public PlanNode? Node { get; set; }
+    [Parameter, EditorRequired] public BreedingPlan Plan { get; set; } = default!;
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>"pick" opens "Pick from My Pals" for a step child right away (from the glance view).</summary>
+    [Parameter] public string? InitialTab { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnCompleteStep { get; set; }
+    [Parameter] public EventCallback<bool> OnPickerOpenChanged { get; set; }
+
+    /// <summary>"Don't use in these plans" (T107): the exclusion the user chose; the page adds it and solves again.</summary>
+    [Parameter] public EventCallback<PlanExclusion> OnExclude { get; set; }
+
+    /// <summary>
+    /// Runs the first stage with the given Pal (it may be a draft that is not saved) and returns the result: as the start parent for a step child,
+    /// as a preferred Pal for a wild leaf (the second argument; T112).
+    /// </summary>
+    [Parameter] public Func<OwnedPal, bool, CancellationToken, Task<PlanResult>>? Evaluate { get; set; }
+
+    /// <summary>Indexes of the steps already done (the checklist): "if you retry" counts only what is left (T112).</summary>
+    [Parameter] public IReadOnlySet<int>? Done { get; set; }
+
+    /// <summary>The gender that hatched from a flexible step (T105), by step index.</summary>
+    [Parameter] public IReadOnlyDictionary<int, Gender>? FlexChoices { get; set; }
+
+    /// <summary>"Continue from this Pal" / "Save and continue": the Pal (a draft is saved first), the node it replaces and the numbers shown.</summary>
+    [Parameter] public EventCallback<ContinueRequest> OnContinue { get; set; }
+
+    public sealed record ContinueRequest(OwnedPal Pal, bool IsDraft, PlanNode Node, double? WithPal, double Retry);
+
+    private sealed record NodeInfo(string Name, Gender? Gender, bool Flexible, string Sub);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!ReferenceEquals(_lastNode, Node))
+        {
+            _lastNode = Node;
+            ResetHand();
+            _tab = Node is WildLeaf ? (OwnedOfSpecies().Count > 0 ? "pick" : "enter") : (Node is BreedStep && InitialTab == "pick" ? "pick" : null);
+            if (_tab == "pick") StartCandidateRun();
+            if (Node != null)
+            {
+                try { await JS.InvokeVoidAsync("pbFocusElement", _title); }
+                catch (JSException) { }
+                catch (JSDisconnectedException) { }
+            }
+        }
+    }
+
+    private void ResetHand()
+    {
+        _cts?.Cancel();
+        _debounce?.Cancel();
+        _hand = null;
+        _handIsDraft = false;
+        _verdict = null;
+        _busy = false;
+        _draftPassives = [];
+        _draftGender = Gender.Male;
+        _remaining.Clear();
+    }
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) => e.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+
+    // ---- header ------------------------------------------------------------------------------------------------------------
+
+    private NodeInfo Info()
+    {
+        var name = Node is OwnedLeaf { Pal.Nickname: { } nick } ? nick : SpeciesName(Node!.SpeciesId);
+        var flexible = Node is BreedStep { ChildGender: GenderReq.Any };
+        Gender? gender = Node switch
+        {
+            OwnedLeaf o => o.Pal.Gender,
+            { Gender: GenderReq.Male } => Gender.Male,
+            { Gender: GenderReq.Female } => Gender.Female,
+            _ => null,
+        };
+        var consumer = NodeAnalysis.ConsumerOf(Plan, Node!);
+        string sub = Node switch
+        {
+            BreedStep s => L["Plan.Node.SubStep", PlanText.StepsOf(Plan).ToList().FindIndex(x => ReferenceEquals(x, s)) + 1, Eggs(s.ExpectedEggs)].Value,
+            WildLeaf w => consumer is { } c ? L["Plan.Node.SubWildFor", PlanText.ObtainLabel(w.ObtainMethod, L), c.Number].Value : PlanText.ObtainLabel(w.ObtainMethod, L),
+            OwnedLeaf ol => OwnedSub(ol),
+            _ => string.Empty,
+        };
+        return new NodeInfo(name, gender, flexible, sub);
+    }
+
+    // "Sende · Kutu 1 · 1. ve 2. adimda es" (T114): where the Pal is and the steps it serves.
+    private string OwnedSub(OwnedLeaf owned)
+    {
+        var steps = NodeAlternatives.StepsUsing(Plan, owned.Pal.Uid);
+        var text = L["Plan.NodeOwned"].Value + " · " + LocationText.ShortPlace(owned.Pal, Terms, L);
+        if (steps.Count == 1) text += " · " + L["Plan.Node.PartnerInStep", steps[0]].Value;
+        else if (steps.Count > 1) text += " · " + L["Plan.Node.PartnerInSteps", NodeAlternatives.JoinNumbers(steps, Lang)].Value;
+        return text;
+    }
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string Eggs(double v) => double.IsInfinity(v) ? L["Plan.Node.Impossible"].Value : "~" + v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private string Percent(double p) => p < 0.005 && p > 0 ? "<1%" : (p * 100).ToString("0", CultureInfo.GetCultureInfo(Lang)) + "%";
+
+    private string PassiveName(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    // ---- body: the step's wishes and eggs ------------------------------------------------------------------------------------
+
+    private RenderFragment WantsSection(BreedStep step) => __builder =>
+    {
+        var wanted = new HashSet<string>(Query.DesiredPassives, StringComparer.OrdinalIgnoreCase);
+        <section class="dsec">
+            <h3>@L["Plan.Node.Wants"]</h3>
+            <dl class="wants">
+                <dt>@L["Common.Gender"]</dt>
+                <dd>@(step.ChildGender switch { GenderReq.Male => L["Common.Male"].Value, GenderReq.Female => L["Common.Female"].Value, _ => "⚥ " + L["Plan.Node.EitherGender"].Value })</dd>
+                <dt>@L["Plan.Node.UnwantedLabel"]</dt>
+                <dd>@(step.MaxUnwanted == 0 ? L["Plan.Node.UnwantedNone"].Value : L["Plan.Node.UnwantedUpTo", step.MaxUnwanted].Value)</dd>
+            </dl>
+            @if (step.TargetPassives.Count > 0)
+            {
+                <div class="pas">
+                    @foreach (var pid in step.TargetPassives)
+                    {
+                        <PassiveLine PassiveId="@pid" Want="@wanted.Contains(pid)" />
+                    }
+                </div>
+            }
+        </section>
+    };
+
+    private RenderFragment EggsSection(BreedStep step) => __builder =>
+    {
+        if (!NodeAnalysis.PassivesMatter(Query.DesiredPassives))
+        {
+            var genderRight = NodeAnalysis.GenderRight(Breeding, step);
+            <section class="dsec">
+                <h3>@L["Plan.Node.EveryEgg"]</h3>
+                <p class="h">@(step.ChildGender == GenderReq.Any ? L["Plan.Node.NoPassiveEgg"].Value : L["Plan.Node.NoPassiveEggGender", Percent(genderRight)].Value)</p>
+            </section>
+            return;
+        }
+
+        var flexible = step.ChildGender == GenderReq.Any && Node != Plan.Root;
+        OutcomeDistribution dist;
+        if (step.AltPartner != null)
+        {
+            // A step with a backup partner (T105): the same model as its egg number; the hatched gender, when known, picks the branch.
+            var index = PlanText.StepsOf(Plan).ToList().FindIndex(s => ReferenceEquals(s, step));
+            Gender? hatched = FlexChoices != null && FlexChoices.TryGetValue(index, out var g) ? g : null;
+            dist = NodeAnalysis.StepOutcomesWithBackup(Odds, Breeding, step, Query.DesiredPassives, NodeAnalysis.GenderRight(Breeding, step), hatched, Data);
+        }
+        else dist = NodeAnalysis.StepOutcomes(Odds, step, Query.DesiredPassives, NodeAnalysis.GenderRight(Breeding, step), flexible, Data);
+        <OutcomeList Distribution="@dist" StepEggs="@step.ExpectedEggs" Flexible="@flexible" WantedGender="@step.ChildGender" />
+    };
+
+    private RenderFragment CatchSection(WildLeaf wild) => __builder =>
+    {
+        var consumer = NodeAnalysis.ConsumerOf(Plan, wild);
+        if (!NodeAnalysis.PassivesMatter(Query.DesiredPassives))
+        {
+            <section class="dsec">
+                <h3>@L["Plan.Node.EveryCatch"]</h3>
+                <p class="h">@L["Plan.Node.NoPassiveCatch"]</p>
+            </section>
+            return;
+        }
+
+        var rows = consumer is { } c ? CatchRows(wild, c.Step) : [];
+        <section class="dsec">
+            <h3>@L["Plan.Node.EveryCatch"]</h3>
+            <p class="h">@L["Plan.Node.CatchAssumed", wild.AssumedUnwantedPassives]</p>
+            @if (consumer is { } c2)
+            {
+                <ul class="orows">
+                    @foreach (var row in rows)
+                    {
+                        var impossible = double.IsInfinity(row.StepEggs);
+                        var cls = impossible ? "bad" : row.Kind == "fewer" ? "ok" : row.Kind == "more" ? "bad" : "mid";
+                        <li class="@cls">
+                            <span class="pc num">@Percent(row.Probability)</span>
+                            <span class="tx">
+                                <b>@L["Plan.Node.Catch." + row.Kind]</b>
+                                <span class="m">@(impossible ? L["Plan.Node.CatchImpossible"].Value : row.Kind == "equal" ? L["Plan.Node.CatchEqualText"].Value : L["Plan.Node.CatchStepText", Eggs(c2.Step.ExpectedEggs), Eggs(row.StepEggs)].Value)</span>
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    };
+
+    private IReadOnlyList<NodeAnalysis.CatchRow> CatchRows(WildLeaf wild, BreedStep step) =>
+        NodeAnalysis.CatchRowsFor(wild, step, Query.DesiredPassives, Odds, Breeding, Data);
+
+    private RenderFragment OwnedSection(OwnedLeaf owned) => __builder =>
+    {
+        var wanted = new HashSet<string>(Query.DesiredPassives, StringComparer.OrdinalIgnoreCase);
+        var (title, sub) = LocationText.TwoLine(owned.Pal, Terms, L);
+        <section class="dsec">
+            <h3>@L["Plan.Node.Where"]</h3>
+            <p class="loc"><b>@title</b> @sub</p>
+            @if (owned.Pal.Passives.Count > 0)
+            {
+                <div class="pas">
+                    @foreach (var pid in owned.Pal.Passives)
+                    {
+                        <PassiveLine PassiveId="@pid" Want="@wanted.Contains(pid)" />
+                    }
+                </div>
+            }
+        </section>
+
+        var alts = AltPals(owned);
+        if (alts.Count > 0)
+        {
+            <section class="dsec">
+                <h3>@L["Plan.Node.SamePathInstead"]</h3>
+                <ul class="cands" aria-label="@L["Plan.Node.SamePathInstead"].Value">
+                    @foreach (var pal in alts.Select(p => (Pal: p, Eggs: NodeAnalysis.EggsWithReplacement(Plan, owned.Pal.Uid, p, Query.DesiredPassives, Odds, Breeding, Data)))
+                                             .OrderBy(x => x.Eggs).ThenBy(x => x.Pal.Uid, StringComparer.Ordinal).Take(8))
+                    {
+                        <li class="cand">
+                            <PalIcon PalId="@pal.Pal.SpeciesId" Size="28" />
+                            <span class="tx">
+                                <b class="nm">@(pal.Pal.Nickname ?? SpeciesName(pal.Pal.SpeciesId)) <GenderIcon Gender="@pal.Pal.Gender" Size="14" /></b>
+                                <span class="m">@LocationText.ShortPlace(pal.Pal, Terms, L)@(pal.Pal.Passives.Count > 0 ? " · " + string.Join(", ", pal.Pal.Passives.Take(2).Select(PassiveName)) : "")</span>
+                            </span>
+                            <span class="vc num">@(double.IsInfinity(pal.Eggs) ? L["Plan.Node.Impossible"].Value : L["Plan.Node.ThisPath", Eggs(pal.Eggs)].Value)</span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    };
+
+    // ---- the Pal in hand -------------------------------------------------------------------------------------------------------
+
+    // The same species, other Pals of the scope that may be used (T114): the Pals that could stand in the place of this one.
+    private List<OwnedPal> AltPals(OwnedLeaf self) =>
+        OwnedOfSpecies().Where(p => p.Uid != self.Pal.Uid && !Query.ExcludedUids.Contains(p.Uid, StringComparer.Ordinal) && (p.Gender == null || self.Pal.Gender == null || p.Gender == self.Pal.Gender)).ToList();
+
+    private List<OwnedPal> OwnedOfSpecies() =>
+        Scope.ScopedPals
+            .Where(p => !p.IsExcluded && string.Equals(p.SpeciesId, Node?.SpeciesId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private void OpenTab(string tab)
+    {
+        _tab = tab;
+        _hand = null;
+        _verdict = null;
+        if (tab == "pick") StartCandidateRun();
+    }
+
+    private RenderFragment PickerSection() => __builder =>
+    {
+        <section class="dsec">
+            <Segmented TValue="string"
+                       Items="@TabItems()"
+                       Value="@(_tab ?? "pick")"
+                       ValueChanged="OpenTab"
+                       AriaLabel="@L["Plan.Node.HandTabsAria"].Value" />
+            @if (_tab == "pick")
+            {
+                var candidates = OwnedOfSpecies();
+                if (candidates.Count == 0)
+                {
+                    <p class="h">@L["Plan.Node.NoneOwned"]</p>
+                }
+                else
+                {
+                    <ul class="cands" role="listbox" aria-label="@L["Plan.Node.CandidatesAria"].Value">
+                        @foreach (var pal in OrderedCandidates(candidates))
+                        {
+                            var captured = pal;
+                            var has = _remaining.TryGetValue(pal.Uid, out var rem);
+                            var selected = _hand != null && !_handIsDraft && _hand.Uid == pal.Uid;
+                            <li>
+                                <button type="button" class="@($"cand{(selected ? " on" : "")}")" role="option" aria-selected="@(selected ? "true" : "false")"
+                                        title="@LocationText.Format(pal, Terms, L)" @onclick="() => SelectCandidate(captured)">
+                                    <PalIcon PalId="@pal.SpeciesId" Size="32" />
+                                    <span class="nm">@(pal.Nickname ?? SpeciesName(pal.SpeciesId))<GenderIcon Gender="@pal.Gender" Size="14" /></span>
+                                    <span class="@($"rem num{(has && rem is null ? " none" : "")}")">@(!has ? "…" : rem is { } r ? Eggs(r) : L["Plan.Node.NotEnough"].Value)</span>
+                                    <span class="pp">
+                                        @if (pal.Passives.Count == 0) { <span class="m">@L["Plan.Node.NoPassives"]</span> }
+                                        @foreach (var pid in pal.Passives)
+                                        {
+                                            <span class="@(Query.DesiredPassives.Contains(pid, StringComparer.OrdinalIgnoreCase) ? "w" : "")">@PassiveName(pid)</span>
+                                        }
+                                    </span>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else
+            {
+                <div class="form">
+                    <span class="l">@L["Common.Gender"]</span>
+                    <GenderSegmented AllowAny="false" Value="@(_draftGender == Gender.Male ? GenderReq.Male : GenderReq.Female)" ValueChanged="SetDraftGenderAsync" />
+                    <span class="l">@L["Plan.Node.PassivesCount", _draftPassives.Count]</span>
+                    <div class="sock">
+                        @for (var i = 0; i < 4; i++)
+                        {
+                            var idx = i;
+                            var pid = idx < _draftPassives.Count ? _draftPassives[idx] : null;
+                            @if (pid != null || idx == _draftPassives.Count)
+                            {
+                                <PassiveSocket PassiveId="@pid"
+                                               OwnedCount="0"
+                                               Exclude="@_draftPassives"
+                                               OnPick="id => SetDraftPassiveAsync(idx, id)"
+                                               OnRemove="() => RemoveDraftPassiveAsync(idx)"
+                                               OnPickerOpenChanged="OnPickerOpenChanged" />
+                            }
+                        }
+                    </div>
+                    <p class="h">@L["Plan.Node.EnterHelp"]</p>
+                </div>
+            }
+        </section>
+    };
+
+    private IReadOnlyList<SegmentedItem<string>> TabItems() =>
+    [
+        new("pick", L["Plan.Node.PickMine"].Value, IsWord: true),
+        new("enter", L["Plan.Node.EnterPassives"].Value, IsWord: true),
+    ];
+
+    private IEnumerable<OwnedPal> OrderedCandidates(List<OwnedPal> candidates) =>
+        candidates.OrderBy(p => _remaining.TryGetValue(p.Uid, out var r) ? (r ?? double.MaxValue - 1) : double.MaxValue)
+                  .ThenBy(p => p.Uid, StringComparer.Ordinal);
+
+    private RenderFragment HandList() => __builder =>
+    {
+        <section class="dsec">
+            <h3>@L["Plan.Node.InHand", SpeciesName(Node!.SpeciesId)]</h3>
+            @if (_hand != null && _hand.Passives.Count > 0)
+            {
+                <div class="pas">
+                    @foreach (var pid in _hand.Passives)
+                    {
+                        <PassiveLine PassiveId="@pid" Want="@Query.DesiredPassives.Contains(pid, StringComparer.OrdinalIgnoreCase)" />
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="h">@L["Plan.Node.NoPassives"]</p>
+            }
+        </section>
+    };
+
+    private void StartCandidateRun()
+    {
+        _cts?.Cancel();
+        if (Evaluate == null || Node == null) return;
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        _ = RunCandidatesAsync(OwnedOfSpecies().Take(8).ToList(), cts.Token);
+    }
+
+    private async Task RunCandidatesAsync(List<OwnedPal> list, CancellationToken ct)
+    {
+        foreach (var pal in list)
+        {
+            if (ct.IsCancellationRequested) return;
+            if (_remaining.ContainsKey(pal.Uid)) continue;
+            double? value = null;
+            try
+            {
+                var result = await Evaluate!(pal, Node is WildLeaf, ct);
+                if (result.Plans.Count > 0) value = result.Plans[0].ExpectedEggsTotal;
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception) { }
+            if (ct.IsCancellationRequested) return;
+            _remaining[pal.Uid] = value;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SelectCandidate(OwnedPal pal)
+    {
+        _hand = pal;
+        _handIsDraft = false;
+        await ComputeVerdictAsync();
+    }
+
+    private Task SetDraftGenderAsync(GenderReq value)
+    {
+        _draftGender = value == GenderReq.Female ? Gender.Female : Gender.Male;
+        return DraftChangedAsync();
+    }
+
+    private Task SetDraftPassiveAsync(int index, string id)
+    {
+        if (index < _draftPassives.Count) _draftPassives[index] = id; else _draftPassives.Add(id);
+        return DraftChangedAsync();
+    }
+
+    private Task RemoveDraftPassiveAsync(int index)
+    {
+        if (index < _draftPassives.Count) _draftPassives.RemoveAt(index);
+        return DraftChangedAsync();
+    }
+
+    // A draft is a temporary Pal; it is saved only by "Save and continue". The verdict is recomputed ~500 ms after the last change.
+    private async Task DraftChangedAsync()
+    {
+        _hand = BuildDraft();
+        _handIsDraft = true;
+        _verdict = null;
+        _debounce?.Cancel();
+        var cts = new CancellationTokenSource();
+        _debounce = cts;
+        try { await Task.Delay(500, cts.Token); }
+        catch (OperationCanceledException) { return; }
+        await ComputeVerdictAsync();
+    }
+
+    private OwnedPal BuildDraft() => new(
+        "draft:" + Guid.NewGuid().ToString("N"), null, Node!.SpeciesId, _draftGender, 1, 1, _draftPassives.ToList(), null, [], [], null, null,
+        new Paldium.Core.Domain.PalLocation(LocationKind.Unknown, null, null, null), PalSourceKind.Manual, OwnedPalRepository.ManualSourceId, DateTimeOffset.UtcNow, false, false);
+
+    private async Task ComputeVerdictAsync()
+    {
+        if (_hand == null || Evaluate == null || Node == null) return;
+        _busy = true;
+        _verdict = null;
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        StateHasChanged();
+        double? withPal = null;
+        try
+        {
+            var result = await Evaluate(_hand, Node is WildLeaf, cts.Token);
+            if (result.Plans.Count > 0) withPal = result.Plans[0].ExpectedEggsTotal;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception) { }
+        if (cts.IsCancellationRequested) return;
+        _busy = false;
+        if (!_handIsDraft) _remaining[_hand.Uid] = withPal;
+        _verdict = Node switch
+        {
+            BreedStep step => NodeAnalysis.Decide(step, _hand.Passives, _hand.Gender, Query.DesiredPassives, withPal, NodeAnalysis.RemainingIfRetry(Plan, step, Done)),
+            WildLeaf => new NodeAnalysis.Verdict(NodeAnalysis.VerdictKind.Exact, withPal, Plan.ExpectedEggsTotal, withPal is { } w && w <= Plan.ExpectedEggsTotal + 1e-9),
+            _ => null,
+        };
+        StateHasChanged();
+    }
+
+    // ---- footer: verdict -------------------------------------------------------------------------------------------------------
+
+    private RenderFragment VerdictBox() => __builder =>
+    {
+        var v = _verdict!;
+        var positive = v.ContinueFromPal;
+        var kind = v.Kind.ToString();
+        var isWild = Node is WildLeaf;
+        // The same as assumed (not "better") when the numbers are equal (T112).
+        var sameEggs = v.WithPal is { } wp && Math.Abs(wp - v.Retry) < 1e-6;
+        var sameAsPlan = isWild && sameEggs;
+        var title = isWild ? (sameAsPlan ? L["Plan.Node.V.WildSame"].Value : positive ? L["Plan.Node.V.WildBetter"].Value : L["Plan.Node.V.WildWorse"].Value) : L["Plan.Node.V." + kind + (positive ? ".Yes" : ".No")].Value;
+        var body = v.WithPal is { } with
+            ? (sameEggs ? L["Plan.Node.V.BodySame", Eggs(with)].Value : positive ? L["Plan.Node.V.BodyUse", Eggs(v.Retry), Eggs(with)].Value : L["Plan.Node.V.BodyRetry", Eggs(with), Eggs(v.Retry)].Value)
+            : L["Plan.Node.V.BodyNoPlan"].Value;
+        <div class="@($"verdict {(positive ? "good" : "bad")}")" role="status">
+            <div class="vt">
+                <Icon Name="@(positive ? "check" : "warn")" Size="16" />
+                <b>@title</b>
+            </div>
+            <p class="vb">@body</p>
+            <div class="cmp">
+                <div class="@(v.WithPal is { } a && positive ? "win" : "")">
+                    <span>@(isWild ? L["Plan.Node.CmpWithPlan"].Value : L["Plan.Node.CmpWithPal"].Value)</span>
+                    <b class="num">@(v.WithPal is { } x ? Eggs(x) : L["Plan.Node.NoPlanShort"].Value)</b>
+                </div>
+                <div class="@(!positive ? "win" : "")">
+                    <span>@(isWild ? L["Plan.Node.CmpCurrent"].Value : L["Plan.Node.CmpRetry"].Value)</span>
+                    <b class="num">@Eggs(v.Retry)</b>
+                </div>
+            </div>
+            <div class="acts">
+                @if (positive)
+                {
+                    <button type="button" class="save" @onclick="ContinueAsync">@(_handIsDraft ? L["Plan.Node.SaveContinue"].Value : L["Plan.Node.ContinueFrom"].Value)</button>
+                }
+                else
+                {
+                    <button type="button" class="save" @onclick="RetryAsync">@(isWild ? L["Plan.Node.CatchOther"].Value : L["Plan.Node.Retry"].Value)</button>
+                }
+                <button type="button" class="ghostb" @onclick="CancelHand">@L["Common.Cancel"]</button>
+            </div>
+        </div>
+    };
+
+    private Task ContinueAsync() =>
+        _hand == null || Node == null || _verdict == null
+            ? Task.CompletedTask
+            : OnContinue.InvokeAsync(new ContinueRequest(_hand, _handIsDraft, Node, _verdict.WithPal, _verdict.Retry));
+
+    private Task RetryAsync() => OnClose.InvokeAsync();
+
+    private void CancelHand()
+    {
+        var wild = Node is WildLeaf;
+        ResetHand();
+        _tab = wild ? (OwnedOfSpecies().Count > 0 ? "pick" : "enter") : null;
+        if (_tab == "pick") StartCandidateRun();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _debounce?.Cancel();
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

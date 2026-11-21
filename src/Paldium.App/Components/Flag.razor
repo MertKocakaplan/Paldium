@@ -1,0 +1,19 @@
+<span class="@CssClass()" title="@Title">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+    [Parameter] public string Kind { get; set; } = "default";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string CssClass()
+    {
+        var kindCls = Kind switch
+        {
+            "ed" => " ed",
+            "off" => " off",
+            _ => "",
+        };
+        return string.IsNullOrEmpty(Class) ? $"flag{kindCls}" : $"flag{kindCls} {Class}";
+    }
+}

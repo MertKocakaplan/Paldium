@@ -1,0 +1,65 @@
+@inherits LocalizedComponentBase
+
+<div class="@($"gseg{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" role="radiogroup" aria-label="@(AriaLabel ?? L["Common.Gender"].Value)">
+    @for (var i = 0; i < Options().Length; i++)
+    {
+        var idx = i;
+        var opt = Options()[idx];
+        var selected = opt.Value == Value;
+        <button type="button"
+                @ref="_buttons[idx]"
+                role="radio"
+                aria-checked="@(selected ? "true" : "false")"
+                aria-selected="@(selected ? "true" : null)"
+                tabindex="@(selected ? 0 : -1)"
+                @onclick="() => SelectAsync(opt.Value)"
+                @onkeydown="e => OnKeyDownAsync(e, idx)">
+            @if (opt.Icon is { } g)
+            {
+                <GenderIcon Gender="g" />
+            }
+            @opt.Label
+        </button>
+    }
+</div>
+
+@code {
+    private readonly Dictionary<int, ElementReference> _buttons = new();
+
+    [Parameter] public GenderReq Value { get; set; } = GenderReq.Any;
+    [Parameter] public EventCallback<GenderReq> ValueChanged { get; set; }
+    [Parameter] public bool AllowAny { get; set; } = true;
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private (GenderReq Value, Gender? Icon, string Label)[] Options() => AllowAny
+        ? [
+            (GenderReq.Male, Gender.Male, L["Common.Male"].Value),
+            (GenderReq.Female, Gender.Female, L["Common.Female"].Value),
+            (GenderReq.Any, null, L["Common.Any"].Value),
+          ]
+        : [
+            (GenderReq.Male, Gender.Male, L["Common.Male"].Value),
+            (GenderReq.Female, Gender.Female, L["Common.Female"].Value),
+          ];
+
+    private async Task SelectAsync(GenderReq value) => await ValueChanged.InvokeAsync(value);
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e, int idx)
+    {
+        var opts = Options();
+        int? next = e.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => (idx + 1) % opts.Length,
+            "ArrowLeft" or "ArrowUp" => (idx - 1 + opts.Length) % opts.Length,
+            "Home" => 0,
+            "End" => opts.Length - 1,
+            _ => null,
+        };
+        if (next is not { } n || n == idx) return;
+
+        await ValueChanged.InvokeAsync(opts[n].Value);
+        if (_buttons.TryGetValue(n, out var el))
+            await el.FocusAsync();
+    }
+}

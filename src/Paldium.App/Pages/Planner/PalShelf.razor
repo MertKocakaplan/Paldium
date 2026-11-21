@@ -1,0 +1,503 @@
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+@inject IOwnedPalRepository Repository
+
+<aside class="shelf" aria-label="@L["Plan.ShelfAria"].Value">
+    <div class="hd">
+        <h2>
+            <span>@L["Plan.ShelfTitle"]</span>
+            <span class="m num">@CountLabel(filteredCount)</span>
+        </h2>
+        <SearchField Value="@_search"
+                     ValueChanged="SetSearch"
+                     Placeholder="@L["Plan.ShelfSearchPlaceholder"].Value"
+                     AriaLabel="@L["Plan.ShelfSearchPlaceholder"].Value"
+                     OnEscape="() => SetSearch(string.Empty)" />
+        <Segmented TValue="ShelfMode"
+                   Items="@ModeItems()"
+                   Value="@EffectiveMode()"
+                   ValueChanged="OnModeChanged"
+                   AriaLabel="@L["Plan.ShelfFilterAria"].Value" />
+    </div>
+
+    <div class="list" role="listbox" aria-label="@L["Plan.ShelfListAria"].Value">
+        @if (_entries.Count == 0)
+        {
+            <div class="shelf-empty">@EmptyText()</div>
+        }
+        else
+        {
+            var visibleRows = 0;
+            var totalRows = 0;
+            foreach (var entry in _entries)
+            {
+                if (entry.Pal == null)
+                {
+                    if (visibleRows < _limit)
+                    {
+                        <div class="grp" role="presentation">@entry.GroupTitle</div>
+                    }
+                    continue;
+                }
+
+                totalRows++;
+                if (visibleRows >= _limit) continue;
+                visibleRows++;
+
+                var pal = entry.Pal;
+                var gone = GoneUids.Contains(pal.Uid);
+                var used = !gone && IsUsed(pal);
+                var dim = !gone && DimUids.Contains(pal.Uid);
+                var menuOpen = string.Equals(_menuUid, pal.SelectionKey, StringComparison.Ordinal);
+                var isStart = Query.StartMode == "owned" && string.Equals(FindStart()?.SelectionKey, pal.SelectionKey, StringComparison.Ordinal);
+                var isPreferred = _preferredKeys.Contains(pal.SelectionKey);
+                var excluded = !isStart && (Query.ExcludedUids.Contains(pal.Uid, StringComparer.Ordinal) || Query.ExcludedSpecies.Contains(pal.SpeciesId, StringComparer.OrdinalIgnoreCase)
+                    || (Data.Pal(pal.SpeciesId).Group is { } grp && Query.ExcludedGroups.Contains(grp, StringComparer.OrdinalIgnoreCase)));
+
+                <div class="@($"it-wrap{(used ? " used" : "")}{(dim ? " dim" : "")}{(excluded ? " xed" : "")}{(menuOpen ? " menu-open" : "")}")"
+                     draggable="true"
+                     @ondragstart="() => StartDragAsync(pal)"
+                     @ondragend="EndDragAsync">
+                    <button type="button"
+                            class="it"
+                            role="option"
+                            aria-selected="@((used || isStart) ? "true" : "false")"
+                            @onclick="() => ToggleStartAsync(pal)">
+                        <PalIcon PalId="@pal.SpeciesId" Size="36" />
+                        <span class="t">
+                            <span class="t-nm">@PalDisplayName(pal)</span>
+                            <GenderIcon Gender="@pal.Gender" Size="14" />
+                        </span>
+                        <span class="loc">
+                            @if (gone)
+                            {
+                                <span class="tag neg">@L["Plan.OutOfScopeShortTag"]</span>
+                            }
+                            else if (used)
+                            {
+                                <span class="tag">@(UseCounts is { } uc && uc.GetValueOrDefault(pal.Uid) > 1 ? L["Plan.InPlanTagSteps", uc[pal.Uid]].Value : L["Plan.InPlanTag"].Value)</span>
+                            }
+                            else if (isStart)
+                            {
+                                <span class="tag">@L["Plan.AsStartTag"]</span>
+                            }
+                            else if (excluded)
+                            {
+                                <span class="tag xd"><Icon Name="ban" Size="12" /> @L["Plan.Exclude.ShelfTag"]</span>
+                            }
+                            else
+                            {
+                                <span>@LocationText.ShortPlace(pal, Terms, L)</span>
+                            }
+                            @if (Paldium.Core.Domain.PalLocation.IsPaged(pal.Location.Kind) && pal.Location.SlotIndex is { } slot and >= 0)
+                            {
+                                <BoxMap Slot="@slot" Cell="5" Gap="1" />
+                            }
+                            else
+                            {
+                                <LocationTile Kind="@pal.Location.Kind" />
+                            }
+                        </span>
+                        <span class="w">@PassiveSummary(pal)</span>
+                    </button>
+
+                    <button type="button"
+                            class="it-more ib2"
+                            aria-label="@L["Plan.ShelfRowActionsAria", PalDisplayName(pal)].Value"
+                            aria-haspopup="menu"
+                            aria-expanded="@(menuOpen ? "true" : "false")"
+                            @onclick="() => ToggleMenuAsync(pal.SelectionKey)">
+                        <Icon Name="more" Size="14" />
+                    </button>
+
+                    @if (menuOpen)
+                    {
+                        <MudPopover Open="true"
+                                    Elevation="0"
+                                    Fixed="true"
+                                    AnchorOrigin="Origin.BottomRight"
+                                    TransformOrigin="Origin.TopRight"
+                                    OverflowBehavior="OverflowBehavior.FlipOnOpen">
+                            <div class="cpop" role="menu" @onkeydown="OnMenuKeyDownAsync" tabindex="-1">
+                                <button type="button" class="mi" role="menuitem" @onclick="() => SetAsStartFromMenuAsync(pal, isStart)">
+                                    <Icon Name="arrow-right" Size="14" />
+                                    <span>@(isStart ? L["Plan.ClearStart"] : L["Plan.MakeStart"])</span>
+                                </button>
+                                <button type="button" class="mi" role="menuitem" @onclick="() => TogglePreferredAsync(pal, isPreferred)">
+                                    <Icon Name="pin" Size="14" />
+                                    <span>@(isPreferred ? L["Plan.UnmarkPreferred"] : L["Plan.MarkPreferred"])</span>
+                                </button>
+                            </div>
+                        </MudPopover>
+                    }
+                </div>
+            }
+
+            @if (totalRows > _limit)
+            {
+                var remaining = totalRows - _limit;
+                <button type="button" class="btn2 shelf-more" @onclick="() => _limit += PageSize">
+                    @L["Plan.ShelfShowMore", remaining]
+                </button>
+            }
+        }
+    </div>
+</aside>
+<MudOverlay Visible="@(_menuUid != null)" VisibleChanged="OnOverlayVisibleChangedAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+
+@code {
+    public enum ShelfMode
+    {
+        Wanted,
+        Preferred,
+        All,
+    }
+
+    private sealed record ShelfEntry(string? GroupTitle, OwnedPal? Pal);
+
+    private const int PageSize = 120;
+    private string _search = string.Empty;
+    private ShelfMode? _manualMode;
+    private int _limit = PageSize;
+    private string? _menuUid;
+    private List<ShelfEntry> _entries = [];
+    private int filteredCount;
+    private HashSet<string> _wantedSet = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _preferredKeys = new(StringComparer.Ordinal);
+
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public IReadOnlySet<string> UsedUids { get; set; } = new HashSet<string>();
+
+    /// <summary>How many steps each Pal of the plan serves (T114): "In plan · 2 steps" when more than one.</summary>
+    [Parameter] public IReadOnlyDictionary<string, int>? UseCounts { get; set; }
+    [Parameter] public IReadOnlySet<string> DimUids { get; set; } = new HashSet<string>();
+    [Parameter] public IReadOnlySet<string> GoneUids { get; set; } = new HashSet<string>();
+    [Parameter] public IReadOnlyList<OwnedPal> OutOfScopePlanPals { get; set; } = [];
+    [Parameter] public EventCallback<string?> OnDragUidChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnMenuOpenChanged { get; set; }
+    [Parameter] public EventCallback OnAfterSelect { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnDataChanged;
+        Repository.Changed += OnRepoChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        RebuildEntries();
+    }
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnDataChanged;
+        Repository.Changed -= OnRepoChanged;
+        base.Dispose();
+    }
+
+    private void OnDataChanged(object? sender, EventArgs e)
+    {
+        RebuildEntries();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRepoChanged(object? sender, OwnedPalSnapshot e)
+    {
+        RebuildEntries();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private ShelfMode EffectiveMode()
+    {
+        if (_manualMode is { } chosen) return chosen;
+        if (Query.DesiredPassives.Count > 0) return ShelfMode.Wanted;
+        return ShelfMode.All;
+    }
+
+    /// <summary>The list is built in <see cref="RebuildEntries"/>, so a new search text must rebuild it (it filters on every key).</summary>
+    private void SetSearch(string value)
+    {
+        _search = value;
+        _limit = PageSize;
+        RebuildEntries();
+    }
+
+    private void OnModeChanged(ShelfMode mode)
+    {
+        _manualMode = mode;
+        _limit = PageSize;
+        RebuildEntries();
+    }
+
+    private SegmentedItem<ShelfMode>[] ModeItems() =>
+    [
+        new(ShelfMode.Wanted, L["Plan.ShelfTabWanted"].Value, true),
+        new(ShelfMode.Preferred, L["Plan.ShelfTabPreferred"].Value, true),
+        new(ShelfMode.All, L["Common.All"].Value, true),
+    ];
+
+    private void RebuildEntries()
+    {
+        _wantedSet = Query.DesiredPassives.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _preferredKeys = Query.PreferredUids
+            .Select(k => Repository.Current.Find(k)?.SelectionKey ?? k)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var scoped = Scope.ScopedPals;
+        var scopedUids = scoped.Select(p => p.Uid).ToHashSet(StringComparer.Ordinal);
+        var extraGone = OutOfScopePlanPals
+            .Where(p => !scopedUids.Contains(p.Uid) && OwnedPalSearch.Matches(Data, p, _search))
+            .ToList();
+        var matchingSearch = scoped
+            .Where(p => OwnedPalSearch.Matches(Data, p, _search))
+            .ToList();
+
+        var preferredPals = matchingSearch
+            .Where(p => _preferredKeys.Contains(p.SelectionKey))
+            .OrderBy(p => DexNoOf(p.SpeciesId))
+            .ThenByDescending(p => p.Level)
+            .ToList();
+
+        var mode = EffectiveMode();
+        _entries = [];
+        filteredCount = 0;
+
+        if (mode == ShelfMode.Preferred)
+        {
+            if (preferredPals.Count > 0)
+            {
+                _entries.Add(new ShelfEntry(L["Plan.ShelfGroupPreferred"].Value, null));
+                foreach (var p in preferredPals) _entries.Add(new ShelfEntry(null, p));
+            }
+            filteredCount = preferredPals.Count;
+            return;
+        }
+
+        if (mode == ShelfMode.Wanted)
+        {
+            if (preferredPals.Count > 0)
+            {
+                _entries.Add(new ShelfEntry(L["Plan.ShelfGroupPreferred"].Value, null));
+                foreach (var p in preferredPals) _entries.Add(new ShelfEntry(null, p));
+                filteredCount += _wantedSet.Count > 0
+                    ? preferredPals.Count(p => WantedHitCount(p) > 0)
+                    : preferredPals.Count;
+            }
+
+            if (_wantedSet.Count > 0)
+            {
+                var restInScope = matchingSearch
+                    .Where(p => !_preferredKeys.Contains(p.SelectionKey))
+                    .Select(p => (Pal: p, Hits: WantedHitCount(p), Bad: BadCount(p), InScope: true));
+                var restGone = extraGone
+                    .Where(p => !_preferredKeys.Contains(p.SelectionKey))
+                    .Select(p => (Pal: p, Hits: WantedHitCount(p), Bad: BadCount(p), InScope: false));
+
+                var rest = restInScope
+                    .Where(x => x.Hits > 0)
+                    .Concat(restGone)
+                    .OrderByDescending(x => x.Hits)
+                    .ThenBy(x => x.Bad)
+                    .ThenBy(x => DexNoOf(x.Pal.SpeciesId))
+                    .ThenByDescending(x => x.Pal.Level)
+                    .Select(x => x.Pal)
+                    .ToList();
+
+                if (rest.Count > 0)
+                {
+                    _entries.Add(new ShelfEntry(L["Plan.ShelfGroupMostWanted"].Value, null));
+                    foreach (var p in rest) _entries.Add(new ShelfEntry(null, p));
+                    filteredCount += restInScope.Count(x => x.Hits > 0);
+                }
+            }
+            else
+            {
+                var restInScope = matchingSearch
+                    .Where(p => !_preferredKeys.Contains(p.SelectionKey))
+                    .ToList();
+                var rest = restInScope
+                    .Concat(extraGone.Where(p => !_preferredKeys.Contains(p.SelectionKey)))
+                    .OrderBy(p => DexNoOf(p.SpeciesId))
+                    .ThenBy(p => IsVariantOf(p.SpeciesId))
+                    .ThenByDescending(p => p.Level)
+                    .ToList();
+
+                if (rest.Count > 0)
+                {
+                    _entries.Add(new ShelfEntry(L["Plan.ShelfGroupByDex"].Value, null));
+                    foreach (var p in rest) _entries.Add(new ShelfEntry(null, p));
+                    filteredCount += restInScope.Count;
+                }
+            }
+            return;
+        }
+
+        // ShelfMode.All
+        var allSorted = matchingSearch
+            .Concat(extraGone)
+            .OrderBy(p => DexNoOf(p.SpeciesId))
+            .ThenBy(p => IsVariantOf(p.SpeciesId))
+            .ThenByDescending(p => p.Level)
+            .ThenBy(p => p.Uid, StringComparer.Ordinal)
+            .ToList();
+
+        if (allSorted.Count > 0)
+        {
+            _entries.Add(new ShelfEntry(L["Plan.ShelfGroupByDex"].Value, null));
+            foreach (var p in allSorted) _entries.Add(new ShelfEntry(null, p));
+        }
+        filteredCount = matchingSearch.Count;
+    }
+
+    private string CountLabel(int count)
+    {
+        if (EffectiveMode() == ShelfMode.Wanted && _wantedSet.Count > 0)
+            return L["Plan.ShelfMatchingCount", count].Value;
+        return L["Plan.ShelfTotalCount", count].Value;
+    }
+
+    private string EmptyText()
+    {
+        if (!string.IsNullOrWhiteSpace(_search)) return L["Picker.NoResults"].Value;
+        return EffectiveMode() switch
+        {
+            ShelfMode.Preferred => L["Plan.ShelfNoPreferred"].Value,
+            ShelfMode.Wanted when _wantedSet.Count > 0 => L["Plan.ShelfNoWantedMatch"].Value,
+            _ => L["Picker.NoOwned"].Value,
+        };
+    }
+
+    private RenderFragment PassiveSummary(OwnedPal pal) => __builder =>
+    {
+        if (pal.Passives.Count == 0)
+        {
+            <span>@L["Plan.ShelfNoPassives"]</span>
+            return;
+        }
+
+        if (_wantedSet.Count > 0)
+        {
+            var wanted = pal.Passives.Where(id => _wantedSet.Contains(id)).ToList();
+            if (wanted.Count == 0)
+            {
+                <span>@L["Plan.ShelfNoWantedPassives"]</span>
+                return;
+            }
+
+            var otherCount = pal.Passives.Count - wanted.Count;
+            for (var i = 0; i < wanted.Count; i++)
+            {
+                if (i > 0) { <text>, </text> }
+                <b>@PassiveName(wanted[i])</b>
+            }
+            if (otherCount > 0)
+            {
+                <text> · @L["Plan.ShelfOtherCount", otherCount]</text>
+            }
+            return;
+        }
+
+        var shown = Math.Min(2, pal.Passives.Count);
+        var names = string.Join(", ", pal.Passives.Take(shown).Select(PassiveName));
+        var extra = pal.Passives.Count - shown;
+        <span>@(extra > 0 ? $"{names} · {L["Plan.ShelfOtherCount", extra]}" : names)</span>
+    };
+
+    private string PalDisplayName(OwnedPal pal)
+    {
+        try { return pal.Nickname ?? Data.Pal(pal.SpeciesId).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return pal.Nickname ?? pal.SpeciesId; }
+    }
+
+    private string PassiveName(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private int DexNoOf(string id)
+    {
+        try { return Data.Pal(id).DexNo; }
+        catch (KeyNotFoundException) { return int.MaxValue; }
+    }
+
+    private bool IsVariantOf(string id)
+    {
+        try { return Data.Pal(id).IsVariant; }
+        catch (KeyNotFoundException) { return false; }
+    }
+
+    private int WantedHitCount(OwnedPal pal) => pal.Passives.Count(id => _wantedSet.Contains(id));
+
+    private int BadCount(OwnedPal pal) => pal.Passives.Count(id =>
+    {
+        try { return Data.Passive(id).Rank < 0; }
+        catch (KeyNotFoundException) { return false; }
+    });
+
+    private OwnedPal? FindStart() =>
+        Query.StartMode == "owned" && !string.IsNullOrEmpty(Query.StartOwnedUid)
+            ? Repository.Current.Find(Query.StartOwnedUid)
+            : null;
+
+    private bool IsUsed(OwnedPal pal) => UsedUids.Contains(pal.Uid);
+
+    private Task ToggleStartAsync(OwnedPal pal)
+    {
+        var isCurrent = Query.StartMode == "owned" && string.Equals(FindStart()?.SelectionKey, pal.SelectionKey, StringComparison.Ordinal);
+        return SetStartAsync(isCurrent ? null : pal);
+    }
+
+    private async Task SetStartAsync(OwnedPal? pal)
+    {
+        var next = pal == null
+            ? Query with { StartMode = "none", StartOwnedUid = null }
+            : Query with { StartMode = "owned", StartOwnedUid = pal.SelectionKey, StartSpeciesId = null };
+        await QueryChanged.InvokeAsync(next);
+        await OnAfterSelect.InvokeAsync();
+    }
+
+    private async Task SetAsStartFromMenuAsync(OwnedPal pal, bool isStart)
+    {
+        await CloseMenuAsync();
+        await SetStartAsync(isStart ? null : pal);
+    }
+
+    private async Task TogglePreferredAsync(OwnedPal pal, bool isPreferred)
+    {
+        await CloseMenuAsync();
+        var nextList = isPreferred
+            ? Query.PreferredUids.Where(k => !string.Equals(Repository.Current.Find(k)?.SelectionKey ?? k, pal.SelectionKey, StringComparison.Ordinal)).ToList()
+            : Query.PreferredUids.Append(pal.SelectionKey).Distinct(StringComparer.Ordinal).ToList();
+        await QueryChanged.InvokeAsync(Query with { PreferredUids = nextList });
+    }
+
+    private async Task ToggleMenuAsync(string selectionKey)
+    {
+        var next = string.Equals(_menuUid, selectionKey, StringComparison.Ordinal) ? null : selectionKey;
+        _menuUid = next;
+        await OnMenuOpenChanged.InvokeAsync(next != null);
+    }
+
+    private async Task CloseMenuAsync()
+    {
+        if (_menuUid == null) return;
+        _menuUid = null;
+        await OnMenuOpenChanged.InvokeAsync(false);
+    }
+
+    private Task OnOverlayVisibleChangedAsync(bool visible) =>
+        visible ? Task.CompletedTask : CloseMenuAsync();
+
+    private Task OnMenuKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseMenuAsync() : Task.CompletedTask;
+
+    private Task StartDragAsync(OwnedPal pal) => OnDragUidChanged.InvokeAsync(pal.SelectionKey);
+
+    private Task EndDragAsync() => OnDragUidChanged.InvokeAsync(null);
+}

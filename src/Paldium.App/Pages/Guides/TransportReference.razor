@@ -1,0 +1,190 @@
+@namespace Paldium.App.Pages.GuidesParts
+@using System.Globalization
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+@inject GuideStateService State
+@inject NavigationManager Nav
+
+@* "Transporting: who carries fastest" (screens/guides.md, T120): one table of the Pals that have the Transporting work, sorted by carrying speed.
+   Built from the Ranch table's parts (top bar, search, check box, table styles). *@
+<div class="rread ranch transport">
+    <div class="rbar">
+        <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+        <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Transport.Title"]</b></span>
+        <span class="sp"></span>
+        <span class="note9"><Icon Name="info" Size="14" />@L["Transport.Note"]</span>
+    </div>
+
+    <div class="tp9">
+        <div class="tf">
+            <SearchField Value="@State.TransportQuery"
+                         ValueChanged="SetQuery"
+                         Placeholder="@L["Transport.Search"].Value"
+                         AriaLabel="@L["Transport.Search"].Value"
+                         OnEscape="() => SetQuery(string.Empty)" />
+            <span class="rsel">
+                @L["Transport.MinLevel"]
+                <Segmented TValue="int" Items="@LevelItems()" Value="@State.TransportMinLevel" ValueChanged="SetMinLevel" AriaLabel="@L["Transport.MinLevel"].Value" />
+            </span>
+            <button type="button" class="ck9" role="checkbox" aria-checked="@(State.TransportOnlyOwned ? "true" : "false")" disabled="@(OwnedCount() == 0)" @onclick="ToggleOwned">
+                <span class="sq">@if (State.TransportOnlyOwned) { <Icon Name="check" Size="12" /> }</span>
+                @L["Ranch.OnlyOwned"]
+            </button>
+            <span class="m num">@(OwnedCount() == 0 ? L["Ranch.MyPalsEmpty"].Value : L["Transport.Count", _visible.Count].Value)</span>
+        </div>
+
+        @if (_visible.Count == 0)
+        {
+            <div class="noresult">
+                <p class="h">@L["Transport.NoResults"]</p>
+                <button type="button" class="btn2" @onclick="ClearFilters">@L["Transport.ClearFilters"]</button>
+            </div>
+        }
+        else
+        {
+            <div class="tscroll">
+                <table class="dt9 wide tpt">
+                    <thead>
+                        <tr>
+                            @Header(TransportModel.SortPal, L["Transport.Pal"].Value, "")
+                            @Header(TransportModel.SortLevel, L["Transport.Level"].Value, "lv")
+                            @Header(TransportModel.SortSpeed, L["Transport.Speed"].Value, "sp")
+                            @Header(TransportModel.SortRun, L["Transport.Run"].Value, "rn")
+                            @Header(TransportModel.SortOwned, L["Transport.Owned"].Value, "ow")
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _visible)
+                        {
+                            var captured = row;
+                            var own = OwnedOf(captured.Pal.Id);
+                            <tr tabindex="0" @onclick="() => Open(captured)" @onkeydown="e => OnRowKey(e, captured)">
+                                <th class="iname" scope="row">
+                                    <span class="inm">
+                                        <PalIcon Pal="captured.Pal" Size="32" />
+                                        <span>
+                                            <a href="@Paldium.App.Components.Links.Pal(captured.Pal.Id)" @onclick:stopPropagation="true">@captured.Pal.DisplayName(Lang)</a>
+                                            <span class="m">
+                                                @foreach (var el in captured.Pal.Elements)
+                                                {
+                                                    var info = Data.Elements.FirstOrDefault(x => string.Equals(x.Id, el, StringComparison.OrdinalIgnoreCase));
+                                                    if (info != null) { <img class="el" src="@("gamedata/" + info.IconPath)" width="14" height="14" alt="@info.Names.Get(Lang)" title="@info.Names.Get(Lang)" /> }
+                                                }
+                                                @if (captured.Pal.Nocturnal) { <img class="nm" src="gamedata/icons/misc/Night.png" width="14" height="14" alt="@L["Paldex.FlagNight"].Value" title="@L["Paldex.FlagNight"].Value" /> }
+                                                @if (captured.Pal.Group == "terraria") { <Flag Text="@L["Transport.Terraria"].Value" /> }
+                                            </span>
+                                        </span>
+                                    </span>
+                                </th>
+                                <td class="lv num">
+                                    <span class="wk"><img src="@WorkIcon" width="18" height="18" alt="" /><b>@captured.Level</b></span>
+                                </td>
+                                <td class="sp num"><b>@captured.TransportSpeed.ToString("N0", CultureInfo.GetCultureInfo(Lang))</b></td>
+                                <td class="rn num">@captured.RunSpeed.ToString("N0", CultureInfo.GetCultureInfo(Lang))</td>
+                                <td class="ow">@if (own > 0) { <span class="own">@L["Transport.OwnedCell", own]</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? PalId { get; set; }
+
+    private IReadOnlyList<TransportRow> _all = [];
+    private IReadOnlyList<TransportRow> _visible = [];
+    private string _workIcon = "";
+
+    private string WorkIcon => _workIcon;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+        _all = TransportModel.Rows(Data.Pals);
+        var work = Data.WorkTypes.FirstOrDefault(w => w.Id == TransportModel.WorkKey);
+        _workIcon = work != null ? "gamedata/" + work.IconPath : "";
+        Refresh();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // /guides/tasima?pal=<id> (from the library search): the search box starts with that Pal's name.
+        if (!string.IsNullOrEmpty(PalId) && _all.FirstOrDefault(r => r.Pal.Id == PalId) is { } row)
+        {
+            State.TransportQuery = row.Pal.Names.Get(Lang);
+            Refresh();
+        }
+    }
+
+    protected override void OnUiLanguageChanged() => Refresh();
+
+    private void OnScopeChanged(object? sender, EventArgs e) => _ = InvokeAsync(() => { Refresh(); StateHasChanged(); });
+
+    private int OwnedCount() => Scope.ScopedPals.Count(p => !p.IsExcluded && _all.Any(x => x.Pal.Id == p.SpeciesId));
+
+    private int OwnedOf(string palId) => Scope.ScopedPals.Count(p => !p.IsExcluded && string.Equals(p.SpeciesId, palId, StringComparison.OrdinalIgnoreCase));
+
+    // The owned counts are worked out once per refresh, not once per row and sort comparison.
+    private Dictionary<string, int> _owned = new(StringComparer.OrdinalIgnoreCase);
+
+    private void Refresh()
+    {
+        _owned = Scope.ScopedPals.Where(p => !p.IsExcluded).GroupBy(p => p.SpeciesId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        int Owned(string id) => _owned.GetValueOrDefault(id);
+        var filtered = TransportModel.Filter(_all, State.TransportQuery, Lang, State.TransportMinLevel, State.TransportOnlyOwned, Owned);
+        _visible = TransportModel.Sort(filtered, State.TransportSort, State.TransportDescending, Lang, Owned);
+    }
+
+    private IReadOnlyList<SegmentedItem<int>> LevelItems() =>
+        Enumerable.Range(1, TransportModel.MaxLevel).Select(n => new SegmentedItem<int>(n, n.ToString(CultureInfo.InvariantCulture))).ToList();
+
+    private Task SetQuery(string value) { State.TransportQuery = value; Refresh(); return Task.CompletedTask; }
+    private void SetMinLevel(int level) { State.TransportMinLevel = level; Refresh(); }
+    private void ToggleOwned() { State.TransportOnlyOwned = !State.TransportOnlyOwned; Refresh(); }
+
+    private void ClearFilters()
+    {
+        State.TransportQuery = "";
+        State.TransportMinLevel = 1;
+        State.TransportOnlyOwned = false;
+        Refresh();
+    }
+
+    // A header click sorts by that column (descending for numbers, ascending for the Pal column); a second click turns the order round.
+    private void SortBy(string key)
+    {
+        if (State.TransportSort == key) State.TransportDescending = !State.TransportDescending;
+        else { State.TransportSort = key; State.TransportDescending = TransportModel.DefaultDescending(key); }
+        Refresh();
+    }
+
+    private void Open(TransportRow row) => Nav.NavigateTo(Paldium.App.Components.Links.Pal(row.Pal.Id));
+
+    private void OnRowKey(KeyboardEventArgs e, TransportRow row)
+    {
+        if (e.Key is "Enter" or " ") Open(row);
+    }
+
+    private RenderFragment Header(string key, string label, string cls) => __builder =>
+    {
+        var sorted = State.TransportSort == key;
+        <th class="@cls" aria-sort="@(sorted ? (State.TransportDescending ? "descending" : "ascending") : null)">
+            <button type="button" @onclick="() => SortBy(key)">
+                @label
+                @if (sorted) { <Icon Name="@(State.TransportDescending ? "chevron-down" : "chevron-up")" Size="14" /> }
+            </button>
+        </th>
+    };
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+}

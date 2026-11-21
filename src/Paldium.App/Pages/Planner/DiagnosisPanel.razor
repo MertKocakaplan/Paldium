@@ -1,0 +1,30 @@
+@namespace Paldium.App.Pages.PlannerParts
+@inherits LocalizedComponentBase
+
+<section class="diag" aria-labelledby="dg-h">
+    <h2 id="dg-h">@L["Plan.Diag.NoPlanHeading"]</h2>
+    <p class="sub">@L["Plan.Diag.Sub"]</p>
+    <ul>
+        @foreach (var item in Items)
+        {
+            var captured = item;
+            <li>
+                <span>
+                    @captured.Text
+                    <span class="m">@captured.Related</span>
+                </span>
+                @if (captured.ActionLabel != null && captured.ApplyFix != null)
+                {
+                    <button type="button" class="btn2 acc" @onclick="() => OnFix.InvokeAsync(captured)">
+                        @captured.ActionLabel
+                    </button>
+                }
+            </li>
+        }
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PlanText.DiagnosticEntry> Items { get; set; } = [];
+    [Parameter] public EventCallback<PlanText.DiagnosticEntry> OnFix { get; set; }
+}

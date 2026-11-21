@@ -1,0 +1,173 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+<div class="plabel" style="@($"--x:40px;--y:{LabelY}px")">
+    <b>@Label</b>
+    @if (AllowOwnedSwitch)
+    {
+        <Segmented TValue="bool"
+                   Mini="true"
+                   Items="@ModeItems()"
+                   Value="@OwnedMode"
+                   ValueChanged="OnModeChangedAsync"
+                   AriaLabel="@L["Calculator.ParentSourceAria", Label].Value" />
+    }
+</div>
+
+@if (OwnedMode && OwnedPal != null)
+{
+    var (locTitle, locSub) = LocationText.TwoLine(OwnedPal, Terms, L);
+    var name = OwnedPal.Nickname ?? Data.Pal(OwnedPal.SpeciesId).DisplayName(Lang);
+    <div class="node" style="@($"--x:40px;--y:{NodeY}px")" aria-label="@Label">
+        <div class="top">
+            <PalPicker Mode="PalPicker.PickerMode.Owned"
+                       OwnedValue="OwnedPal"
+                       AllowClear="true"
+                       OwnedValueChanged="OnOwnedPickedAsync"
+                       Class="node-pick-wrap">
+                <button type="button"
+                        class="target-btn"
+                        aria-label="@L["Calculator.ChangeParentAria", Label, name].Value"
+                        @onclick="context">
+                    <PalIcon PalId="@OwnedPal.SpeciesId" Size="40" />
+                    <div class="top-tx">
+                        <div class="t">
+                            <span class="t-nm">@name</span>
+                            <GenderIcon Gender="@OwnedPal.Gender" Size="14" />
+                        </div>
+                        <div class="m">@L["Plan.NodeOwned"]</div>
+                    </div>
+                </button>
+            </PalPicker>
+            <button type="button"
+                    class="slot-clr"
+                    aria-label="@L["Calculator.ClearParentAria", Label].Value"
+                    title="@L["Common.Clear"].Value"
+                    @onclick="ClearAsync">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+
+        <span class="loc">
+            @if (Paldium.Core.Domain.PalLocation.IsPaged(OwnedPal.Location.Kind) && OwnedPal.Location.SlotIndex is { } slot and >= 0)
+            {
+                <BoxMap Slot="@slot" Cell="5" Gap="1" />
+            }
+            else
+            {
+                <LocationTile Kind="@OwnedPal.Location.Kind" Size="33" />
+            }
+            <span>
+                <b>@locTitle</b>
+                @locSub
+            </span>
+        </span>
+
+        @if (OwnedPal.Passives.Count > 0)
+        {
+            <div class="pas">
+                @foreach (var pid in OwnedPal.Passives)
+                {
+                    var wanted = WantedPassives != null
+                        ? WantedPassives.Contains(pid)
+                        : IsPositive(pid);
+                    <PassiveLine PassiveId="@pid" Want="@wanted" />
+                }
+            </div>
+        }
+    </div>
+}
+else if (!OwnedMode && Species != null)
+{
+    <div class="node sp" style="@($"--x:40px;--y:{NodeY}px")" aria-label="@Label">
+        <div class="top">
+            <PalPicker Mode="PalPicker.PickerMode.Species"
+                       Value="Species"
+                       AllowClear="true"
+                       ValueChanged="OnSpeciesPickedAsync"
+                       Class="node-pick-wrap">
+                <button type="button"
+                        class="target-btn"
+                        aria-label="@L["Calculator.ChangeParentAria", Label, Species.DisplayName(Lang)].Value"
+                        @onclick="context">
+                    <PalIcon Pal="Species" Size="40" />
+                    <div class="top-tx">
+                        <div class="t">
+                            <span class="t-nm">@Species.DisplayName(Lang)</span>
+                        </div>
+                        <div class="m">
+                            @L["Calculator.SpeciesTag"] · <span class="num">#@Species.DexLabel</span> · @ElementsText(Species)
+                        </div>
+                    </div>
+                </button>
+            </PalPicker>
+            <button type="button"
+                    class="slot-clr"
+                    aria-label="@L["Calculator.ClearParentAria", Label].Value"
+                    title="@L["Common.Clear"].Value"
+                    @onclick="ClearAsync">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="@($"pick{(NodeY >= 250 ? " pick-up" : "")}")" style="@($"--x:40px;--y:{NodeY}px")">
+        <PalPicker Mode="@(OwnedMode ? PalPicker.PickerMode.Owned : PalPicker.PickerMode.Species)"
+                   InlineSearch="true"
+                   AutoFocus="@AutoFocusEmpty"
+                   FieldClass="@(DimEmpty ? "ph" : null)"
+                   Placeholder="@(OwnedMode ? L["Picker.OwnedPlaceholder"].Value : L["Calculator.SearchSpeciesPlaceholder"].Value)"
+                   AriaLabel="@L["Calculator.PickParentAria", Label].Value"
+                   Value="Species"
+                   ValueChanged="OnSpeciesPickedAsync"
+                   OwnedValue="OwnedPal"
+                   OwnedValueChanged="OnOwnedPickedAsync" />
+        <p>@EmptyHelpText</p>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter] public int LabelY { get; set; } = 12;
+    [Parameter] public int NodeY { get; set; } = 48;
+    [Parameter] public bool AllowOwnedSwitch { get; set; } = true;
+    [Parameter] public bool OwnedMode { get; set; }
+    [Parameter] public EventCallback<bool> OwnedModeChanged { get; set; }
+    [Parameter] public PalSpecies? Species { get; set; }
+    [Parameter] public EventCallback<PalSpecies?> SpeciesChanged { get; set; }
+    [Parameter] public OwnedPal? OwnedPal { get; set; }
+    [Parameter] public EventCallback<OwnedPal?> OwnedPalChanged { get; set; }
+    [Parameter] public bool AutoFocusEmpty { get; set; }
+    [Parameter] public bool DimEmpty { get; set; }
+    [Parameter] public string EmptyHelpText { get; set; } = string.Empty;
+    [Parameter] public IReadOnlySet<string>? WantedPassives { get; set; }
+
+    private IReadOnlyList<SegmentedItem<bool>> ModeItems() =>
+    [
+        new(false, L["Calculator.SpeciesTag"].Value, IsWord: true),
+        new(true, L["Pair.FromMyPals"].Value, IsWord: true),
+    ];
+
+    private Task OnModeChangedAsync(bool ownedMode) => OwnedModeChanged.InvokeAsync(ownedMode);
+
+    private Task OnSpeciesPickedAsync(PalSpecies? species) => SpeciesChanged.InvokeAsync(species);
+
+    private Task OnOwnedPickedAsync(OwnedPal? pal) => OwnedPalChanged.InvokeAsync(pal);
+
+    private Task ClearAsync() => OwnedMode
+        ? OwnedPalChanged.InvokeAsync(null)
+        : SpeciesChanged.InvokeAsync(null);
+
+    private bool IsPositive(string passiveId)
+    {
+        try { return Data.Passive(passiveId).Rank > 0; }
+        catch (KeyNotFoundException) { return false; }
+    }
+
+    private string ElementsText(PalSpecies species) =>
+        string.Join(" / ", species.Elements
+            .Select(id => Data.Elements.FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id));
+}

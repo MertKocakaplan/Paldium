@@ -1,0 +1,179 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Owned
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IOwnedPalRepository Repository
+
+@* The Excluded list (T107, planner.md "Kullanilmayanlar listesi"): groups, species and single Pals the plans may not use. In the result
+   view it is a popover of the plan tabs; in the input view (Inline) it is a section of the "More" popover. *@
+<div class="@(Inline ? "xsec" : "xpop")" role="@(Inline ? null : "dialog")" aria-labelledby="xl-h" @onkeydown="OnKeyDownAsync">
+    @if (Inline)
+    {
+        <h3 id="xl-h">@L["Plan.Exclude.ListTitle"] <span class="m num">@Rows.Count</span></h3>
+    }
+    else
+    {
+        <div class="xph">
+            <h2 id="xl-h">@L["Plan.Exclude.ListTitle"] <span class="m num">@Rows.Count</span></h2>
+            <p>@L["Plan.Exclude.ListSub"]</p>
+        </div>
+    }
+
+    <ul class="@(Inline ? "xl in" : "xl")">
+        @foreach (var row in Rows)
+        {
+            var captured = row;
+            <li class="@(captured.Orphan ? "orphan" : null)" style="@(captured.Orphan ? "opacity:.55" : null)">
+                @if (captured.GroupIcons.Count > 0)
+                {
+                    <span class="stk">
+                        @foreach (var id in captured.GroupIcons) { <PalIcon PalId="@id" Size="24" /> }
+                    </span>
+                }
+                else
+                {
+                    <PalIcon PalId="@captured.IconId" Size="@(Inline ? 28 : 32)" />
+                }
+                <span class="t">
+                    <span class="nm">@captured.Name</span>
+                    <span class="m">@captured.Sub</span>
+                </span>
+                <button type="button" class="ib2" title="@captured.RemoveLabel" aria-label="@captured.RemoveLabel" @onclick="() => RemoveAsync(captured.Exclusion)">
+                    <Icon Name="x" Size="16" />
+                </button>
+            </li>
+        }
+    </ul>
+
+    <div class="xadd">
+        <SearchField Value="@_search"
+                     ValueChanged="v => _search = v"
+                     Placeholder="@("+ " + L["Plan.Exclude.Add"].Value)"
+                     AriaLabel="@L["Plan.Exclude.Add"].Value"
+                     OnFocus="() => { _searchFocus = true; return Task.CompletedTask; }"
+                     OnBlur="() => { _searchFocus = false; return Task.CompletedTask; }"
+                     OnEscape="() => { _search = string.Empty; return Task.CompletedTask; }" />
+        @if (!string.IsNullOrWhiteSpace(_search) || _searchFocus)
+        {
+            var found = Matches();
+            <div class="picks" role="listbox" aria-label="@L["Plan.Exclude.Add"].Value" @onmousedown:preventDefault="true">
+                @foreach (var m in found)
+                {
+                    var captured = m;
+                    <button type="button" class="pk" role="option" @onclick="() => AddAsync(captured.Exclusion)">
+                        @if (captured.IconId != null) { <PalIcon PalId="@captured.IconId" Size="24" /> }
+                        <span class="t">@captured.Name</span>
+                        <span class="m">@captured.Sub</span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="xpf">
+        @if (Rows.Count > 0)
+        {
+            <button type="button" class="ghostb" @onclick="ClearAllAsync"><Icon Name="refresh" Size="14" /><span>@L["Plan.Exclude.ClearAll"]</span></button>
+        }
+        <span class="sp"></span>
+        @if (!Inline)
+        {
+            <button type="button" class="btn2" @onclick="() => OnClose.InvokeAsync()">@L["Plan.Node.Close"]</button>
+        }
+    </div>
+</div>
+
+@code {
+    private string _search = string.Empty;
+    private bool _searchFocus;
+
+    private sealed record Row(PlanExclusion Exclusion, string Name, string Sub, string IconId, IReadOnlyList<string> GroupIcons, bool Orphan, string RemoveLabel);
+    private sealed record Match(PlanExclusion Exclusion, string Name, string Sub, string? IconId);
+
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public bool Inline { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string GroupName(string group) =>
+        L[$"Plan.Exclude.GroupName.{group}"] is { ResourceNotFound: false } t ? t.Value : group;
+
+    private IReadOnlyList<string> GroupSpecies(string group) =>
+        Data.Pals.Where(p => string.Equals(p.Group, group, StringComparison.OrdinalIgnoreCase)).Select(p => p.Id).ToList();
+
+    private IReadOnlyList<Row> Rows
+    {
+        get
+        {
+            var rows = new List<Row>();
+            foreach (var e in ExclusionOps.InListOrder(Query, SpeciesName))
+            {
+                if (e.Kind == PlanExclusion.GroupKind)
+                {
+                    var members = GroupSpecies(e.Id);
+                    var name = L["Plan.Exclude.GroupTitle", GroupName(e.Id)].Value;
+                    rows.Add(new Row(e, name, L["Plan.Exclude.GroupSub", members.Count].Value, members.FirstOrDefault() ?? "",
+                        members.Take(3).ToList(), false, L["Plan.Exclude.RemoveAria", name].Value));
+                }
+                else if (e.Kind == PlanExclusion.SpeciesKind)
+                {
+                    var name = SpeciesName(e.Id);
+                    rows.Add(new Row(e, name, L["Plan.Exclude.KindSpecies"].Value, e.Id, [], false, L["Plan.Exclude.RemoveAria", name].Value));
+                }
+                else
+                {
+                    var pal = Repository.Current.Find(e.Id);
+                    var name = pal == null ? e.Id : (pal.Nickname ?? SpeciesName(pal.SpeciesId));
+                    var sub = pal == null ? L["Plan.Exclude.Orphan"].Value : L["Plan.Exclude.KindPal", Paldium.App.Components.LocationText.ShortPlace(pal, Terms, L)].Value;
+                    rows.Add(new Row(e, name, sub, pal?.SpeciesId ?? "", [], pal == null, L["Plan.Exclude.RemoveAria", name].Value));
+                }
+            }
+
+            return rows;
+        }
+    }
+
+    private IReadOnlyList<Match> Matches()
+    {
+        var q = _search.Trim();
+        var list = new List<Match>();
+        foreach (var group in Data.Pals.Select(p => p.Group).Where(g => g != null).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var name = GroupName(group!);
+            var e = new PlanExclusion(PlanExclusion.GroupKind, group!);
+            if (ExclusionOps.Has(Query, e)) continue;
+            if (q.Length == 0 || name.Contains(q, StringComparison.CurrentCultureIgnoreCase))
+                list.Add(new Match(e, name, L["Plan.Exclude.GroupSub", GroupSpecies(group!).Count].Value, GroupSpecies(group!).FirstOrDefault()));
+        }
+
+        foreach (var pal in Data.Pals.Where(p => q.Length == 0 || p.DisplayName(Lang).Contains(q, StringComparison.CurrentCultureIgnoreCase)).Take(8))
+        {
+            var e = new PlanExclusion(PlanExclusion.SpeciesKind, pal.Id);
+            if (!ExclusionOps.Has(Query, e)) list.Add(new Match(e, pal.DisplayName(Lang), L["Plan.Exclude.KindSpecies"].Value, pal.Id));
+        }
+
+        return list.Take(10).ToList();
+    }
+
+    private async Task AddAsync(PlanExclusion e)
+    {
+        _search = string.Empty;
+        await QueryChanged.InvokeAsync(ExclusionOps.With(Query, e));
+    }
+
+    private Task RemoveAsync(PlanExclusion e) => QueryChanged.InvokeAsync(ExclusionOps.Without(Query, e));
+
+    private Task ClearAllAsync() => QueryChanged.InvokeAsync(ExclusionOps.Clear(Query));
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && !Inline) await OnClose.InvokeAsync();
+    }
+}

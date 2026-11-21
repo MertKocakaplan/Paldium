@@ -1,0 +1,941 @@
+@page "/planner"
+@implements IAsyncDisposable
+@using System.Diagnostics
+@using Microsoft.JSInterop
+@using Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Owned
+@using Paldium.Core.Planning
+@using Paldium.Import.Sync
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject ISpeciesPathFinder PathFinder
+@inject PlannerStateService State
+@inject IOwnedPalRepository Repository
+@inject OwnedScopeService Scope
+@inject PassiveSolver Solver
+@inject SettingsStore Store
+@inject ISyncService Sync
+@inject IJSRuntime JS
+
+@{
+    var target = ResolvedTarget();
+    var currentPlan = State.CurrentPlan;
+    var usedUids = UsedUidsOf(currentPlan);
+    var dimUids = DimUidsOf(currentPlan);
+    var scopedUids = Scope.ScopedPals.Select(p => p.Uid).ToHashSet(StringComparer.Ordinal);
+    var outOfScopeLeaves = PlanText.FindOutOfScopeLeaves(currentPlan, scopedUids, Data, Lang);
+    var goneUids = outOfScopeLeaves.Select(x => x.Pal.Uid).ToHashSet(StringComparer.Ordinal);
+    var outOfScopePals = outOfScopeLeaves.Select(x => x.Pal).ToList();
+    var notes = State.Result != null && currentPlan != null
+        ? PlanText.BuildNotes(State.Result, currentPlan, _query, Repository, Data, Terms, L, Lang)
+        : Array.Empty<PlanText.PlanNoteEntry>();
+    // A real empty result only: a reset, a pending recompute or a cancelled run has no result, so the page shows the input view, not "no plan".
+    var emptyResult = !_computingStage1 && State.HasEmptyResult;
+    var diagnostics = emptyResult && State.Result is { } emptyOf
+        ? PlanText.BuildDiagnostics(emptyOf, _query, Data, L, Lang, ExclusionName)
+        : Array.Empty<PlanText.DiagnosticEntry>();
+    var flags = diagnostics.Select(d => d.FlagControl).Where(f => f != null).ToHashSet(StringComparer.Ordinal);
+    var panelNode = !_computingStage1 && !_editingInputs && currentPlan != null && _selectedNode != null && TreeContains(currentPlan.Root, _selectedNode) ? _selectedNode : null;
+    var showImproveToast = _pendingImproveResult != null && !_dismissedImproveToast && currentPlan != null;
+}
+
+<div class="b">
+    @if (_glanceOpen && !_computingStage1 && !_editingInputs && currentPlan != null)
+    {
+        <GlanceView Plan="@currentPlan"
+                    PlanIndex="@State.Selected"
+                    Done="@State.Done"
+                    WantedPassives="@_query.DesiredPassives"
+                    OnClose="() => _glanceOpen = false"
+                    OnCompleteStep="CompleteGlanceStep"
+                    FlexChoices="@State.FlexChoices"
+                    OnCompleteFlexStep="CompleteFlexStep"
+                    OnOtherHatched="OtherHatched"
+                    OnToggleStep="ToggleStep" />
+    }
+    else
+    {
+        <div class="work">
+        @if (!CompactNav)
+        {
+            <PalShelf Query="@_query"
+                      QueryChanged="SetQuery"
+                      UsedUids="@usedUids"
+                      UseCounts="@NodeAlternatives.UseCounts(currentPlan)"
+                      DimUids="@dimUids"
+                      GoneUids="@goneUids"
+                      OutOfScopePlanPals="@outOfScopePals"
+                      OnDragUidChanged="uid => _draggingUid = uid"
+                      OnMenuOpenChanged="OnShelfMenuOpenChanged" />
+            <PanelResizer Key="planner" />
+        }
+        else
+        {
+            <Drawer Side="left"
+                    Width="288"
+                    Open="@_shelfOpen"
+                    OpenChanged="OnShelfDrawerOpenChanged"
+                    AriaLabel="@L["Plan.ShelfAria"].Value">
+                <PalShelf Query="@_query"
+                          QueryChanged="SetQuery"
+                          UsedUids="@usedUids"
+                          UseCounts="@NodeAlternatives.UseCounts(currentPlan)"
+                          DimUids="@dimUids"
+                          GoneUids="@goneUids"
+                          OutOfScopePlanPals="@outOfScopePals"
+                          OnDragUidChanged="uid => _draggingUid = uid"
+                          OnMenuOpenChanged="OnShelfMenuOpenChanged"
+                          OnAfterSelect="() => _shelfOpen = false" />
+            </Drawer>
+        }
+
+        <div class="bench">
+            <h1 class="sr" tabindex="-1">@L["Nav.Planner"]</h1>
+
+            <PlanList Query="@_query"
+                      QueryChanged="SetQuery"
+                      Target="@target"
+                      Computing="@_computingStage1"
+                      ElapsedSeconds="@_elapsedSeconds"
+                      Improving="@_improvingStage2"
+                      ImproveElapsedSeconds="@_stage2Seconds"
+                      ImproveLimitSeconds="@_improveLimitSeconds"
+                      OnCancel="Cancel"
+                      CanContinue="@CanContinueSearch()"
+                      OnContinue="ContinueSearchAsync"
+                      EmptyResult="@emptyResult"
+                      DiagnosticCount="@diagnostics.Count"
+                      Plans="@State.Plans"
+                      Labels="@State.Labels"
+                      Selected="@State.Selected"
+                      OnSelectPlanIndex="SelectPlanIndex"
+                      Notes="@notes"
+                      OnSelectExtraPlan="SelectExtraPlan"
+                      Compact="@CompactNav"
+                      EditingInputs="@_editingInputs"
+                      OnToggleEditInputs="() => _editingInputs = !_editingInputs"
+                      OnToggleShelf="() => _shelfOpen = !_shelfOpen"
+                      OnMenuOpenChanged="OnTabsMenuOpenChanged" />
+
+            <div class="brow">
+                <PlanTree Target="@target"
+                          Query="@_query"
+                          QueryChanged="SetQuery"
+                          Compact="@CompactNav"
+                          Computing="@_computingStage1"
+                          EmptyResult="@emptyResult"
+                          EditingInputs="@_editingInputs"
+                          Plan="@currentPlan"
+                          Done="@State.Done"
+                          Notes="@notes"
+                          GoneUids="@goneUids"
+                          Diagnostics="@diagnostics"
+                          OnApplyDiagnosticFix="ApplyDiagnosticFix"
+                          IsStale="@State.IsStale"
+                          OutOfScopeLeaves="@outOfScopeLeaves"
+                          LastSyncAgo="@LastSyncAgo()"
+                          OnRecompute="() => StartComputeAsync(explicitSolve: false, preserveSelection: true)"
+                          ShowImproveToast="@showImproveToast"
+                          ImproveOldEggs="@_improveOldEggs"
+                          ImproveNewEggs="@_improveNewEggs"
+                          OnShowImprovedPlan="ApplyImprovedPlan"
+                          OnDismissImprovedPlan="() => _dismissedImproveToast = true"
+                          DraggingUid="@_draggingUid"
+                          OnDragConsumed="() => _draggingUid = null"
+                          OnSlotPickerOpenChanged="OnSlotPickerOpenChanged"
+                          OnTargetPickerOpenChanged="OnTargetPickerOpenChanged"
+                          OnToggleStep="ToggleStep"
+                          OnSelectExtraPlan="SelectExtraPlan"
+                          SelectedNode="@panelNode"
+                          OnSelectNode="SelectNode"
+                          BandText="@_bandText"
+                          OnUndoBand="UndoContinueAsync" />
+
+                @if (panelNode != null && currentPlan != null)
+                {
+                    <NodePanel Node="@panelNode"
+                               InitialTab="@_panelInitialTab"
+                               Plan="@currentPlan"
+                               Query="@_query"
+                               Compact="@CompactNav"
+                               OnClose="ClosePanel"
+                               Evaluate="EvaluateStartAsync"
+                               Done="@State.Done"
+                               FlexChoices="@State.FlexChoices"
+                               OnContinue="ContinueFromAsync"
+                               OnExclude="ExcludeAsync"
+                               OnPickerOpenChanged="OnPanelPickerOpenChanged" />
+                }
+            </div>
+
+            <BottomStrip Query="@_query"
+                         QueryChanged="SetQuery"
+                         Computing="@_computingStage1"
+                         Compact="@CompactNav"
+                         EditingInputs="@_editingInputs"
+                         Plan="@currentPlan"
+                         Done="@State.Done"
+                         WildFlag="@flags.Contains("wild")"
+                         StepsFlag="@flags.Contains("steps")"
+                         LegendaryFlag="@flags.Contains("legendary")"
+                         ScopeFlag="@flags.Contains("scope")"
+                         OnCompute="() => StartComputeAsync(explicitSolve: true)"
+                         OnCancel="Cancel"
+                         OnCompleteNextStep="CompleteNextStep"
+                         OnFinish="FinishPlan"
+                         FlexChoices="@State.FlexChoices"
+                         OnCompleteFlexStep="CompleteFlexStep"
+                         OnOpenGlance="() => _glanceOpen = true"
+                         OnPickerOpenChanged="OnStripPickerOpenChanged" />
+        </div>
+        </div>
+    }
+</div>
+
+@code {
+    private PlannerSettings _query = new();
+    private bool _computingStage1;
+    private bool _improvingStage2;
+    private bool _stage1AppliedInRun;
+    private bool _editingInputs;
+    private bool _glanceOpen;
+    private double _elapsedSeconds;
+    private double _stage2Seconds;
+    private readonly Stopwatch _stage2Sw = new();
+    private PlanResult? _pendingImproveResult;
+    private long _pendingImproveVersion;
+    private string? _pendingImproveTarget;
+    private double _improveOldEggs;
+    private double _improveNewEggs;
+    private bool _dismissedImproveToast;
+    private PlannerSettings? _resultQuery;
+    private int _improveLimitSeconds;
+    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _debounceCts;
+    private bool _pendingRecompute;
+    private readonly OnceParameter _targetParameter = new();
+    private bool _shelfOpen;
+    private string? _draggingUid;
+    private bool _shelfMenuOpen;
+    private bool _tabsMenuOpen;
+    private bool _slotPickerOpen;
+    private bool _targetPickerOpen;
+    private bool _stripPickerOpen;
+    private bool _panelPickerOpen;
+    private PlanNode? _selectedNode;
+    private string? _bandText;
+    private DotNetObjectReference<Planner>? _self;
+    private IJSObjectReference? _shortcutHandle;
+
+    [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
+
+    /// <summary>Optional <c>?target=SpeciesId</c>: the Planner opens with that target (the Paldex "Generate in the Planner" button).</summary>
+    [SupplyParameterFromQuery(Name = "target")]
+    public string? Target { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _query = Store.Current.Planner;
+        State.Changed += OnStateChanged;
+        Sync.StatusesChanged += OnStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        try { _shortcutHandle = await JS.InvokeAsync<IJSObjectReference>("pbKeyShortcut.attach", _self, nameof(OnEnterShortcut)); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (string.IsNullOrEmpty(Target) || !_targetParameter.IsNew(Target) || !Data.TryNormalizePalId(Target, out var id)) return;
+        if (!string.Equals(_query.TargetId, id, StringComparison.Ordinal))
+        {
+            _query = _query with { TargetId = id };
+            Store.Update(s => s with { Planner = _query });
+            ClearPendingImprove();
+            State.Reset();
+            if (State.HasSolved) ScheduleAutoRecompute();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnEnterShortcut()
+    {
+        if (_computingStage1 || _improvingStage2 || AnyPickerOpen() || string.IsNullOrEmpty(_query.TargetId))
+            return Task.CompletedTask;
+        return StartComputeAsync(explicitSolve: true);
+    }
+
+    private void ClearPendingImprove()
+    {
+        _pendingImproveResult = null;
+        _pendingImproveTarget = null;
+        _dismissedImproveToast = false;
+    }
+
+    private string? LastSyncAgo()
+    {
+        var lastSync = Sync.Statuses
+            .Where(s => s.LastSyncUtc != null)
+            .Select(s => s.LastSyncUtc!.Value)
+            .DefaultIfEmpty()
+            .Max();
+        if (lastSync == default) return null;
+        var age = DateTimeOffset.UtcNow - lastSync;
+        if (age < TimeSpan.FromMinutes(1)) return L["Sync.JustNow"].Value;
+        if (age < TimeSpan.FromHours(1)) return L["Sync.MinutesAgo", (int)age.TotalMinutes].Value;
+        return L["Sync.HoursAgo", (int)age.TotalHours].Value;
+    }
+
+    private Task ApplyDiagnosticFix(PlanText.DiagnosticEntry entry)
+    {
+        if (entry.ApplyFix == null) return Task.CompletedTask;
+        SetQuery(entry.ApplyFix(_query));
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyImprovedPlan()
+    {
+        if (_pendingImproveResult != null && _pendingImproveTarget != null)
+        {
+            State.SetResult(_pendingImproveResult, _pendingImproveVersion, _pendingImproveTarget, resetSelection: true);
+            ClearPendingImprove();
+        }
+        return Task.CompletedTask;
+    }
+
+    private bool AnyPickerOpen() =>
+        _shelfOpen || _shelfMenuOpen || _tabsMenuOpen || _slotPickerOpen || _targetPickerOpen || _stripPickerOpen || _panelPickerOpen;
+
+    private PalSpecies? ResolvedTarget()
+    {
+        if (string.IsNullOrEmpty(_query.TargetId)) return null;
+        try { return Data.Pal(_query.TargetId); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private IReadOnlySet<string> UsedUidsOf(BreedingPlan? plan)
+    {
+        if (plan == null) return new HashSet<string>();
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        void Walk(PlanNode node)
+        {
+            switch (node)
+            {
+                case OwnedLeaf o:
+                    set.Add(o.Pal.Uid);
+                    break;
+                case BreedStep s:
+                    Walk(s.ParentA);
+                    Walk(s.ParentB);
+                    break;
+            }
+        }
+        Walk(plan.Root);
+        return set;
+    }
+
+    private IReadOnlySet<string> DimUidsOf(BreedingPlan? plan)
+    {
+        if (plan == null || _query.PreferredUids.Count == 0) return new HashSet<string>();
+        var usedPrefs = new HashSet<string>(plan.PreferredUidsUsed, StringComparer.Ordinal);
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in _query.PreferredUids)
+        {
+            var pal = Repository.Current.Find(key);
+            if (pal != null && !usedPrefs.Contains(pal.Uid))
+                set.Add(pal.Uid);
+        }
+        return set;
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private static bool TreeContains(PlanNode root, PlanNode node) =>
+        ReferenceEquals(root, node) || (root is BreedStep s && (TreeContains(s.ParentA, node) || TreeContains(s.ParentB, node)));
+
+    private void SelectNode(PlanNode node) { _panelInitialTab = null; _selectedNode = ReferenceEquals(_selectedNode, node) ? null : node; }
+
+    private string? _panelInitialTab;
+
+    private void ClosePanel() { _selectedNode = null; _panelInitialTab = null; }
+
+    private void OtherHatched(BreedStep step)
+    {
+        _glanceOpen = false;
+        _panelInitialTab = "pick";
+        _selectedNode = step;
+    }
+
+    // The first stage with the given Pal as the start parent: "the plan that is left with this Pal" (T103). A draft is not saved, so it is added to the Pals.
+    // asPreferred: a wild leaf (T112): the Pal is added as a preferred one and the plan has to use it; the start Pal stays. Otherwise the Pal is the start parent.
+    // Without wanted passives the path finder answers, as in the main solve.
+    private Task<PlanResult> EvaluateStartAsync(OwnedPal pal, bool asPreferred, CancellationToken ct)
+    {
+        var snapshot = Repository.Current;
+        if (string.IsNullOrEmpty(_query.TargetId)) return Task.FromResult(new PlanResult([], [], [], false));
+        var (path, goal) = BuildQueries(snapshot, _query.TargetId);
+        var pals = snapshot.Pals.Any(p => p.Uid == pal.Uid)
+            ? snapshot.Pals
+            : [.. snapshot.Pals, pal with { Location = pal.Location with { Kind = FitLocationKind(pal.Location.Kind, goal.Scope) } }];
+        if (asPreferred)
+        {
+            goal = goal with { PreferredUids = [pal.Uid], PreferredMode = PreferredMode.AtLeastOne, TimeLimit = TimeSpan.Zero, Exhaustive = false };
+            path = path with { PreferredUids = [pal.Uid], PreferredMode = PreferredMode.AtLeastOne };
+        }
+        else
+        {
+            goal = goal with { Start = new StartParent(pal.Uid, null, null), TimeLimit = TimeSpan.Zero, Exhaustive = false, PreferredUids = [] };
+            path = path with { Start = new StartParent(pal.Uid, null, null), PreferredUids = [] };
+        }
+
+        return _query.DesiredPassives.Count > 0
+            ? Task.Run(() => Solver.Solve(goal, pals, ct), ct)
+            : PathFinder.FindAsync(path, pals, ct);
+    }
+
+    // The location a Pal gets so that the scope counts it: the preview and the saved Pal must use the same one (T112).
+    private static LocationKind FitLocationKind(LocationKind kind, OwnerScope scope) =>
+        scope.IncludedLocations.Contains(kind) ? kind : scope.IncludedLocations.FirstOrDefault(kind);
+
+    private sealed record ContinueUndo(PlannerSettings Query, PlanResult? Result, int Selected, string? ManualUid);
+    private ContinueUndo? _undo;
+
+    private async Task ContinueFromAsync(NodePanel.ContinueRequest request)
+    {
+        if (string.IsNullOrEmpty(_query.TargetId) || State.Result == null) return;
+        var previousStart = _query.StartOwnedUid != null ? Repository.Current.Find(_query.StartOwnedUid) : null;
+        var pal = request.Pal;
+        string? manualUid = null;
+        if (request.IsDraft)
+        {
+            pal = Repository.AddManual(new OwnedPalDraft
+            {
+                SpeciesId = pal.SpeciesId,
+                Gender = pal.Gender,
+                Passives = pal.Passives,
+                Nickname = null,
+                Location = new Paldium.Core.Domain.PalLocation(FitLocationKind(LocationKind.Unknown, Scope.Scope), null, null, null),
+            });
+            manualUid = pal.Uid;
+        }
+
+        _undo = new ContinueUndo(_query, State.Result, State.Selected, manualUid);
+        var wildLeaf = request.Node is WildLeaf;
+        if (wildLeaf)
+        {
+            // A caught Pal does not replace the start Pal: it is added to your Pals and becomes a preferred one (T112).
+            var preferred = _query.PreferredUids.Append(pal.SelectionKey).Distinct(StringComparer.Ordinal).ToList();
+            _query = _query with { PreferredUids = preferred };
+        }
+        else _query = _query with { StartMode = "owned", StartOwnedUid = pal.SelectionKey, StartSpeciesId = null };
+        Store.Update(s => s with { Planner = _query });
+        var name = pal.Nickname ?? SpeciesNameOf(pal.SpeciesId);
+        var gender = pal.Gender == Gender.Female ? L["Common.FemaleLower"].Value : pal.Gender == Gender.Male ? L["Common.MaleLower"].Value : "";
+        var text = wildLeaf ? L["Plan.Band.CaughtPreferred", name, gender].Value : L["Plan.Band.Recomputed", name, gender].Value;
+        if (request.WithPal is { } left)
+            text += " " + L["Plan.Band.Left", Eggs1(left), Eggs1(request.Retry)].Value;
+        if (!wildLeaf && previousStart != null && !string.Equals(previousStart.Uid, pal.Uid, StringComparison.Ordinal))
+            text += " " + L["Plan.Band.StartChanged", previousStart.Nickname ?? SpeciesNameOf(previousStart.SpeciesId), name].Value;
+        _bandText = text;
+        _selectedNode = null;
+        await StartComputeAsync(explicitSolve: true);
+    }
+
+    // "Don't use": the exclusion is added, the plan is solved again at once and a band says what changed (T107); "Undo" brings the old result back.
+    private async Task ExcludeAsync(PlanExclusion exclusion)
+    {
+        if (string.IsNullOrEmpty(_query.TargetId) || State.Result == null || ExclusionOps.Has(_query, exclusion)) return;
+        var oldPlan = State.CurrentPlan;
+        _undo = new ContinueUndo(_query, State.Result, State.Selected, null);
+        _query = ExclusionOps.With(_query, exclusion);
+        Store.Update(s => s with { Planner = _query });
+        _bandText = L[exclusion.Kind == PlanExclusion.GroupKind ? "Plan.Exclude.BandPlural" : "Plan.Exclude.Band", ExclusionName(exclusion)].Value;
+        _selectedNode = null;
+        await StartComputeAsync(explicitSolve: true);
+        if (State.CurrentPlan is { } now && oldPlan != null && _undo != null)
+        {
+            var text = _bandText;
+            text += " " + (now.Steps != oldPlan.Steps
+                ? L["Plan.Exclude.BandChangeSteps", oldPlan.Steps, now.Steps, Eggs1(oldPlan.ExpectedEggsTotal), Eggs1(now.ExpectedEggsTotal)].Value
+                : L["Plan.Exclude.BandChange", Eggs1(oldPlan.ExpectedEggsTotal), Eggs1(now.ExpectedEggsTotal)].Value);
+            if (State.Plans.Count > 1) text += " " + L["Plan.Exclude.PathsFound", State.Plans.Count].Value;
+            _bandText = text;
+        }
+    }
+
+    private string ExclusionName(PlanExclusion e)
+    {
+        if (e.Kind == PlanExclusion.GroupKind)
+            return L["Plan.Exclude.GroupTitle", L[$"Plan.Exclude.GroupName.{e.Id}"] is { ResourceNotFound: false } g ? g.Value : e.Id].Value;
+        if (e.Kind == PlanExclusion.SpeciesKind) return SpeciesNameOf(e.Id);
+        var pal = Repository.Current.Find(e.Id);
+        return pal == null ? e.Id : (pal.Nickname ?? SpeciesNameOf(pal.SpeciesId));
+    }
+
+    private string Eggs1(double v) => "~" + v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private string SpeciesNameOf(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    // "Undo": the previous query, result and selected plan come back (the stored result is used, nothing is solved again); the Pal that was added is removed.
+    private Task UndoContinueAsync()
+    {
+        if (_undo is not { } undo) return Task.CompletedTask;
+        _undo = null;
+        _bandText = null;
+        CancelDebounce();
+        _cts?.Cancel();
+        _computingStage1 = false;
+        _improvingStage2 = false;
+        _query = undo.Query;
+        Store.Update(s => s with { Planner = _query });
+        if (undo.ManualUid != null)
+        {
+            try { Repository.RemoveManual(undo.ManualUid); }
+            catch (OwnedPalValidationException) { }
+        }
+
+        if (undo.Result != null && undo.Query.TargetId is { } target)
+        {
+            State.SetResult(undo.Result, Repository.Current.Version, target, resetSelection: true);
+            State.Select(undo.Selected);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SetQuery(PlannerSettings query)
+    {
+        var changedTarget = !string.Equals(_query.TargetId, query.TargetId, StringComparison.Ordinal);
+        _query = query;
+        _bandText = null;
+        _undo = null;
+        Store.Update(s => s with { Planner = query });
+
+        if (string.IsNullOrEmpty(query.TargetId))
+        {
+            CancelDebounce();
+            Cancel();
+            ClearPendingImprove();
+            State.Reset();
+            State.HasSolved = false;
+            _editingInputs = false;
+            _glanceOpen = false;
+            return;
+        }
+
+        if (changedTarget)
+        {
+            ClearPendingImprove();
+            State.Reset();
+            _editingInputs = false;
+            _glanceOpen = false;
+        }
+
+        if (State.HasSolved)
+            ScheduleAutoRecompute();
+    }
+
+    private void OnShelfDrawerOpenChanged(bool open) { _shelfOpen = open; HandlePickerStateChanged(open); }
+    private void OnShelfMenuOpenChanged(bool open) { _shelfMenuOpen = open; HandlePickerStateChanged(open); }
+    private void OnTabsMenuOpenChanged(bool open) { _tabsMenuOpen = open; HandlePickerStateChanged(open); }
+    private void OnSlotPickerOpenChanged(bool open) { _slotPickerOpen = open; HandlePickerStateChanged(open); }
+    private void OnTargetPickerOpenChanged(bool open) { _targetPickerOpen = open; HandlePickerStateChanged(open); }
+    private void OnStripPickerOpenChanged(bool open) { _stripPickerOpen = open; HandlePickerStateChanged(open); }
+    private void OnPanelPickerOpenChanged(bool open) { _panelPickerOpen = open; HandlePickerStateChanged(open); }
+
+    private void HandlePickerStateChanged(bool open)
+    {
+        if (open)
+        {
+            _debounceCts?.Cancel();
+            return;
+        }
+        if (_pendingRecompute && State.HasSolved && !AnyPickerOpen() && !string.IsNullOrEmpty(_query.TargetId))
+            StartDebounceCountdown();
+    }
+
+    private void ScheduleAutoRecompute()
+    {
+        _pendingRecompute = true;
+        if (AnyPickerOpen())
+        {
+            _debounceCts?.Cancel();
+            return;
+        }
+        StartDebounceCountdown();
+    }
+
+    private void StartDebounceCountdown()
+    {
+        _debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+        _ = DebounceThenComputeAsync(cts);
+    }
+
+    private void CancelDebounce()
+    {
+        _pendingRecompute = false;
+        _debounceCts?.Cancel();
+        _debounceCts = null;
+    }
+
+    private async Task DebounceThenComputeAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(500, cts.Token);
+            if (cts.Token.IsCancellationRequested || AnyPickerOpen() || string.IsNullOrEmpty(_query.TargetId))
+                return;
+            _pendingRecompute = false;
+            await InvokeAsync(() => StartComputeAsync(explicitSolve: false));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private Task SelectPlanIndex(int index)
+    {
+        _bandText = null;
+        _selectedNode = null;
+        State.Select(index);
+        return Task.CompletedTask;
+    }
+
+    private Task SelectExtraPlan(ExtraPlan extra)
+    {
+        State.SelectPlan(extra.Plan, extra.Label);
+        return Task.CompletedTask;
+    }
+
+    // Every step is done and the user presses "Done" (T116): the plan is finished, the Planner goes back to the input view with the same target
+    // and settings (the ticks of the finished plan are forgotten with it).
+    private Task FinishPlan()
+    {
+        CancelDebounce();
+        Cancel();
+        ClearPendingImprove();
+        State.Reset();
+        State.HasSolved = false;
+        _selectedNode = null;
+        _bandText = null;
+        _undo = null;
+        _editingInputs = false;
+        return Task.CompletedTask;
+    }
+
+    private Task ToggleStep(int stepIdx)
+    {
+        State.ToggleStep(stepIdx);
+        return Task.CompletedTask;
+    }
+
+    private Task CompleteNextStep(int stepIdx)
+    {
+        if (!State.Done.Contains(stepIdx))
+            State.Done.Add(stepIdx);
+        return Task.CompletedTask;
+    }
+
+    private Task CompleteFlexStep((int Index, Gender Gender) choice)
+    {
+        State.FlexChoices[choice.Index] = choice.Gender;
+        return CompleteNextStep(choice.Index);
+    }
+
+    private Task CompleteGlanceStep(int stepIdx)
+    {
+        if (!State.Done.Contains(stepIdx))
+            State.Done.Add(stepIdx);
+        if (State.CurrentPlan is { } plan && PlanText.CurrentStepIndex(PlanText.StepsOf(plan), State.Done) < 0)
+            _glanceOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task StartComputeAsync(bool explicitSolve, bool preserveSelection = false)
+    {
+        if (string.IsNullOrEmpty(_query.TargetId)) return;
+        CancelDebounce();
+        ClearPendingImprove();
+
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        var token = cts.Token;
+
+        _computingStage1 = true;
+        _improvingStage2 = false;
+        _improveLimitSeconds = _query.Exhaustive ? 0 : _query.TimeLimitSeconds;
+        _stage1AppliedInRun = false;
+        _elapsedSeconds = 0;
+        _stage2Seconds = 0;
+        _stage2Sw.Reset();
+        State.HasSolved = true;
+        // Started from the debounce timer (no UI event): show the searching state now.
+        StateHasChanged();
+
+        var keepingDimmedOldPlan = State.Plans.Count > 0 && string.Equals(State.ResultTarget, _query.TargetId, StringComparison.Ordinal);
+        if (explicitSolve && !preserveSelection && !keepingDimmedOldPlan)
+            State.Reset();
+        else if (!string.Equals(State.ResultTarget, _query.TargetId, StringComparison.Ordinal))
+            State.Reset();
+
+        var snapshot = Repository.Current;
+        var (query, goal) = BuildQueries(snapshot, _query.TargetId);
+
+        var resetOnFirst = explicitSolve && !preserveSelection;
+        var progress = new Progress<SolverProgress>(p =>
+        {
+            if (token.IsCancellationRequested) return;
+            if (p.Phase == "stage1" && p.Partial is { Plans.Count: > 0 } s1)
+            {
+                _stage1AppliedInRun = true;
+                _computingStage1 = false;
+                _improvingStage2 = true;
+                _editingInputs = false;
+                _stage2Sw.Restart();
+                _stage2Seconds = 0;
+                State.SetResult(s1, snapshot.Version, _query.TargetId, resetSelection: resetOnFirst);
+                StateHasChanged();
+            }
+            else if (p.Phase == "improve" && p.Partial is { Plans.Count: > 0 } imp)
+            {
+                if (!_stage1AppliedInRun)
+                {
+                    _stage1AppliedInRun = true;
+                    _computingStage1 = false;
+                    _improvingStage2 = true;
+                    _editingInputs = false;
+                    _stage2Sw.Restart();
+                    _stage2Seconds = 0;
+                    State.SetResult(imp, snapshot.Version, _query.TargetId, resetSelection: resetOnFirst);
+                    StateHasChanged();
+                }
+                else
+                {
+                    OfferImprovedResult(imp, snapshot.Version, _query.TargetId);
+                }
+            }
+        });
+
+        using var timerCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var timerTask = TrackElapsedAsync(timerCts.Token);
+
+        try
+        {
+            var result = _query.DesiredPassives.Count > 0
+                ? await Solver.SolveAsync(goal, snapshot.Pals, token, progress)
+                : await PathFinder.FindAsync(query, snapshot.Pals, token, progress);
+            if (!token.IsCancellationRequested)
+            {
+                if (!_stage1AppliedInRun)
+                {
+                    State.SetResult(result, snapshot.Version, _query.TargetId, resetSelection: resetOnFirst);
+                }
+                else
+                {
+                    OfferImprovedResult(result, snapshot.Version, _query.TargetId);
+                    if (_pendingImproveResult == null)
+                        State.RefreshMetadata(result);
+                }
+                _editingInputs = false;
+                _resultQuery = _query;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            timerCts.Cancel();
+            try { await timerTask; } catch (OperationCanceledException) { }
+            if (ReferenceEquals(_cts, cts))
+            {
+                _computingStage1 = false;
+                _improvingStage2 = false;
+                _stage2Sw.Stop();
+            }
+            // A quick run started by the debounce timer ends with no UI event and no 100 ms tick: draw the result.
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private (PathQuery Path, GoalQuery Goal) BuildQueries(OwnedPalSnapshot snapshot, string targetId)
+    {
+        var start = _query.StartMode switch
+        {
+            "owned" when _query.StartOwnedUid != null => new StartParent(snapshot.Find(_query.StartOwnedUid)?.Uid ?? _query.StartOwnedUid, null, null),
+            "species" when _query.StartSpeciesId != null => new StartParent(null, _query.StartSpeciesId, null),
+            _ => null,
+        };
+        var preferred = _query.PreferredUids.Select(snapshot.Find).OfType<OwnedPal>().Select(p => p.Uid).Distinct(StringComparer.Ordinal).ToList();
+        var targetGender = _query.TargetGender switch { "male" => GenderReq.Male, "female" => GenderReq.Female, _ => GenderReq.Any };
+        var path = new PathQuery(targetId, start, preferred, _query.AllowWild, _query.MaxWild,
+            _query.ExcludeLegendaryWild, _query.MaxSteps, 4, Scope.Scope, targetGender,
+            _query.RequirePreferred ? PreferredMode.AtLeastOne : PreferredMode.None,
+            _query.ExcludedUids, _query.ExcludedSpecies, _query.ExcludedGroups);
+
+        var goal = new GoalQuery(targetId, _query.DesiredPassives, _query.MaxUnwanted, targetGender, start, preferred,
+            _query.RequirePreferred ? PreferredMode.AtLeastOne : PreferredMode.None, _query.AllowWild, _query.MaxWild,
+            _query.ExcludeLegendaryWild, _query.WildAssumedUnwanted, _query.MaxSteps, _query.AllowSpecialCake, 4, Scope.Scope,
+            TimeSpan.FromSeconds(_query.TimeLimitSeconds), _query.Exhaustive,
+            _query.ExcludedUids, _query.ExcludedSpecies, _query.ExcludedGroups);
+        return (path, goal);
+    }
+
+    /// <summary>"Keep searching" is offered while the improving stage ran out of time for exactly this query (any change of the query takes it away).</summary>
+    private bool CanContinueSearch() =>
+        State.Result is { TimedOut: true } && State.Plans.Count > 0 && !_computingStage1 && !_improvingStage2 && !State.IsStale
+        && _resultQuery != null && _resultQuery == _query
+        && string.Equals(State.ResultTarget, _query.TargetId, StringComparison.Ordinal);
+
+    private async Task ContinueSearchAsync()
+    {
+        if (!CanContinueSearch() || State.Result is not { } previous || string.IsNullOrEmpty(_query.TargetId)) return;
+        var targetId = _query.TargetId;
+        CancelDebounce();
+        ClearPendingImprove();
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        var token = cts.Token;
+
+        _improvingStage2 = true;
+        _improveLimitSeconds = _query.Exhaustive ? 0 : _query.TimeLimitSeconds > 0 ? _query.TimeLimitSeconds : PassiveSolver.ContinueSecondsWhenOff;
+        _stage2Seconds = 0;
+        _stage2Sw.Restart();
+        StateHasChanged();
+
+        var snapshot = Repository.Current;
+        var (_, goal) = BuildQueries(snapshot, targetId);
+        goal = goal with { TimeLimit = TimeSpan.FromSeconds(_query.TimeLimitSeconds) };
+        var progress = new Progress<SolverProgress>(p =>
+        {
+            if (token.IsCancellationRequested) return;
+            if (p.Phase == "improve" && p.Partial is { Plans.Count: > 0 } imp)
+                OfferImprovedResult(imp, snapshot.Version, targetId);
+        });
+
+        using var timerCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var timerTask = TrackElapsedAsync(timerCts.Token);
+        try
+        {
+            var result = await Solver.ContinueAsync(goal, snapshot.Pals, previous, token, progress);
+            if (!token.IsCancellationRequested)
+            {
+                OfferImprovedResult(result, snapshot.Version, targetId);
+                if (_pendingImproveResult == null) State.RefreshMetadata(result);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            timerCts.Cancel();
+            try { await timerTask; } catch (OperationCanceledException) { }
+            if (ReferenceEquals(_cts, cts))
+            {
+                _improvingStage2 = false;
+                _stage2Sw.Stop();
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OfferImprovedResult(PlanResult candidate, long version, string targetId)
+    {
+        if (candidate.Plans.Count == 0 || State.Plans.Count == 0) return;
+
+        var currentBaseline = State.CurrentPlan ?? State.Plans[0];
+        var bestNew = candidate.Plans[0];
+        var bestShown = State.Plans[0];
+
+        if (_pendingImproveResult != null)
+        {
+            var strictlyBetterThanPending = bestNew.ExpectedEggsTotal < _improveNewEggs - 0.05;
+            if (strictlyBetterThanPending || bestNew.ExpectedEggsTotal <= _pendingImproveResult.Plans[0].ExpectedEggsTotal + 1e-6)
+            {
+                _pendingImproveResult = candidate;
+                _pendingImproveVersion = version;
+                _pendingImproveTarget = targetId;
+                _improveNewEggs = bestNew.ExpectedEggsTotal;
+                if (strictlyBetterThanPending) _dismissedImproveToast = false;
+                StateHasChanged();
+            }
+            return;
+        }
+
+        var meaningfullyBetter = bestNew.ExpectedEggsTotal < bestShown.ExpectedEggsTotal - 0.05;
+        var differentAndAtLeastAsGood =
+            PlannerStateService.Signature(bestNew) != PlannerStateService.Signature(bestShown)
+            && bestNew.ExpectedEggsTotal <= bestShown.ExpectedEggsTotal + 1e-6;
+        if (!meaningfullyBetter && !differentAndAtLeastAsGood) return;
+
+        _pendingImproveResult = candidate;
+        _pendingImproveVersion = version;
+        _pendingImproveTarget = targetId;
+        _improveOldEggs = currentBaseline.ExpectedEggsTotal;
+        _improveNewEggs = bestNew.ExpectedEggsTotal;
+        _dismissedImproveToast = false;
+        StateHasChanged();
+    }
+
+    private async Task TrackElapsedAsync(CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+        while (await timer.WaitForNextTickAsync(ct))
+        {
+            _elapsedSeconds = sw.Elapsed.TotalSeconds;
+            if (_improvingStage2 && _stage2Sw.IsRunning)
+                _stage2Seconds = _stage2Sw.Elapsed.TotalSeconds;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Cancel()
+    {
+        CancelDebounce();
+        _cts?.Cancel();
+        _computingStage1 = false;
+        _improvingStage2 = false;
+        _stage2Sw.Stop();
+        // Stopped before any plan arrived: back to the input view rather than a "no plan" screen.
+        if (State.Result == null) State.HasSolved = false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        CancelDebounce();
+        if (_shortcutHandle != null)
+        {
+            try { await _shortcutHandle.InvokeVoidAsync("dispose"); await _shortcutHandle.DisposeAsync(); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
+        Dispose();
+    }
+
+    public override void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+        Sync.StatusesChanged -= OnStateChanged;
+        _debounceCts?.Cancel();
+        _cts?.Cancel();
+        base.Dispose();
+    }
+}

@@ -1,0 +1,9 @@
+@inherits LocalizedComponentBase
+
+@* An unknown address (screens/layout.md): a plain empty state with a way back; no page tab is active. *@
+<div class="b">
+    <h1 class="sr" tabindex="-1">@L["NotFound.Title"]</h1>
+    <EmptyResult Title="@L["NotFound.Title"].Value" Reason="@L["NotFound.Text"].Value" Class="notfound">
+        <ExtraAction><a class="btn2 acc" href="planner">@L["NotFound.Back"]</a></ExtraAction>
+    </EmptyResult>
+</div>

@@ -1,0 +1,48 @@
+@namespace Paldium.App.Pages.PlannerParts
+@inherits LocalizedComponentBase
+
+@if (OutOfScopeLeaves.Count > 0)
+{
+    <div class="band warn" role="status" aria-live="polite">
+        <span class="tx">
+            <b><Icon Name="warn" Size="14" /> @L["Plan.StaleBrokenTitle"]</b>
+            <span class="m">@BrokenSubtitle()</span>
+        </span>
+        <button type="button" class="btn2 acc" @onclick="OnRecompute">
+            <Icon Name="refresh" Size="14" />
+            <span>@L["Plan.Recompute"]</span>
+        </button>
+    </div>
+}
+else
+{
+    <div class="band" role="status" aria-live="polite">
+        <span class="ico"><Icon Name="info" Size="14" /></span>
+        <span class="tx">
+            <b>@L["Plan.StaleValidTitle"]</b>
+            @if (!string.IsNullOrEmpty(LastSyncAgo))
+            {
+                <span class="m">@L["Plan.StaleLastRead", LastSyncAgo]</span>
+            }
+        </span>
+        <button type="button" class="btn2 acc" @onclick="OnRecompute">
+            <Icon Name="refresh" Size="14" />
+            <span>@L["Plan.Recompute"]</span>
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<PlanText.OutOfScopeLeaf> OutOfScopeLeaves { get; set; } = [];
+    [Parameter] public string? LastSyncAgo { get; set; }
+    [Parameter] public EventCallback OnRecompute { get; set; }
+
+    private string BrokenSubtitle()
+    {
+        var first = OutOfScopeLeaves[0];
+        var detail = L["Plan.StaleBrokenDetail", first.StepNumber, first.DisplayName].Value;
+        return string.IsNullOrEmpty(LastSyncAgo)
+            ? detail
+            : $"{detail} {L["Plan.StaleLastRead", LastSyncAgo].Value}";
+    }
+}

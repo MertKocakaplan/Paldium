@@ -1,0 +1,16 @@
+{
+  "_comment": "Hand-written (T23). Wild spawner region key (first part of the DT_PalWildSpawner row name, case-insensitive) -> REGION_* text id of DT_WorldMap_Common_Text_Common. DT_WorldMapAreaData has no bounds, so only the broad areas whose name is unambiguous are mapped. Keys that are difficulty colours (green, yellow, blue, orange, red, purple) or have no single area (island, desertisland, volcanoiskand, remainsIsland, Ocean, sanctuary, dungeon, allarea, Quest) stay unmapped and are shown with their raw key.",
+  "regions": {
+    "grass": "REGION_Grass_1",
+    "forest": "REGION_Forest_1",
+    "volcano": "REGION_Volcano_1",
+    "desert": "REGION_Desert_1",
+    "dessert": "REGION_Desert_1",
+    "snow": "REGION_Frost_1",
+    "sakura": "REGION_Wide_Sakurajima01",
+    "sakurajima": "REGION_Wide_Sakurajima01",
+    "yamijima": "REGION_Wide_Darkisland01",
+    "skyisland": "REGION_Wide_Skyisland01",
+    "worldtree": "REGION_FootOfWorldTree"
+  }
+}

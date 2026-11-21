@@ -1,0 +1,32 @@
+@inherits LocalizedComponentBase
+
+<div class="@($"head{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    <h1 class="sr" tabindex="-1">@Title</h1>
+    @if (ShowFilterButton)
+    {
+        <button type="button"
+                class="btn2 rail-toggle"
+                aria-expanded="@(FilterOpen ? "true" : "false")"
+                @onclick="OnToggleFilters">
+            <Icon Name="filter" Size="14" />
+            <span>@(ActiveFilterCount > 0 ? L["Filters.ToggleCount", ActiveFilterCount].Value : L["Filters.Title"].Value)</span>
+        </button>
+    }
+    @if (Summary != null)
+    {
+        @Summary
+    }
+    <span class="sp"></span>
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public bool ShowFilterButton { get; set; }
+    [Parameter] public bool FilterOpen { get; set; }
+    [Parameter] public int ActiveFilterCount { get; set; }
+    [Parameter] public EventCallback OnToggleFilters { get; set; }
+    [Parameter] public RenderFragment? Summary { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

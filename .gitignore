@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+artifacts/
+tools/Paldium.GameExtractor/out/
+TestResults/
+.argon-review/
+
+# Impeccable: per-developer settings (hook consent)
+.impeccable/config.local.json
+
+# Personal patterns for the publish check (this machine only)
+build/private-patterns.local.txt

@@ -1,0 +1,79 @@
+@using Paldium.Core.Breeding
+@inherits LocalizedComponentBase
+@inject BreedingRules Rules
+@inject IGameData Data
+
+@* The breeding-power axis of the "How breeding works" guide (mockup .worked): both parents, their average, every species around it,
+   the child in the accent colour and the first candidate to the right. All numbers come from the breeding rules. *@
+@if (_line != null)
+{
+    var kid = Name(_line.ChildId);
+    <figure class="worked">
+        <div class="eq">
+            <span class="term"><GuidePalRef Id="@A" /><span class="num">@_line.RankA</span></span>
+            <span class="op">+</span>
+            <span class="term"><GuidePalRef Id="@B" /><span class="num">@_line.RankB</span></span>
+            <span class="op">→</span>
+            <span class="term">@L["Guide.Fig.AverageWord"] <b class="num">@_line.Target</b></span>
+        </div>
+        <svg class="pline" viewBox="0 0 680 150" role="img"
+             aria-label="@L["Guide.Fig.PowerAria", _line.Target, kid, _line.ChildRank].Value">
+            <line x1="24" y1="72" x2="656" y2="72" class="axis" />
+            @foreach (var mark in _line.Marks.Where(m => m.SpeciesId != _line.ChildId))
+            {
+                var x = X(mark.Rank);
+                <line x1="@F(x)" y1="64" x2="@F(x)" y2="80" class="@(mark.IsCandidate ? "cand" : "rec")" />
+                <circle cx="@F(x)" cy="60" r="@(mark.IsCandidate ? "3.5" : "3")" class="@(mark.IsCandidate ? "cand" : "rec")" />
+            }
+            @{ var kx = X(_line.ChildRank); var ax = X(_line.Target); }
+            <line x1="@F(kx)" y1="64" x2="@F(kx)" y2="96" class="kid" />
+            <circle cx="@F(kx)" cy="60" r="5" class="kid" />
+            <line x1="@F(ax)" y1="30" x2="@F(ax)" y2="110" class="avg" />
+            @T(ax, 22, "avgt", L["Guide.Fig.Average", _line.Target].Value)
+            @T(kx, 116, "kidt", kid + " " + _line.ChildRank)
+            @T((kx + ax) / 2, 136, "dist", L["Guide.Fig.Gap", Math.Abs(_line.Target - _line.ChildRank)].Value)
+            @if (_line.NextId != null)
+            {
+                @T(X(_line.NextRank), 44, "nbt", L["Guide.Fig.NextLabel", Name(_line.NextId), _line.NextRank, _line.NextRank - _line.Target].Value)
+            }
+            @T(24, 146, "ax", _line.AxisMin.ToString(CultureInfo.InvariantCulture), null)
+            @T(656, 146, "ax", _line.AxisMax.ToString(CultureInfo.InvariantCulture), "end")
+        </svg>
+        <figcaption>
+            <span class="lg"><i class="k"></i>@L["Guide.Fig.LegendKid"]</span><span class="lg"><i class="c"></i>@L["Guide.Fig.LegendCand"]</span><span class="lg"><i class="r"></i>@L["Guide.Fig.LegendRec"]</span>
+            @if (RecipeAtTarget())
+            {
+                @((MarkupString)L["Guide.Fig.CaptionRecipe", _line.Target, kid, _line.ChildRank, _line.NextId == null ? "" : Name(_line.NextId), _line.NextRank].Value)
+            }
+            else
+            {
+                @((MarkupString)L["Guide.Fig.Caption", kid, _line.ChildRank, _line.NextId == null ? "" : Name(_line.NextId), _line.NextRank].Value)
+            }
+        </figcaption>
+    </figure>
+}
+
+@code {
+    private PowerLineModel? _line;
+
+    [Parameter] public string A { get; set; } = "";
+    [Parameter] public string B { get; set; } = "";
+
+    protected override void OnParametersSet()
+    {
+        try { _line = PowerLineModel.Build(Rules, A, B); }
+        catch (KeyNotFoundException) { _line = null; }
+    }
+
+    private double X(int rank) => 24 + (rank - _line!.AxisMin) / (double)(_line.AxisMax - _line.AxisMin) * 632;
+
+    // Razor treats <text> as its own tag, so the SVG text elements are written as markup strings.
+    private static MarkupString T(double x, int y, string cls, string text, string? anchor = "middle") =>
+        new($"<text x=\"{F(x)}\" y=\"{y}\" class=\"{cls}\"{(anchor == null ? "" : $" text-anchor=\"{anchor}\"")}>{System.Net.WebUtility.HtmlEncode(text)}</text>");
+
+    private static string F(double v) => v.ToString("0.0", CultureInfo.InvariantCulture);
+
+    private string Name(string id) => Data.Pal(id).DisplayName(Lang);
+
+    private bool RecipeAtTarget() => _line!.Marks.Any(m => !m.IsCandidate && m.Rank == _line.Target);
+}

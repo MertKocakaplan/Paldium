@@ -1,0 +1,17 @@
+@inherits LocalizedComponentBase
+
+@* "On this page": the guide's second-level headings. The current one is marked while the text scrolls; a click scrolls to it. *@
+<nav class="outl" aria-label="@L["Guide.OutlineTitle"].Value">
+    <span class="l">@L["Guide.OutlineTitle"]</span>
+    @foreach (var heading in Headings)
+    {
+        var id = heading.Id;
+        <a href="@("#" + id)" aria-current="@(id == CurrentId ? "true" : null)" @onclick="() => OnSelect.InvokeAsync(id)" @onclick:preventDefault="true">@heading.Text</a>
+    }
+</nav>
+
+@code {
+    [Parameter] public IReadOnlyList<GuideHeading> Headings { get; set; } = [];
+    [Parameter] public string? CurrentId { get; set; }
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+}

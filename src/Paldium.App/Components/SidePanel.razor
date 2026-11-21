@@ -1,0 +1,57 @@
+@inherits LocalizedComponentBase
+
+@if (Open)
+{
+    @if (Drawer)
+    {
+        <div class="drawer-scrim" @onclick="RequestCloseAsync"></div>
+    }
+
+    <aside class="@($"insp{(Drawer ? " drawer drawer-right" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+           style="@($"--insp-w: {Width}px;")"
+           aria-label="@Title"
+           @onkeydown="OnKeyDownAsync">
+        <div class="ih">
+            <h2>@Title</h2>
+            <button type="button"
+                    class="ib2"
+                    aria-label="@L["Common.Close"].Value"
+                    title="@L["Common.Close"].Value"
+                    @onclick="RequestCloseAsync">
+                <Icon Name="x" Size="16" />
+            </button>
+        </div>
+        <div class="body">
+            @ChildContent
+        </div>
+        @if (Footer != null)
+        {
+            <div class="ifoot">
+                @Footer
+            </div>
+        }
+    </aside>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public bool Drawer { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public int Width { get; set; } = 380;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task RequestCloseAsync() =>
+        OnClose.HasDelegate
+            ? OnClose.InvokeAsync()
+            : OpenChanged.InvokeAsync(false);
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await RequestCloseAsync();
+    }
+}

@@ -1,0 +1,33 @@
+@inject IGameData Data
+
+@if (_species != null)
+{
+    <img class="@($"pal{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+         src="@($"gamedata/{_species.IconPath}")"
+         width="@Size"
+         height="@Size"
+         alt="" />
+}
+else
+{
+    <span class="@($"pal{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" style="@($"width:{Size}px;height:{Size}px")" aria-hidden="true"></span>
+}
+
+@code {
+    private PalSpecies? _species;
+
+    [Parameter] public PalSpecies? Pal { get; set; }
+    [Parameter] public string? PalId { get; set; }
+    [Parameter] public int Size { get; set; } = 40;
+    [Parameter] public string? Class { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _species = Pal;
+        if (_species == null && !string.IsNullOrEmpty(PalId))
+        {
+            try { _species = Data.Pal(PalId); }
+            catch (KeyNotFoundException) { _species = null; }
+        }
+    }
+}

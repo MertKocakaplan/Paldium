@@ -1,0 +1,382 @@
+@page "/skills"
+@implements IDisposable
+@using Paldium.App.Pages.SkillsParts
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+@inject SkillsStateService State
+
+@{
+    var isActives = State.ActiveTab == SkillsStateService.TabActives;
+    var selectedPassive = !isActives ? ResolveSelectedPassive() : null;
+    var inspectorOpen = selectedPassive != null;
+    var filterDrawer = CompactNav || inspectorOpen;
+    var workClass = CompactNav ? "work noRail" : inspectorOpen ? "work edit" : "work";
+    var anyActive = isActives ? State.HasActiveFilters : State.HasPassiveFilters;
+    var activeItems = isActives ? BuildActiveSkillChips() : BuildPassiveChips();
+}
+
+<div class="b p x y">
+    <div class="@workClass">
+        <FilterRail Drawer="@filterDrawer"
+                    PanelKey="skills"
+                    Open="@_filtersOpen"
+                    OpenChanged="v => _filtersOpen = v"
+                    AnyActive="@anyActive"
+                    OnClear="ClearCurrentFilters">
+            <SkillsFilters IsActivesTab="@isActives"
+                           PassiveFilter="@State.PassiveFilter"
+                           PassiveFilterChanged="SetPassiveFilter"
+                           OwnedOnly="@State.PassiveOwnedOnly"
+                           OwnedOnlyChanged="SetPassiveOwnedOnly"
+                           OwnedPassiveIds="@_ownedPassiveIds"
+                           ActiveFilter="@State.ActiveFilter"
+                           ActiveFilterChanged="SetActiveFilter" />
+        </FilterRail>
+
+        <div class="main">
+            <ListHead Title="@L["Nav.Skills"].Value"
+                      ShowFilterButton="@(CompactNav || inspectorOpen)"
+                      FilterOpen="@_filtersOpen"
+                      ActiveFilterCount="@activeItems.Count"
+                      OnToggleFilters="() => _filtersOpen = !_filtersOpen">
+                <Summary>
+                    <Segmented TValue="string"
+                               Class="modes"
+                               Items="@TabItems()"
+                               Value="@State.ActiveTab"
+                               ValueChanged="SetTab"
+                               AriaLabel="@L["Nav.Skills"].Value" />
+                    <span class="sum">
+                        @RenderSummary(isActives, isActives ? ActiveResults.Count : PassiveResults.Count)
+                    </span>
+                </Summary>
+                <ChildContent>
+                    <SortDropdown Options="@(isActives ? ActiveSortOptions() : PassiveSortOptions())"
+                                  Value="@(isActives ? State.ActiveSort.Key.ToString() : State.PassiveSort.Key.ToString())"
+                                  Descending="@(isActives ? State.ActiveSort.Descending : State.PassiveSort.Descending)"
+                                  OnSortChanged="OnSortChanged" />
+                </ChildContent>
+            </ListHead>
+
+            <ActiveFilterBar Items="@activeItems"
+                             OnRemove="RemoveActiveChip"
+                             OnClearAll="ClearCurrentFilters" />
+
+            @if (isActives)
+            {
+                <ActiveList Results="@ActiveResults"
+                            LearnerCounts="@_learnerCounts"
+                            Filter="@State.ActiveFilter"
+                            FilterChanged="SetActiveFilter"
+                            Sort="@State.ActiveSort"
+                            SortChanged="SetActiveSort"
+                            OnClearAll="ClearCurrentFilters" />
+            }
+            else
+            {
+                <PassiveList Results="@PassiveResults"
+                             OwnedCounts="@_ownedCounts"
+                             OwnedPassiveIds="@_ownedPassiveIds"
+                             Filter="@State.PassiveFilter"
+                             FilterChanged="SetPassiveFilter"
+                             OwnedOnly="@State.PassiveOwnedOnly"
+                             OwnedOnlyChanged="SetPassiveOwnedOnly"
+                             Sort="@State.PassiveSort"
+                             SortChanged="SetPassiveSort"
+                             SelectedPassiveId="@selectedPassive?.Id"
+                             OnSelectPassive="SelectPassive"
+                             InspectorOpen="@inspectorOpen"
+                             CompactNav="@CompactNav"
+                             OnClearAll="ClearCurrentFilters"
+                             OnAllowAnyTag="AllowAnyTag" />
+            }
+        </div>
+
+        @if (!isActives)
+        {
+            <PassiveInspector Passive="@selectedPassive"
+                              Drawer="@CompactNav"
+                              OnClose="() => SelectPassive(null)" />
+        }
+    </div>
+</div>
+
+@code {
+    private bool _filtersOpen;
+    private Dictionary<string, int> _ownedCounts = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _ownedPassiveIds = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, int> _learnerCounts = new(StringComparer.OrdinalIgnoreCase);
+
+    private IReadOnlyList<PassiveSkill>? _passiveResults;
+    private (PassiveFilter, PassiveSort, bool, string, int)? _passiveKey;
+    private int _ownedVersion;
+
+    private IReadOnlyList<ActiveSkill>? _activeResults;
+    private (ActiveFilter, ActiveSort, string)? _activeKey;
+
+    [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
+
+    /// <summary>Optional <c>?tab=passives|actives</c>.</summary>
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    /// <summary>Optional <c>?passive=PassiveId</c>: opens the Passives tab with that passive inspected.</summary>
+    [SupplyParameterFromQuery(Name = "passive")]
+    public string? Passive { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        RebuildOwnedCounts();
+        RebuildLearnerCounts();
+        Scope.Changed += OnScopeChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (State.ApplyQuery(Tab, Passive, Data, _ownedPassiveIds))
+            _passiveResults = null;
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        RebuildOwnedCounts();
+        _passiveResults = null;
+        StateHasChanged();
+    });
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+
+    private void RebuildOwnedCounts()
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var op in Scope.ScopedPals)
+        {
+            foreach (var pid in op.Passives)
+            {
+                if (string.IsNullOrEmpty(pid)) continue;
+                set.Add(pid);
+                counts.TryGetValue(pid, out var n);
+                counts[pid] = n + 1;
+            }
+        }
+        _ownedCounts = counts;
+        _ownedPassiveIds = set;
+        _ownedVersion++;
+    }
+
+    private void RebuildLearnerCounts()
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pal in Data.Pals)
+        {
+            foreach (var entry in pal.AttackLearnset)
+            {
+                if (string.IsNullOrEmpty(entry.SkillId)) continue;
+                counts.TryGetValue(entry.SkillId, out var n);
+                counts[entry.SkillId] = n + 1;
+            }
+        }
+        _learnerCounts = counts;
+    }
+
+    private IReadOnlyList<PassiveSkill> PassiveResults
+    {
+        get
+        {
+            var key = (State.PassiveFilter, State.PassiveSort, State.PassiveOwnedOnly, Lang, _ownedVersion);
+            if (_passiveResults == null || _passiveKey != key)
+            {
+                var baseList = SkillQuery.Passives(Data, State.PassiveFilter, State.PassiveSort, Lang);
+                _passiveResults = State.PassiveOwnedOnly
+                    ? baseList.Where(p => _ownedPassiveIds.Contains(p.Id)).ToList()
+                    : baseList;
+                _passiveKey = key;
+            }
+            return _passiveResults;
+        }
+    }
+
+    private IReadOnlyList<ActiveSkill> ActiveResults
+    {
+        get
+        {
+            var key = (State.ActiveFilter, State.ActiveSort, Lang);
+            if (_activeResults == null || _activeKey != key)
+            {
+                _activeResults = SkillQuery.Actives(Data, State.ActiveFilter, State.ActiveSort, Lang);
+                _activeKey = key;
+            }
+            return _activeResults;
+        }
+    }
+
+    private PassiveSkill? ResolveSelectedPassive()
+    {
+        if (string.IsNullOrEmpty(State.SelectedPassiveId)) return null;
+        return Data.Passives.FirstOrDefault(p =>
+            string.Equals(p.Id, State.SelectedPassiveId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private IReadOnlyList<SegmentedItem<string>> TabItems() =>
+    [
+        new(SkillsStateService.TabPassives, L["Skills.TabPassivesCount", Data.Passives.Count].Value, IsWord: true),
+        new(SkillsStateService.TabActives, L["Skills.TabActivesCount", Data.Actives.Count].Value, IsWord: true),
+    ];
+
+    private RenderFragment RenderSummary(bool isActives, int shown) => __builder =>
+    {
+        var total = isActives ? Data.Actives.Count : Data.Passives.Count;
+        var key = isActives ? "Skills.ActiveCount" : "Skills.PassiveCount";
+        var raw = L[key, "__S__", "__T__"].Value;
+        var idxT = raw.IndexOf("__T__", StringComparison.Ordinal);
+        var idxS = raw.IndexOf("__S__", StringComparison.Ordinal);
+        if (idxT >= 0 && idxS >= 0)
+        {
+            var first = idxT < idxS ? ("__T__", total) : ("__S__", shown);
+            var second = idxT < idxS ? ("__S__", shown) : ("__T__", total);
+            var p1 = raw.IndexOf(first.Item1, StringComparison.Ordinal);
+            var p2 = raw.IndexOf(second.Item1, StringComparison.Ordinal);
+            @raw[..p1]<b>@first.Item2.ToString(CultureInfo.InvariantCulture)</b>@raw[(p1 + 5)..p2]<b>@second.Item2.ToString(CultureInfo.InvariantCulture)</b>@raw[(p2 + 5)..]
+        }
+        else
+        {
+            @L[key, shown, total].Value
+        }
+    };
+
+    private List<SortOption> PassiveSortOptions() =>
+    [
+        new(nameof(PassiveSortKey.Rank), L["Skills.ColRank"].Value, DefaultDescending: true),
+        new(nameof(PassiveSortKey.Name), L["Skills.ColName"].Value, DefaultDescending: false),
+    ];
+
+    private List<SortOption> ActiveSortOptions() =>
+    [
+        new(nameof(ActiveSortKey.Power), L["Skills.ColPower"].Value, DefaultDescending: true),
+        new(nameof(ActiveSortKey.Name), L["Skills.ColName"].Value, DefaultDescending: false),
+        new(nameof(ActiveSortKey.Cooldown), L["Skills.ColCooldown"].Value, DefaultDescending: false),
+    ];
+
+    private void SetTab(string tab)
+    {
+        State.ActiveTab = tab;
+        _filtersOpen = false;
+    }
+
+    private void SetPassiveFilter(PassiveFilter filter) => State.PassiveFilter = filter;
+    private void SetPassiveOwnedOnly(bool ownedOnly) => State.PassiveOwnedOnly = ownedOnly;
+    private void SetPassiveSort(PassiveSort sort) => State.PassiveSort = sort;
+    private void SetActiveFilter(ActiveFilter filter) => State.ActiveFilter = filter;
+    private void SetActiveSort(ActiveSort sort) => State.ActiveSort = sort;
+    private void SelectPassive(string? id)
+    {
+        State.SelectedPassiveId = id;
+        if (id != null && !CompactNav)
+            _filtersOpen = false;
+    }
+
+    private void AllowAnyTag() =>
+        State.PassiveFilter = State.PassiveFilter with { TagsMatchAll = false };
+
+    private void ClearCurrentFilters()
+    {
+        if (State.ActiveTab == SkillsStateService.TabActives) State.ClearActiveFilters();
+        else State.ClearPassiveFilters();
+    }
+
+    private void OnSortChanged((string Key, bool Descending) sort)
+    {
+        if (State.ActiveTab == SkillsStateService.TabActives)
+        {
+            if (Enum.TryParse<ActiveSortKey>(sort.Key, out var k))
+                State.ActiveSort = new ActiveSort { Key = k, Descending = sort.Descending };
+        }
+        else
+        {
+            if (Enum.TryParse<PassiveSortKey>(sort.Key, out var k))
+                State.PassiveSort = new PassiveSort { Key = k, Descending = sort.Descending };
+        }
+    }
+
+    private IReadOnlyList<ActiveFilterItem> BuildPassiveChips()
+    {
+        var f = State.PassiveFilter;
+        var list = new List<ActiveFilterItem>();
+        if (!string.IsNullOrWhiteSpace(f.Text))
+            list.Add(new("text", $"{L["Filters.Search"].Value}: {f.Text.Trim()}"));
+        foreach (var r in f.Ranks)
+            list.Add(new("rank:" + r.ToString(CultureInfo.InvariantCulture),
+                $"{L["Skills.ColRank"].Value}: {(r < 0 ? "−" + (-r).ToString(CultureInfo.InvariantCulture) : r.ToString(CultureInfo.InvariantCulture))}"));
+        foreach (var tag in f.Tags)
+            list.Add(new("tag:" + tag, $"{L["Skills.TagPrefix"].Value}: {SkillsText.TagLabel(tag, L, Terms)}"));
+        if (f.CanAppearRandomly == true) list.Add(new("random", L["Skills.FilterRandom"].Value));
+        if (f.SurgerySupported == true) list.Add(new("surgery", L["Skills.FilterSurgery"].Value));
+        if (f.MutationOnly == true) list.Add(new("mutation", L["Skills.MutationOnlyShort"].Value));
+        if (State.PassiveOwnedOnly) list.Add(new("owned", L["Skills.FilterOwned"].Value));
+        return list;
+    }
+
+    private IReadOnlyList<ActiveFilterItem> BuildActiveSkillChips()
+    {
+        var f = State.ActiveFilter;
+        var list = new List<ActiveFilterItem>();
+        if (!string.IsNullOrWhiteSpace(f.Text))
+            list.Add(new("text", $"{L["Filters.Search"].Value}: {f.Text.Trim()}"));
+        foreach (var elId in f.Elements)
+        {
+            var elName = Data.Elements.FirstOrDefault(e => string.Equals(e.Id, elId, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? elId;
+            list.Add(new("el:" + elId, L["Paldex.ChipElement", elName].Value));
+        }
+        if (f.MinPower != null || f.MaxPower != null)
+        {
+            var maxAll = Data.Actives.Select(a => a.Power).DefaultIfEmpty(700).Max();
+            var lo = f.MinPower ?? 0;
+            var hi = f.MaxPower ?? maxAll;
+            list.Add(new("power", $"{L["Skills.ColPower"].Value}: {lo.ToString(CultureInfo.InvariantCulture)}–{hi.ToString(CultureInfo.InvariantCulture)}"));
+        }
+        if (f.Inheritable == true) list.Add(new("inheritable", L["Skills.ColInherit"].Value));
+        if (f.HasSkillFruit == true) list.Add(new("fruit", L["Skills.HasFruitFilter"].Value));
+        return list;
+    }
+
+    private void RemoveActiveChip(string key)
+    {
+        if (State.ActiveTab == SkillsStateService.TabActives)
+        {
+            var f = State.ActiveFilter;
+            if (key == "text") State.ActiveFilter = f with { Text = null };
+            else if (key.StartsWith("el:", StringComparison.Ordinal))
+            {
+                var el = key["el:".Length..];
+                State.ActiveFilter = f with { Elements = f.Elements.Where(x => !string.Equals(x, el, StringComparison.OrdinalIgnoreCase)).ToList() };
+            }
+            else if (key == "power") State.ActiveFilter = f with { MinPower = null, MaxPower = null };
+            else if (key == "inheritable") State.ActiveFilter = f with { Inheritable = null };
+            else if (key == "fruit") State.ActiveFilter = f with { HasSkillFruit = null };
+            return;
+        }
+
+        var pf = State.PassiveFilter;
+        if (key == "text") State.PassiveFilter = pf with { Text = null };
+        else if (key.StartsWith("rank:", StringComparison.Ordinal) && int.TryParse(key["rank:".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r))
+            State.PassiveFilter = pf with { Ranks = pf.Ranks.Where(x => x != r).ToList() };
+        else if (key.StartsWith("tag:", StringComparison.Ordinal))
+        {
+            var tag = key["tag:".Length..];
+            State.PassiveFilter = pf with { Tags = pf.Tags.Where(x => !string.Equals(x, tag, StringComparison.OrdinalIgnoreCase)).ToList() };
+        }
+        else if (key == "random") State.PassiveFilter = pf with { CanAppearRandomly = null };
+        else if (key == "surgery") State.PassiveFilter = pf with { SurgerySupported = null };
+        else if (key == "mutation") State.PassiveFilter = pf with { MutationOnly = null };
+        else if (key == "owned") State.PassiveOwnedOnly = false;
+    }
+}

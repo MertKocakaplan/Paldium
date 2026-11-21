@@ -1,0 +1,72 @@
+@inherits LocalizedComponentBase
+
+<span class="cmenu-wrap" @onclick:stopPropagation="true">
+    <Dropdown TValue="string"
+              TriggerClass="cmenu"
+              ShowChevron="false"
+              Open="@Open"
+              OpenChanged="SetOpenAsync"
+              AnchorOrigin="Origin.BottomRight"
+              TransformOrigin="Origin.TopRight"
+              AriaLabel="@L["MyPals.CardActionsAria", PalName].Value">
+        <TriggerContent>
+            <Icon Name="more" Size="16" />
+        </TriggerContent>
+        <ChildContent>
+            <div class="cpop" role="menu" aria-label="@L["MyPals.RowActionsShort"].Value">
+                <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnEdit)">
+                    <Icon Name="edit" Size="16" />
+                    <span>@L["Common.Edit"]</span>
+                    <kbd>Enter</kbd>
+                </button>
+                <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnPlanBreed)">
+                    <Icon Name="arrow-right" Size="16" />
+                    <span>@L["MyPals.PlanBreed"]</span>
+                </button>
+                <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnOpenPaldex)">
+                    <Icon Name="eye" Size="16" />
+                    <span>@L["MyPals.OpenPaldex"]</span>
+                </button>
+                <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnTogglePreferred)">
+                    <Icon Name="@(Preferred ? "x" : "pin")" Size="16" />
+                    <span>@(Preferred ? L["MyPals.RemovePreferred"] : L["MyPals.AddPreferred"])</span>
+                </button>
+                <hr />
+                <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnTogglePlan)">
+                    <Icon Name="@(Pal.IsExcluded ? "check" : "x")" Size="16" />
+                    <span>@(Pal.IsExcluded ? L["MyPals.IncludeInPlan"] : L["MyPals.ExcludeFromPlan"])</span>
+                </button>
+                @if (Pal.Source == PalSourceKind.Manual)
+                {
+                    <button type="button" class="mi" role="menuitem" @onclick="() => RunAsync(OnRemoveManual)">
+                        <Icon Name="x" Size="16" />
+                        <span>@L["Common.Remove"]</span>
+                    </button>
+                }
+            </div>
+        </ChildContent>
+    </Dropdown>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public OwnedPal Pal { get; set; } = default!;
+    [Parameter, EditorRequired] public string PalName { get; set; } = "";
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnPlanBreed { get; set; }
+    [Parameter] public EventCallback OnOpenPaldex { get; set; }
+    [Parameter] public EventCallback OnTogglePlan { get; set; }
+    [Parameter] public bool Preferred { get; set; }
+    [Parameter] public EventCallback OnTogglePreferred { get; set; }
+    [Parameter] public EventCallback OnRemoveManual { get; set; }
+
+    private Task SetOpenAsync(bool value) =>
+        OpenChanged.HasDelegate ? OpenChanged.InvokeAsync(value) : Task.CompletedTask;
+
+    private async Task RunAsync(EventCallback callback)
+    {
+        await SetOpenAsync(false);
+        await callback.InvokeAsync();
+    }
+}

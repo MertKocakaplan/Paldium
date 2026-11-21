@@ -1,0 +1,56 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@if (string.IsNullOrEmpty(PassiveId))
+{
+    <PassivePicker Exclude="@Exclude" OnPick="OnPick" OnOpenChanged="OnPickerOpenChanged">
+        <button type="button" class="add" @onclick="context">
+            <Icon Name="plus" Size="14" />
+            <span>@L["PassivePicker.Add"]</span>
+        </button>
+    </PassivePicker>
+}
+else
+{
+    var passive = TryGet(PassiveId);
+    var name = passive?.Names.Get(Lang) ?? PassiveId;
+    var rank = passive?.Rank ?? 1;
+    var ownedLabel = L["Plan.SocketOwnedCount", OwnedCount].Value;
+    var negClass = rank < 0 ? " neg" : "";
+    var zeroClass = OwnedCount == 0 ? " zero" : "";
+
+    <div class="@($"srow{negClass}{zeroClass}")">
+        <PassivePicker Exclude="@Exclude" OnPick="OnPick" OnOpenChanged="OnPickerOpenChanged" Class="sock-picker-wrap">
+            <button type="button"
+                    class="sock-main"
+                    aria-label="@($"{name}, {ownedLabel}")"
+                    @onclick="context">
+                <RankGlyph Rank="@rank" Size="16" />
+                <span class="n">@name</span>
+                <span class="c">@ownedLabel</span>
+            </button>
+        </PassivePicker>
+        <button type="button"
+                class="x"
+                title="@L["Plan.SocketRemoveAria", name, ownedLabel].Value"
+                aria-label="@L["Plan.SocketRemoveAria", name, ownedLabel].Value"
+                @onclick="OnRemove">
+            <Icon Name="x" Size="14" />
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? PassiveId { get; set; }
+    [Parameter] public int OwnedCount { get; set; }
+    [Parameter] public IReadOnlyList<string> Exclude { get; set; } = [];
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback<bool> OnPickerOpenChanged { get; set; }
+
+    private PassiveSkill? TryGet(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+}

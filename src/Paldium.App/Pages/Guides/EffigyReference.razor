@@ -1,0 +1,126 @@
+@namespace Paldium.App.Pages.GuidesParts
+@using System.Globalization
+@using Paldium.Core.Domain
+@using Paldium.Core.Owned
+@inherits LocalizedComponentBase
+@implements IDisposable
+@inject IGameData Data
+@inject CaptureProgressStore Captures
+@inject SettingsStore Settings
+
+@* "Effigies: Pal Effigy" (screens/guides.md, T126): the 13 enhancement types of the Statue of Power from the game data: what each does, how many ranks and effigies it
+   takes, and a staged bar with a line at the end of every rank. With the player record (own save or the mod, T133) the bar is filled, the rank is worked out
+   (spent = collected - in hand) and the effigies still needed are shown; without it only the game data is shown. *@
+<div class="rread ranch transport effigy">
+    <div class="rbar">
+        <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+        <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Effigy.Title"]</b></span>
+        <span class="sp"></span>
+        <span class="note9"><Icon Name="info" Size="14" />@L["Effigy.Note"]</span>
+    </div>
+
+    <div class="tp9">
+        @if (_record?.Relics is not { Count: > 0 })
+        {
+            <p class="hint2 egn">@L["Effigy.NoData"]</p>
+        }
+        <ul class="eg9">
+            @foreach (var relic in _rows)
+            {
+                var ticks = EffigyModel.Ticks(relic);
+                var max = EffigyModel.MaxEffect(relic);
+                var culture = CultureInfo.GetCultureInfo(Lang);
+                var progress = EffigyModel.Progress(relic, EffigyModel.CountFor(_record, relic.Type), _mimogSpecies);
+                <li class="@(progress is { Maxed: true } ? "eg done" : "eg")">
+                    <div class="eh">
+                        @if (relic.IconPath != null) { <img class="ei" src="@("gamedata/" + relic.IconPath)" width="40" height="40" alt="" /> }
+                        <div class="et">
+                            <b class="nm">@relic.Names.Get(Lang)</b>
+                            <span class="m">@relic.ItemNames.Get(Lang)</span>
+                        </div>
+                    </div>
+                    <p class="ed">@relic.Descriptions.Get(Lang)</p>
+                    @if (progress is { Level: { } level } known)
+                    {
+                        <p class="er num">@RankText(relic, level, known, culture)</p>
+                    }
+                    <div class="eb" role="img" aria-label="@L["Effigy.BarAria", relic.Ranks.Count, relic.Total].Value">
+                        @if (progress is { Collected: not null } filled)
+                        {
+                            <i class="ef" style="@("width:" + (filled.Filled * 100).ToString("0.###", CultureInfo.InvariantCulture) + "%")"></i>
+                        }
+                        @foreach (var tick in ticks)
+                        {
+                            <i class="tk" style="@("left:" + (tick.Position * 100).ToString("0.###", CultureInfo.InvariantCulture) + "%")"></i>
+                        }
+                    </div>
+                    @if (progress != null)
+                    {
+                        <div class="ep num">
+                            @if (progress.Have is { } have) { <span>@L["Effigy.Have", have]</span> }
+                            @if (progress.Level == null && progress.Collected is { } collected) { <span>@L["Effigy.Collected", collected]</span> }
+                            @if (progress.Maxed) { <span class="ok">@L["Effigy.Maxed"]</span> }
+                            else if (progress.CanRankUp) { <span>@L["Effigy.CanRankUp"]</span> }
+                            else if (progress.NextNeed is { } next) { <span>@L["Effigy.NextNeed", next]</span> }
+                            @if (!progress.Maxed && progress.MaxNeed is { } maxNeed) { <span>@L["Effigy.MaxNeed", maxNeed]</span> }
+                        </div>
+                    }
+                    <div class="en num">
+                        <span>@L["Effigy.Ranks", relic.Ranks.Count]</span>
+                        <span>@L["Effigy.Total", relic.Total]</span>
+                        <span>@(max is { } effect ? L["Effigy.MaxEffect", EffigyModel.Percent(effect, culture)].Value : L["Effigy.NoEffect"].Value)</span>
+                    </div>
+                    @if (relic.Type == "MoveSpeed")
+                    {
+                        <p class="em">@L["Effigy.MimogNote"] · <a href="paldex">@L["Effigy.MimogLink"]</a></p>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<RelicInfo> _rows = [];
+    private CaptureRecord? _record;
+    private int _mimogSpecies;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _rows = EffigyModel.Rows(Data.Relics);
+        Resolve();
+        Captures.Changed += OnChanged;
+    }
+
+    // The record of the "I am" player (the world save or the mod file, whichever was read later); the Mimog count comes from the capture part of it.
+    private void Resolve()
+    {
+        (_, _record) = Captures.Resolve(Settings.Current.Scope.MyPlayerId);
+        _mimogSpecies = _record == null ? 0 : Paldium.App.Pages.PaldexParts.CaptureBarModel.Summary(_record, Data.Pals).Done;
+    }
+
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        Resolve();
+        StateHasChanged();
+    });
+
+    // "Rank 7 / 20 - effect 17.5% - next 20%" (only the parts the game table has values for; "At least" when a count does not fit the cost of a rank).
+    private string RankText(RelicInfo relic, int level, EffigyProgress progress, CultureInfo culture)
+    {
+        var effect = EffigyModel.EffectAt(relic, level);
+        var next = progress.Maxed ? null : EffigyModel.EffectAt(relic, level + 1);
+        string text;
+        if (effect == null || (effect == 0 && next == null)) text = L["Effigy.RankPlain", level, progress.MaxLevel].Value;
+        else if (next == null) text = L["Effigy.RankNoNext", level, progress.MaxLevel, EffigyModel.Percent(effect.Value, culture) + "%"].Value;
+        else text = L["Effigy.Rank", level, progress.MaxLevel, EffigyModel.Percent(effect.Value, culture) + "%", EffigyModel.Percent(next.Value, culture) + "%"].Value;
+        return progress.AtLeast ? L["Effigy.AtLeast", text].Value : text;
+    }
+
+    public override void Dispose()
+    {
+        Captures.Changed -= OnChanged;
+        base.Dispose();
+    }
+}

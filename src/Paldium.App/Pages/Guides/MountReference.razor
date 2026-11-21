@@ -1,0 +1,280 @@
+@namespace Paldium.App.Pages.GuidesParts
+@using System.Globalization
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+@inject GuideStateService State
+@inject NavigationManager Nav
+
+@* "Mounts: who is fastest" (screens/guides.md, T124): every rideable Pal in one table, worked out for a star level and the speed passives switched on above it.
+   Built from the Transport table's parts (top bar, search, check box, table styles). *@
+<div class="rread ranch transport mounts">
+    <div class="rbar">
+        <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+        <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Mounts.Title"]</b></span>
+        <span class="sp"></span>
+        <span class="note9"><Icon Name="info" Size="14" />@L["Mounts.Note"]</span>
+    </div>
+
+    <div class="tp9">
+        <div class="mpick">
+            <span class="rsel">
+                @L["Mounts.Stars"]
+                <Segmented TValue="int" Items="@StarItems()" Value="@State.MountStars" ValueChanged="SetStars" AriaLabel="@L["Mounts.Stars"].Value" />
+            </span>
+            <div class="mpas" role="group" aria-label="@L["Mounts.Passives"].Value">
+                <span class="l">@L["Mounts.Passives"]</span>
+                @foreach (var passive in _passives)
+                {
+                    var id = passive.Skill.Id;
+                    var on = State.MountPassives.Contains(id, StringComparer.Ordinal);
+                    var blocked = !on && !MountModel.CanAdd(Selection, _maxPassives);
+                    <button type="button" class="pt9" role="checkbox" aria-checked="@(on ? "true" : "false")" disabled="@blocked"
+                            title="@(blocked ? L["Mounts.MaxPassives", _maxPassives].Value : null)" @onclick="() => TogglePassive(id)">
+                        <span class="n">@passive.Skill.Names.Get(Lang)</span><b class="num">+@passive.Percent.ToString(CultureInfo.InvariantCulture)%</b>
+                    </button>
+                }
+                <button type="button" class="lnk9" disabled="@(State.MountPassives.Count == 0 && State.MountStars == 0)" @onclick="ResetSelection">@L["Mounts.Reset"]</button>
+            </div>
+        </div>
+
+        <div class="tf">
+            <SearchField Value="@State.MountQuery"
+                         ValueChanged="SetQuery"
+                         Placeholder="@L["Transport.Search"].Value"
+                         AriaLabel="@L["Transport.Search"].Value"
+                         OnEscape="() => SetQuery(string.Empty)" />
+            <span class="rsel">
+                @foreach (var kind in Kinds)
+                {
+                    var captured = kind;
+                    var on = State.MountKinds.Contains(captured, StringComparer.Ordinal);
+                    <button type="button" class="ck9" role="checkbox" aria-checked="@(on ? "true" : "false")" @onclick="() => ToggleKind(captured)">
+                        <span class="sq">@if (on) { <Icon Name="check" Size="12" /> }</span>
+                        @L["Mounts.Kind." + captured]
+                    </button>
+                }
+            </span>
+            <button type="button" class="ck9" role="checkbox" aria-checked="@(State.MountOnlyOwned ? "true" : "false")" disabled="@(OwnedCount() == 0)" @onclick="ToggleOwned">
+                <span class="sq">@if (State.MountOnlyOwned) { <Icon Name="check" Size="12" /> }</span>
+                @L["Ranch.OnlyOwned"]
+            </button>
+            <span class="m num">@(OwnedCount() == 0 ? L["Ranch.MyPalsEmpty"].Value : L["Transport.Count", _visible.Count].Value)</span>
+        </div>
+
+        @if (_visible.Count == 0)
+        {
+            <div class="noresult">
+                <p class="h">@L["Transport.NoResults"]</p>
+                <button type="button" class="btn2" @onclick="ClearFilters">@L["Transport.ClearFilters"]</button>
+            </div>
+        }
+        else
+        {
+            <div class="tscroll">
+                <table class="dt9 wide tpt mnt">
+                    <thead>
+                        <tr>
+                            @Header(MountModel.SortPal, L["Transport.Pal"].Value, "")
+                            <th class="kd">@L["Mounts.Kind"]</th>
+                            @Header(MountModel.SortSaddle, L["Mounts.Saddle"].Value, "msd")
+                            @Header(MountModel.SortWalk, L["Mounts.Walk"].Value, "mwk")
+                            @Header(MountModel.SortRun, L["Mounts.Run"].Value, "rn")
+                            @Header(MountModel.SortSprint, L["Mounts.Sprint"].Value, "sp")
+                            @Header(MountModel.SortSwim, L["Mounts.Swim"].Value, "msw")
+                            @Header(MountModel.SortSwimSprint, L["Mounts.SwimSprint"].Value, "mss")
+                            @Header(MountModel.SortStamina, L["Mounts.Stamina"].Value, "mst")
+                            @Header(MountModel.SortOwned, L["Mounts.Owned"].Value, "ow")
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _visible)
+                        {
+                            var captured = row;
+                            var pal = captured.Pal;
+                            var v = MountModel.Compute(captured, Selection, _passives);
+                            var own = OwnedOf(pal.Id);
+                            <tr tabindex="0" @onclick="() => Open(captured)" @onkeydown="e => OnRowKey(e, captured)">
+                                <th class="iname" scope="row">
+                                    <span class="inm">
+                                        <PalIcon Pal="pal" Size="32" />
+                                        <span>
+                                            <a href="@Paldium.App.Components.Links.Pal(pal.Id)" @onclick:stopPropagation="true">@pal.DisplayName(Lang)@StarMark(captured)</a>
+                                            <span class="m">
+                                                @foreach (var el in pal.Elements)
+                                                {
+                                                    var info = Data.Elements.FirstOrDefault(x => string.Equals(x.Id, el, StringComparison.OrdinalIgnoreCase));
+                                                    if (info != null) { <img class="el" src="@("gamedata/" + info.IconPath)" width="14" height="14" alt="@info.Names.Get(Lang)" title="@info.Names.Get(Lang)" /> }
+                                                }
+                                                @if (pal.Group == "terraria") { <Flag Text="@L["Transport.Terraria"].Value" /> }
+                                            </span>
+                                        </span>
+                                    </span>
+                                </th>
+                                <td class="kd">
+                                    @foreach (var kind in Kinds.Where(captured.Mount.Is))
+                                    {
+                                        <Flag Text="@L["Mounts.Kind." + kind].Value" />
+                                    }
+                                </td>
+                                <td class="msd num">@(captured.Mount.SaddleLevel?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                <td class="mwk num">@Cell(pal.Stats.WalkSpeed, v.Walk, v.MovePercent)</td>
+                                <td class="rn num">@Cell(pal.Stats.RunSpeed, v.Run, v.MovePercent)</td>
+                                <td class="sp num"><b>@Cell(pal.Stats.RideSprintSpeed, v.Sprint, v.MovePercent)</b></td>
+                                <td class="msw num">@if (v.Swim is { } swim) { @Cell(captured.Mount.SwimSpeed, swim, v.SwimPercent) } else { <text>—</text> }</td>
+                                <td class="mss num">@if (v.SwimSprint is { } swimSprint) { @Cell(captured.Mount.SwimDashSpeed, swimSprint, v.SwimPercent) } else { <text>—</text> }</td>
+                                <td class="mst num">@Cell(pal.Stats.Stamina, v.Stamina, v.StaminaPercent)</td>
+                                <td class="ow">@if (own > 0) { <span class="own">@L["Transport.OwnedCell", own]</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Kinds = [MountKind.Ground, MountKind.Flying, MountKind.Water];
+
+    [Parameter] public string? PalId { get; set; }
+
+    private IReadOnlyList<MountRow> _all = [];
+    private IReadOnlyList<MountRow> _visible = [];
+    private IReadOnlyList<MountPassive> _passives = [];
+    private int _maxPassives = 4;
+
+    private MountSelection Selection => new(State.MountStars, State.MountPassives);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+        _all = MountModel.Rows(Data.Pals);
+        _passives = MountModel.Passives(Data.Passives);
+        _maxPassives = Data.Mechanics.MaxPassives;
+        Refresh();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // /guides/binekler?pal=<id> (from the library search): the search box starts with that Pal's name.
+        if (!string.IsNullOrEmpty(PalId) && _all.FirstOrDefault(r => r.Pal.Id == PalId) is { } row)
+        {
+            State.MountQuery = row.Pal.Names.Get(Lang);
+            Refresh();
+        }
+    }
+
+    protected override void OnUiLanguageChanged() => Refresh();
+
+    private void OnScopeChanged(object? sender, EventArgs e) => _ = InvokeAsync(() => { Refresh(); StateHasChanged(); });
+
+    private int OwnedCount() => Scope.ScopedPals.Count(p => !p.IsExcluded && _all.Any(x => x.Pal.Id == p.SpeciesId));
+
+    private int OwnedOf(string palId) => _owned.GetValueOrDefault(palId);
+
+    // The owned counts are worked out once per refresh, not once per row and sort comparison.
+    private Dictionary<string, int> _owned = new(StringComparer.OrdinalIgnoreCase);
+
+    private void Refresh()
+    {
+        _owned = Scope.ScopedPals.Where(p => !p.IsExcluded).GroupBy(p => p.SpeciesId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        int Owned(string id) => _owned.GetValueOrDefault(id);
+        var filtered = MountModel.Filter(_all, State.MountQuery, Lang, State.MountKinds, State.MountOnlyOwned, Owned);
+        _visible = MountModel.Sort(filtered, State.MountSort, State.MountDescending, Lang, Owned, Selection, _passives);
+    }
+
+    private IReadOnlyList<SegmentedItem<int>> StarItems() =>
+        Enumerable.Range(0, MountModel.MaxStars + 1).Select(n => new SegmentedItem<int>(n, n.ToString(CultureInfo.InvariantCulture) + " ★")).ToList();
+
+    private Task SetQuery(string value) { State.MountQuery = value; Refresh(); return Task.CompletedTask; }
+    private void SetStars(int stars) { State.MountStars = stars; Refresh(); }
+    private void ToggleOwned() { State.MountOnlyOwned = !State.MountOnlyOwned; Refresh(); }
+
+    private void ToggleKind(string kind)
+    {
+        State.MountKinds = State.MountKinds.Contains(kind, StringComparer.Ordinal) ? State.MountKinds.Where(k => k != kind).ToList() : [.. State.MountKinds, kind];
+        Refresh();
+    }
+
+    private void TogglePassive(string id)
+    {
+        State.MountPassives = MountModel.Toggle(Selection, id, _maxPassives).PassiveIds;
+        Refresh();
+    }
+
+    private void ResetSelection()
+    {
+        State.MountStars = 0;
+        State.MountPassives = [];
+        Refresh();
+    }
+
+    private void ClearFilters()
+    {
+        State.MountQuery = "";
+        State.MountKinds = [];
+        State.MountOnlyOwned = false;
+        Refresh();
+    }
+
+    // A header click sorts by that column (descending for numbers, ascending for the Pal column); a second click turns the order round.
+    private void SortBy(string key)
+    {
+        if (State.MountSort == key) State.MountDescending = !State.MountDescending;
+        else { State.MountSort = key; State.MountDescending = MountModel.DefaultDescending(key); }
+        Refresh();
+    }
+
+    private void Open(MountRow row) => Nav.NavigateTo(Paldium.App.Components.Links.Pal(row.Pal.Id));
+
+    private void OnRowKey(KeyboardEventArgs e, MountRow row)
+    {
+        if (e.Key is "Enter" or " ") Open(row);
+    }
+
+    // A value that the selection changed is shown in the accent colour with the base and the percentage as its tip; the others are plain numbers.
+    private RenderFragment Cell(int baseValue, int shown, int percent) => __builder =>
+    {
+        var text = shown.ToString("N0", CultureInfo.GetCultureInfo(Lang));
+        if (percent != 0 && shown != baseValue)
+        {
+            <span class="chg" title="@L["Mounts.CellTip", baseValue.ToString("N0", CultureInfo.GetCultureInfo(Lang)), percent].Value">@text</span>
+        }
+        else
+        {
+            @text
+        }
+    };
+
+    // A star beside the name: the partner skill gives a speed bonus by star (counted when it is unconditional, only told when it depends on a condition).
+    private RenderFragment StarMark(MountRow row) => __builder =>
+    {
+        var counted = new[] { MountModel.StarBonuses(row.Mount), MountModel.StarBonuses(row.Mount, swim: true) }.FirstOrDefault(x => x != null);
+        var conditional = MountModel.ConditionalBonuses(row.Mount);
+        if (counted == null && conditional == null) return;
+        string tip;
+        if (counted != null) tip = string.Join(" · ", counted.Select(x => L["Mounts.StarTip", x.Stars, x.Percent].Value));
+        else tip = L["Mounts.ConditionalTip", row.Pal.PartnerSkill?.Names.Get(Lang) ?? "", string.Join(" · ", conditional!.Select(x => L["Mounts.StarTip", x.Stars, x.Percent].Value))].Value;
+        <span class="smk" title="@tip">★</span>
+    };
+
+    private RenderFragment Header(string key, string label, string cls) => __builder =>
+    {
+        var sorted = State.MountSort == key;
+        <th class="@cls" aria-sort="@(sorted ? (State.MountDescending ? "descending" : "ascending") : null)">
+            <button type="button" @onclick="() => SortBy(key)">
+                @label
+                @if (sorted) { <Icon Name="@(State.MountDescending ? "chevron-down" : "chevron-up")" Size="14" /> }
+            </button>
+        </th>
+    };
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+}

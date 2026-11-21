@@ -1,0 +1,126 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* Paldex species card (relaxed 324px or dense 194px; x.css .card.sp). *@
+@{
+    var tabIndex = GridSlot == null || GridSlot.IsTabStop ? 0 : -1;
+    var el1 = Pal.Elements.Count > 0 ? Pal.Elements[0].ToLowerInvariant() : "normal";
+    var el2 = Pal.Elements.Count > 1 ? Pal.Elements[1].ToLowerInvariant() : el1;
+    var cardClass = $"card sp el-{el1} el2-{el2}";
+    var iconSize = Dense ? 60 : 84;
+}
+<li class="@cardClass"
+    role="listitem"
+    data-card-index="@GridSlot?.Index"
+    aria-selected="@(Selected ? "true" : "false")">
+    <button type="button"
+            class="card-act"
+            tabindex="@tabIndex"
+            aria-label="@BuildAriaLabel()"
+            @onfocus="NotifyFocused"
+            @onclick="() => OnOpen.InvokeAsync(Pal)"></button>
+
+    <div class="ctop">
+        <span class="t"><span class="nm">@Pal.Names.Get(Lang)</span></span>
+        <OwnedCountBadge Stats="OwnedStats" />
+    </div>
+
+    <div class="art">
+        <span class="no">#@Pal.DexLabel</span>
+        @if (Pal.Elements.Count > 0)
+        {
+            <span class="tr">
+                <span class="els">
+                    @foreach (var elId in Pal.Elements)
+                    {
+                        var elInfo = FindElement(elId);
+                        if (elInfo != null)
+                        {
+                            var elName = elInfo.Names.Get(Lang);
+                            <img src="@("gamedata/" + elInfo.IconPath)" width="16" height="16" alt="@elName" title="@elName" />
+                        }
+                    }
+                </span>
+            </span>
+        }
+        <img class="pal" src="@("gamedata/" + Pal.IconPath)" width="@iconSize" height="@iconSize" alt="" />
+        @if (!Dense && (Pal.Nocturnal || Pal.BreedingFlags.SameSpeciesOnly))
+        {
+            <span class="flags">
+                @if (Pal.Nocturnal)
+                {
+                    <Flag Text="@L["Paldex.FlagNight"].Value" />
+                }
+                @if (Pal.BreedingFlags.SameSpeciesOnly)
+                {
+                    <Flag Text="@L["Paldex.FlagSameSpecies"].Value" />
+                }
+            </span>
+        }
+    </div>
+
+    @if (!Dense)
+    {
+        <div class="ivband" aria-hidden="true">
+            <span>@L["Paldex.StatPowerShort"]<b>@Pal.BreedingPower.ToString(CultureInfo.InvariantCulture)</b></span>
+            <span>@L["Paldex.Rarity"]<b>@Pal.Rarity.ToString(CultureInfo.InvariantCulture)</b></span>
+            <span>@L["Paldex.StatSizeShort"]<b>@Pal.Size</b></span>
+        </div>
+    }
+
+    <WorkLine Pal="Pal" MaxRows="@(Dense ? 3 : 4)" />
+
+    @if (!Dense)
+    {
+        <div class="cfoot stats">
+            <span>@L["Paldex.StatHpShort"]<b>@Pal.Stats.Hp.ToString(CultureInfo.InvariantCulture)</b></span>
+            <span>@L["Paldex.StatAtkShort"]<b>@Pal.Stats.Attack.ToString(CultureInfo.InvariantCulture)</b></span>
+            <span>@L["Paldex.StatDefShort"]<b>@Pal.Stats.Defense.ToString(CultureInfo.InvariantCulture)</b></span>
+        </div>
+    }
+</li>
+
+@code {
+    [CascadingParameter] public CardGridSlot? GridSlot { get; set; }
+
+    [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
+    [Parameter] public OwnedSpeciesStats? OwnedStats { get; set; }
+    [Parameter] public bool Dense { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback<PalSpecies> OnOpen { get; set; }
+
+    private void NotifyFocused()
+    {
+        GridSlot?.NotifyFocused.Invoke(GridSlot.Index);
+    }
+
+    private ElementInfo? FindElement(string id)
+    {
+        foreach (var element in Data.Elements)
+        {
+            if (string.Equals(element.Id, id, StringComparison.OrdinalIgnoreCase))
+                return element;
+        }
+        return null;
+    }
+
+    private string BuildAriaLabel()
+    {
+        var elements = Pal.Elements.Count > 0
+            ? string.Join(" / ", Pal.Elements.Select(e => FindElement(e)?.Names.Get(Lang) ?? e))
+            : "-";
+
+        var works = Data.WorkTypes
+            .Where(w => Pal.Work.TryGetValue(w.Id, out var lv) && lv > 0)
+            .Select(w => (Type: w, Level: Pal.Work[w.Id]))
+            .OrderByDescending(x => x.Level)
+            .Select(x => $"{x.Type.Names.Get(Lang)} {x.Level.ToString(CultureInfo.InvariantCulture)}")
+            .ToList();
+
+        var workText = works.Count > 0
+            ? L["Paldex.CardAriaWork", string.Join(", ", works)].Value
+            : L["Paldex.CardAriaWorkNone"].Value;
+
+        return L["Paldex.CardAria", Pal.Names.Get(Lang), Pal.DexLabel, elements, workText].Value;
+    }
+}

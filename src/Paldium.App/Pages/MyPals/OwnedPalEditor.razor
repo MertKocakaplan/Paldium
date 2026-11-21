@@ -1,0 +1,791 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@using Paldium.Core.Owned
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IOwnedPalRepository Repository
+@inject IJSRuntime JS
+@inject PreferredPalActions PreferredActions
+
+<SidePanel Open="@Open"
+           Drawer="@Drawer"
+           Title="@PanelTitle"
+           OnClose="RequestCloseAsync">
+    <ChildContent>
+        @if (_species != null)
+        {
+            <div class="who">
+                <PalIcon Pal="@_species" Size="48" />
+                <div class="who-txt">
+                    <div class="t">
+                        <span class="nm">@_species.DisplayName(Lang)</span>
+                        <GenderIcon Gender="@ParsedGender" Size="14" />
+                        @if (!string.IsNullOrWhiteSpace(_nickname))
+                        {
+                            <span class="nick">@_nickname.Trim()</span>
+                        }
+                    </div>
+                    <div class="m">
+                        <span class="num">@($"#{_species.DexNo}")</span> · @SpeciesElements(_species)@CondenseSuffix()
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_isNew)
+        {
+            <div class="who who-empty">
+                <span class="who-ph" aria-hidden="true">?</span>
+                <div class="who-txt">
+                    <div class="t">@L["Editor.AddTitle"]</div>
+                    <div class="m">@L["Editor.NewSpeciesHint"]</div>
+                </div>
+            </div>
+        }
+
+        @if (Existing != null)
+        {
+            var loc = Existing.Location;
+            var hasBox = (Paldium.Core.Domain.PalLocation.IsPaged(loc.Kind) || loc.Kind == LocationKind.GlobalStorage)
+                && loc.SlotIndex is { } slotIdx && slotIdx >= 0 && slotIdx < Paldium.Core.Domain.PalLocation.PageSize;
+            var (container, pageText, slotText) = LocationText.ThreeLine(Existing, Terms, L);
+            var titleLine = string.IsNullOrEmpty(pageText) ? container : $"{container}, {pageText}";
+            var subLine = BuildLocationSubline(Existing, slotText);
+
+            <div class="locl">
+                @if (hasBox)
+                {
+                    <BoxMap Slot="@loc.SlotIndex!.Value" />
+                }
+                else
+                {
+                    <LocationTile Kind="@loc.Kind" Size="33" />
+                }
+                <span class="locl-t">
+                    <b>@titleLine</b>
+                    @if (!string.IsNullOrEmpty(subLine))
+                    {
+                        <span>@subLine</span>
+                    }
+                </span>
+            </div>
+        }
+
+        @if (_isSource)
+        {
+            <div class="info">
+                <Icon Name="info" Size="16" />
+                <span>@L["Editor.SourceNote"]</span>
+            </div>
+        }
+
+        @if (_isNew)
+        {
+            <div class="fld">
+                <span class="l">@L["Editor.Species"]</span>
+                <PalPicker Mode="PalPicker.PickerMode.Species"
+                           Value="@_species"
+                           ValueChanged="SetSpecies"
+                           Placeholder="@L["Picker.Placeholder"].Value" />
+            </div>
+        }
+
+        <div class="frow">
+            <div class="fld">
+                <span class="l">
+                    @if (ChangedGender)
+                    {
+                        <span class="chg" aria-hidden="true"></span>
+                    }
+                    @L["Editor.Gender"]
+                </span>
+                <div class="gseg" role="group" aria-label="@L["Editor.Gender"].Value">
+                    <button type="button"
+                            aria-pressed="@(_gender == "male" ? "true" : "false")"
+                            aria-selected="@(_gender == "male" ? "true" : null)"
+                            @onclick='() => ToggleGender("male")'>
+                        <GenderIcon Gender="Gender.Male" />
+                        <span>@L["Common.Male"]</span>
+                    </button>
+                    <button type="button"
+                            aria-pressed="@(_gender == "female" ? "true" : "false")"
+                            aria-selected="@(_gender == "female" ? "true" : null)"
+                            @onclick='() => ToggleGender("female")'>
+                        <GenderIcon Gender="Gender.Female" />
+                        <span>@L["Common.Female"]</span>
+                    </button>
+                </div>
+                @if (ChangedGender)
+                {
+                    <span class="h">@L["Editor.AtSource", FormatGender(_raw!.Gender)]</span>
+                }
+                else if (ParsedGender == null)
+                {
+                    <span class="h">@L["Editor.UnknownHint"]</span>
+                }
+            </div>
+
+            <div class="fld">
+                <span class="l">
+                    @if (ChangedLevel)
+                    {
+                        <span class="chg" aria-hidden="true"></span>
+                    }
+                    @L["Editor.Level"]
+                </span>
+                <input type="number"
+                       class="inp"
+                       min="1"
+                       max="100"
+                       aria-label="@L["Editor.Level"].Value"
+                       value="@_level.ToString(CultureInfo.InvariantCulture)"
+                       @oninput="OnLevelInput" />
+                @if (ChangedLevel)
+                {
+                    <span class="h">@L["Editor.AtSource", _raw!.Level.ToString(CultureInfo.InvariantCulture)]</span>
+                }
+            </div>
+        </div>
+
+        <div class="fld">
+            <span class="l">
+                @if (ChangedPassives)
+                {
+                    <span class="chg" aria-hidden="true"></span>
+                }
+                @L["Editor.PassivesCount", _passives.Count]
+            </span>
+            <div class="sock">
+                @foreach (var id in _passives)
+                {
+                    var pid = id;
+                    var passive = TryPassive(pid);
+                    var rank = passive?.Rank ?? 1;
+                    var name = passive?.Names.Get(Lang) ?? pid;
+                    <div class="@($"srow{(rank < 0 ? " neg" : "")}")">
+                        <RankGlyph Rank="@rank" Size="16" />
+                        <span class="n">@name</span>
+                        <button type="button"
+                                class="x"
+                                title="@L["Common.Remove"].Value"
+                                aria-label="@($"{L["Common.Remove"].Value}: {name}")"
+                                @onclick="() => RemovePassive(pid)">
+                            <Icon Name="x" Size="14" />
+                        </button>
+                    </div>
+                }
+                @if (_passives.Count < 4)
+                {
+                    <PassivePicker Exclude="@_passives" OnPick="AddPassive">
+                        <button type="button" class="add" @onclick="context">
+                            <Icon Name="plus" Size="14" />
+                            <span class="n">@L["PassivePicker.Add"]</span>
+                        </button>
+                    </PassivePicker>
+                }
+            </div>
+            @if (ChangedPassives)
+            {
+                <span class="h">@PassivesDiffHint()</span>
+            }
+        </div>
+
+        <div class="fld">
+            <span class="l">
+                @if (ChangedIvs)
+                {
+                    <span class="chg" aria-hidden="true"></span>
+                }
+                @L["Editor.IvsShort"]
+            </span>
+            <div class="iv3">
+                <input type="number"
+                       class="@($"inp{(string.IsNullOrWhiteSpace(_ivHpText) ? " ph" : "")}")"
+                       min="0"
+                       max="100"
+                       placeholder="@L["Editor.IvHpPlaceholder"].Value"
+                       aria-label="@L["Editor.IvHp"].Value"
+                       value="@_ivHpText"
+                       @oninput="OnIvHpInput" />
+                <input type="number"
+                       class="@($"inp{(string.IsNullOrWhiteSpace(_ivAtkText) ? " ph" : "")}")"
+                       min="0"
+                       max="100"
+                       placeholder="@L["Editor.IvAtkPlaceholder"].Value"
+                       aria-label="@L["Editor.IvAttack"].Value"
+                       value="@_ivAtkText"
+                       @oninput="OnIvAtkInput" />
+                <input type="number"
+                       class="@($"inp{(string.IsNullOrWhiteSpace(_ivDefText) ? " ph" : "")}")"
+                       min="0"
+                       max="100"
+                       placeholder="@L["Editor.IvDefPlaceholder"].Value"
+                       aria-label="@L["Editor.IvDefense"].Value"
+                       value="@_ivDefText"
+                       @oninput="OnIvDefInput" />
+            </div>
+            @if (ChangedIvs)
+            {
+                <span class="h">@L["Editor.AtSource", FormatIvs(_raw!.Ivs)] · @L["Editor.IvEmptyHint"]</span>
+            }
+            else
+            {
+                <span class="h">@L["Editor.IvEmptyHint"]</span>
+            }
+        </div>
+
+        @if (_isNew || _isManual)
+        {
+            <div class="frow">
+                <div class="fld">
+                    <span class="l">@L["Editor.Nickname"]</span>
+                    <input type="text"
+                           class="inp"
+                           aria-label="@L["Editor.Nickname"].Value"
+                           value="@_nickname"
+                           @oninput="OnNicknameInput" />
+                </div>
+                <div class="fld">
+                    <span class="l">@L["Editor.CondenseRankShort"]</span>
+                    <Stepper Value="@_rank"
+                             ValueChanged="SetRank"
+                             Min="1"
+                             Max="5"
+                             AriaLabel="@L["Editor.Rank"].Value" />
+                </div>
+            </div>
+        }
+
+        <div class="fld">
+            <span class="l">@L["Editor.PlanningLabel"]</span>
+            <button type="button"
+                    class="use-row"
+                    role="switch"
+                    aria-checked="@(!_excluded ? "true" : "false")"
+                    @onclick="ToggleUse">
+                <span class="use" aria-pressed="@(!_excluded ? "true" : "false")" aria-hidden="true">
+                    @if (!_excluded)
+                    {
+                        <Icon Name="check" Size="14" />
+                    }
+                </span>
+                <span>@L["MyPals.ColUse"]</span>
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="ed-err" role="alert">
+                <Icon Name="warn" Size="16" />
+                <span>@_error</span>
+            </div>
+        }
+    </ChildContent>
+
+    <Footer>
+        @if (_isSource && _hasCorrections)
+        {
+            <button type="button" class="danger" @onclick="OpenRevertDialogAsync">
+                <Icon Name="undo" Size="14" />
+                <span>@L["Editor.Revert"]</span>
+            </button>
+        }
+        else if (_isManual && Existing != null)
+        {
+            <button type="button" class="danger" @onclick="OpenRemoveDialogAsync">
+                <Icon Name="x" Size="14" />
+                <span>@L["Common.Remove"]</span>
+            </button>
+        }
+        @if (Existing != null)
+        {
+            <button type="button" class="ghostb" @onclick="() => PreferredActions.Toggle(Existing)">
+                <Icon Name="@(PreferredActions.IsPreferred(Existing) ? "x" : "pin")" Size="14" />
+                <span>@(PreferredActions.IsPreferred(Existing) ? L["MyPals.RemovePreferred"] : L["MyPals.AddPreferred"])</span>
+            </button>
+        }
+        <span class="sp"></span>
+        <button type="button" class="ghostb" @onclick="DiscardAndCloseAsync">@L["Editor.Discard"]</button>
+        <button type="button" class="save" disabled="@(!CanSubmit)" @onclick="Submit">@L["Common.Save"]</button>
+    </Footer>
+</SidePanel>
+
+<dialog @ref="_revertDialog" class="pb-dlg" aria-labelledby="pb-revert-title">
+    <h3 id="pb-revert-title">@L["Editor.RevertConfirmTitle"]</h3>
+    <p>@L["Editor.RevertConfirmBody"]</p>
+    <div class="dlg-foot">
+        <button type="button" class="ghostb" @onclick="CloseRevertDialogAsync">@L["Common.Cancel"]</button>
+        <button type="button" class="danger-fill" @onclick="ConfirmRevertAsync">@L["Editor.Revert"]</button>
+    </div>
+</dialog>
+
+<dialog @ref="_removeDialog" class="pb-dlg" aria-labelledby="pb-remove-title">
+    <h3 id="pb-remove-title">@L["Editor.RemoveConfirmTitle"]</h3>
+    <p>@L["MyPals.ConfirmRemove"]</p>
+    <div class="dlg-foot">
+        <button type="button" class="ghostb" @onclick="CloseRemoveDialogAsync">@L["Common.Cancel"]</button>
+        <button type="button" class="danger-fill" @onclick="ConfirmRemoveAsync">@L["Common.Remove"]</button>
+    </div>
+</dialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public bool Drawer { get; set; }
+    [Parameter] public OwnedPal? Existing { get; set; }
+    [Parameter] public int AddSession { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnSaved { get; set; }
+    [Parameter] public EventCallback OnRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnDirtyChanged { get; set; }
+
+    private ElementReference _revertDialog;
+    private ElementReference _removeDialog;
+
+    private string? _loadedKey;
+    private OwnedPal? _loadedSnapshotRef;
+    private bool _isNew;
+    private bool _isManual;
+    private bool _isSource;
+    private bool _hasCorrections;
+
+    private PalSpecies? _species;
+    private string _gender = string.Empty;
+    private int _level = 1;
+    private int _rank = 1;
+    private List<string> _passives = [];
+    private string _ivHpText = string.Empty;
+    private string _ivAtkText = string.Empty;
+    private string _ivDefText = string.Empty;
+    private string _nickname = string.Empty;
+    private bool _excluded;
+    private string? _error;
+
+    private OwnedPal? _raw;
+
+    private string? _initialSpeciesId;
+    private string _initialGender = string.Empty;
+    private int _initialLevel = 1;
+    private int _initialRank = 1;
+    private List<string> _initialPassives = [];
+    private string _initialIvHp = string.Empty;
+    private string _initialIvAtk = string.Empty;
+    private string _initialIvDef = string.Empty;
+    private string _initialNickname = string.Empty;
+    private bool _initialExcluded;
+    private bool _lastReportedDirty;
+
+    public bool HasUnsavedChanges => Open && ComputeDirty();
+
+    private string PanelTitle => _isNew ? L["Editor.AddTitle"].Value : L["Editor.EditTitle"].Value;
+
+    protected override void OnParametersSet()
+    {
+        if (!Open)
+        {
+            _loadedKey = null;
+            _loadedSnapshotRef = null;
+            ReportDirtyIfChanged(false);
+            return;
+        }
+
+        var key = Existing == null ? $"__new__:{AddSession}" : Existing.Uid;
+        if (!string.Equals(_loadedKey, key, StringComparison.Ordinal))
+        {
+            _loadedKey = key;
+            _loadedSnapshotRef = Existing;
+            LoadState();
+        }
+        else if (Existing != null && !ReferenceEquals(_loadedSnapshotRef, Existing))
+        {
+            _loadedSnapshotRef = Existing;
+            if (!_lastReportedDirty)
+                LoadState();
+            else
+            {
+                _raw = Repository.RawPal(Existing.Uid) ?? Existing;
+                _hasCorrections = Repository.Current.Overrides.TryGetValue(Existing.Uid, out var patch) && patch.HasCorrections;
+            }
+        }
+    }
+
+    private void LoadState()
+    {
+        _error = null;
+
+        if (Existing == null)
+        {
+            _isNew = true;
+            _isManual = true;
+            _isSource = false;
+            _hasCorrections = false;
+            _raw = null;
+
+            _species = null;
+            _gender = string.Empty;
+            _level = 1;
+            _rank = 1;
+            _passives = [];
+            _ivHpText = string.Empty;
+            _ivAtkText = string.Empty;
+            _ivDefText = string.Empty;
+            _nickname = string.Empty;
+            _excluded = false;
+        }
+        else
+        {
+            _isNew = false;
+            _isManual = Existing.Source == PalSourceKind.Manual;
+            _isSource = !_isManual;
+            _species = TrySpecies(Existing.SpeciesId);
+            _gender = FormatGenderCode(Existing.Gender);
+            _level = Existing.Level;
+            _rank = Existing.Rank;
+            _passives = Existing.Passives.ToList();
+            _ivHpText = Existing.Ivs?.Hp.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _ivAtkText = Existing.Ivs?.Attack.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _ivDefText = Existing.Ivs?.Defense.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _nickname = Existing.Nickname ?? string.Empty;
+            _excluded = Existing.IsExcluded;
+            _hasCorrections = Repository.Current.Overrides.TryGetValue(Existing.Uid, out var patch) && patch.HasCorrections;
+            _raw = Repository.RawPal(Existing.Uid) ?? Existing;
+        }
+
+        _initialSpeciesId = _species?.Id;
+        _initialGender = _gender;
+        _initialLevel = _level;
+        _initialRank = _rank;
+        _initialPassives = _passives.ToList();
+        _initialIvHp = _ivHpText;
+        _initialIvAtk = _ivAtkText;
+        _initialIvDef = _ivDefText;
+        _initialNickname = _nickname;
+        _initialExcluded = _excluded;
+
+        ReportDirtyIfChanged(false);
+    }
+
+    private bool ComputeDirty()
+    {
+        if (!string.Equals(_species?.Id, _initialSpeciesId, StringComparison.Ordinal)) return true;
+        if (!string.Equals(_gender, _initialGender, StringComparison.Ordinal)) return true;
+        if (_level != _initialLevel) return true;
+        if (_rank != _initialRank) return true;
+        if (!_passives.SequenceEqual(_initialPassives, StringComparer.Ordinal)) return true;
+        if (!string.Equals(_ivHpText.Trim(), _initialIvHp.Trim(), StringComparison.Ordinal)) return true;
+        if (!string.Equals(_ivAtkText.Trim(), _initialIvAtk.Trim(), StringComparison.Ordinal)) return true;
+        if (!string.Equals(_ivDefText.Trim(), _initialIvDef.Trim(), StringComparison.Ordinal)) return true;
+        if (!string.Equals(_nickname, _initialNickname, StringComparison.Ordinal)) return true;
+        if (_excluded != _initialExcluded) return true;
+        return false;
+    }
+
+    private void NotifyDirty() => ReportDirtyIfChanged(ComputeDirty());
+
+    private void ReportDirtyIfChanged(bool dirty)
+    {
+        if (_lastReportedDirty == dirty) return;
+        _lastReportedDirty = dirty;
+        if (OnDirtyChanged.HasDelegate)
+            _ = OnDirtyChanged.InvokeAsync(dirty);
+    }
+
+    private bool CanSubmit => _isNew
+        ? _species != null
+        : HasUnsavedChanges;
+
+    private bool ChangedGender => _isSource && _raw != null && ParsedGender != _raw.Gender;
+    private bool ChangedLevel => _isSource && _raw != null && _level != _raw.Level;
+    private bool ChangedPassives => _isSource && _raw != null && !_passives.SequenceEqual(_raw.Passives, StringComparer.Ordinal);
+    private bool ChangedIvs => _isSource && _raw != null && (!TryParseIvs(out var parsed, out _) || parsed != _raw.Ivs);
+
+    private Gender? ParsedGender => _gender switch
+    {
+        "male" => Gender.Male,
+        "female" => Gender.Female,
+        _ => null,
+    };
+
+    private static string FormatGenderCode(Gender? gender) => gender switch
+    {
+        Gender.Male => "male",
+        Gender.Female => "female",
+        _ => string.Empty,
+    };
+
+    private void SetSpecies(PalSpecies? pal)
+    {
+        _species = pal;
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void ToggleGender(string code)
+    {
+        _gender = string.Equals(_gender, code, StringComparison.Ordinal) ? string.Empty : code;
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void OnLevelInput(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var lv))
+            _level = lv;
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void AddPassive(string id)
+    {
+        if (_passives.Count >= 4 || _passives.Contains(id, StringComparer.OrdinalIgnoreCase)) return;
+        _passives.Add(id);
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void RemovePassive(string id)
+    {
+        _passives.Remove(id);
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void OnIvHpInput(ChangeEventArgs e) { _ivHpText = e.Value?.ToString() ?? string.Empty; _error = null; NotifyDirty(); }
+    private void OnIvAtkInput(ChangeEventArgs e) { _ivAtkText = e.Value?.ToString() ?? string.Empty; _error = null; NotifyDirty(); }
+    private void OnIvDefInput(ChangeEventArgs e) { _ivDefText = e.Value?.ToString() ?? string.Empty; _error = null; NotifyDirty(); }
+    private void OnNicknameInput(ChangeEventArgs e) { _nickname = e.Value?.ToString() ?? string.Empty; _error = null; NotifyDirty(); }
+
+    private void SetRank(int rank)
+    {
+        _rank = Math.Clamp(rank, 1, 5);
+        _error = null;
+        NotifyDirty();
+    }
+
+    private void ToggleUse()
+    {
+        _excluded = !_excluded;
+        _error = null;
+        NotifyDirty();
+    }
+
+    private bool TryParseIvs(out Ivs? ivs, out string? error)
+    {
+        error = null;
+        var hpBlank = string.IsNullOrWhiteSpace(_ivHpText);
+        var atkBlank = string.IsNullOrWhiteSpace(_ivAtkText);
+        var defBlank = string.IsNullOrWhiteSpace(_ivDefText);
+
+        if (hpBlank && atkBlank && defBlank)
+        {
+            ivs = null;
+            return true;
+        }
+
+        if (hpBlank || atkBlank || defBlank ||
+            !int.TryParse(_ivHpText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var hp) ||
+            !int.TryParse(_ivAtkText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var atk) ||
+            !int.TryParse(_ivDefText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var def))
+        {
+            ivs = null;
+            error = L["Editor.IvIncomplete"].Value;
+            return false;
+        }
+
+        ivs = new Ivs(hp, atk, def);
+        return true;
+    }
+
+    public bool TrySave()
+    {
+        _error = null;
+        if (_species == null)
+        {
+            _error = L["Editor.SpeciesRequired"].Value;
+            return false;
+        }
+
+        if (!TryParseIvs(out var parsedIvs, out var ivError))
+        {
+            _error = ivError;
+            return false;
+        }
+
+        try
+        {
+            string savedUid;
+            if (_isSource)
+            {
+                var pal = Existing!;
+                Repository.Current.Overrides.TryGetValue(pal.Uid, out var previous);
+                var diff = PalOverride.Diff(_raw ?? pal, ParsedGender, _level, _passives.ToList(), parsedIvs, previous) with
+                {
+                    IsExcluded = _excluded ? true : null,
+                };
+                Repository.SetOverride(pal.Uid, diff);
+                savedUid = pal.Uid;
+            }
+            else
+            {
+                var draft = new OwnedPalDraft
+                {
+                    SpeciesId = _species.Id,
+                    Gender = ParsedGender,
+                    Level = _level,
+                    Rank = _rank,
+                    Passives = _passives.ToList(),
+                    Ivs = parsedIvs,
+                    Nickname = string.IsNullOrWhiteSpace(_nickname) ? null : _nickname.Trim(),
+                    EquippedAttacks = Existing?.EquippedAttacks ?? [],
+                    LearnedAttacks = Existing?.LearnedAttacks ?? [],
+                    Location = Existing?.Location ?? new Paldium.Core.Domain.PalLocation(LocationKind.Unknown, null, null, null),
+                    IsExcluded = _excluded,
+                };
+
+                if (Existing == null)
+                    savedUid = Repository.AddManual(draft).Uid;
+                else
+                {
+                    Repository.UpdateManual(Existing.Uid, draft);
+                    savedUid = Existing.Uid;
+                }
+            }
+
+            _loadedKey = savedUid;
+            if (Repository.Current.Find(savedUid) is { } updated)
+            {
+                Existing = updated;
+                LoadState();
+            }
+            else
+            {
+                ReportDirtyIfChanged(false);
+            }
+
+            if (OnSaved.HasDelegate)
+                _ = OnSaved.InvokeAsync(savedUid);
+            return true;
+        }
+        catch (OwnedPalValidationException ex)
+        {
+            _error = L[ex.Key].Value;
+            return false;
+        }
+    }
+
+    private void Submit() => _ = TrySave();
+
+    public void ResetDraft()
+    {
+        LoadState();
+        StateHasChanged();
+    }
+
+    private async Task DiscardAndCloseAsync()
+    {
+        LoadState();
+        await OnClose.InvokeAsync();
+    }
+
+    private Task RequestCloseAsync() => OnClose.InvokeAsync();
+
+    private async Task OpenRevertDialogAsync() =>
+        await JS.InvokeVoidAsync("pbShowModal", _revertDialog);
+
+    private async Task CloseRevertDialogAsync() =>
+        await JS.InvokeVoidAsync("pbCloseModal", _revertDialog);
+
+    private async Task ConfirmRevertAsync()
+    {
+        await CloseRevertDialogAsync();
+        var pal = Existing;
+        if (pal == null) return;
+        Repository.Current.Overrides.TryGetValue(pal.Uid, out var previous);
+        Repository.SetOverride(pal.Uid, new PalOverride { IsExcluded = previous?.IsExcluded });
+        _loadedKey = null;
+        if (Repository.Current.Find(pal.Uid) is { } updated)
+        {
+            Existing = updated;
+            _loadedKey = updated.Uid;
+            LoadState();
+        }
+        if (OnSaved.HasDelegate)
+            await OnSaved.InvokeAsync(pal.Uid);
+    }
+
+    private async Task OpenRemoveDialogAsync() =>
+        await JS.InvokeVoidAsync("pbShowModal", _removeDialog);
+
+    private async Task CloseRemoveDialogAsync() =>
+        await JS.InvokeVoidAsync("pbCloseModal", _removeDialog);
+
+    private async Task ConfirmRemoveAsync()
+    {
+        await CloseRemoveDialogAsync();
+        if (Existing == null) return;
+        Repository.RemoveManual(Existing.Uid);
+        ReportDirtyIfChanged(false);
+        await OnRemoved.InvokeAsync();
+    }
+
+    private PalSpecies? TrySpecies(string id) =>
+        Data.TryNormalizePalId(id, out var cid) ? Data.Pal(cid) : null;
+
+    private PassiveSkill? TryPassive(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private string SpeciesElements(PalSpecies s) =>
+        string.Join(" / ", s.Elements.Select(id =>
+            Data.Elements.FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id));
+
+    private string CondenseSuffix() =>
+        _rank > 1 ? $" · ★{(_rank - 1).ToString(CultureInfo.InvariantCulture)}" : string.Empty;
+
+    private string BuildLocationSubline(OwnedPal pal, string slotText)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(slotText)) parts.Add(slotText);
+        if (pal.Owner != null && !string.IsNullOrWhiteSpace(pal.Owner.PlayerName)) parts.Add(pal.Owner.PlayerName);
+        var src = pal.Source switch
+        {
+            PalSourceKind.ModBridge => L["MyPals.FilterSourceModBridge"].Value,
+            PalSourceKind.Manual => L["MyPals.FilterSourceManual"].Value,
+            PalSourceKind.GlobalStorage => Term("GlobalPalbox"),
+            _ => L["SourceKind.Save"].Value,
+        };
+        parts.Add(src);
+        return string.Join(" · ", parts);
+    }
+
+    private string FormatGender(Gender? g) => g switch
+    {
+        Gender.Male => L["Common.Male"].Value,
+        Gender.Female => L["Common.Female"].Value,
+        _ => L["Common.Unknown"].Value,
+    };
+
+    private string FormatIvs(Ivs? ivs) => ivs == null
+        ? L["Common.Unknown"].Value
+        : $"{ivs.Hp.ToString(CultureInfo.InvariantCulture)} / {ivs.Attack.ToString(CultureInfo.InvariantCulture)} / {ivs.Defense.ToString(CultureInfo.InvariantCulture)}";
+
+    private string PassivesDiffHint()
+    {
+        if (_raw == null) return string.Empty;
+        var rawSet = _raw.Passives;
+        var added = _passives.Where(p => !rawSet.Contains(p, StringComparer.OrdinalIgnoreCase))
+            .Select(p => TryPassive(p)?.Names.Get(Lang) ?? p).ToList();
+        var removed = rawSet.Where(p => !_passives.Contains(p, StringComparer.OrdinalIgnoreCase))
+            .Select(p => TryPassive(p)?.Names.Get(Lang) ?? p).ToList();
+
+        var sentences = new List<string>();
+        if (added.Count > 0) sentences.Add(L["Editor.PassiveAddedHint", string.Join(", ", added)].Value);
+        if (removed.Count > 0) sentences.Add(L["Editor.PassiveRemovedHint", string.Join(", ", removed)].Value);
+        if (sentences.Count > 0) return string.Join(" ", sentences);
+
+        var rawNames = rawSet.Count == 0
+            ? L["Common.None"].Value
+            : string.Join(", ", rawSet.Select(p => TryPassive(p)?.Names.Get(Lang) ?? p));
+        return L["Editor.PassivesAtSource", rawNames].Value;
+    }
+}

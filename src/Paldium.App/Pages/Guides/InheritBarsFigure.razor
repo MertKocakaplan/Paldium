@@ -1,0 +1,39 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* The two dice (mockup .charts): how many passives pass on and how many random ones are added. The weights are the game's (mechanics). *@
+<figure class="worked dice">
+    <div class="charts">
+        <figure>
+            <div class="vbars">
+                @foreach (var (label, share) in Shares(Data.Mechanics.PassiveInheritWeights, 1, Data.Mechanics.MaxPassives, ""))
+                {
+                    <div class="vb"><span class="v num">@Percent(share)</span><i style="@("height:" + F(share * 200) + "px")"></i><span class="x">@label</span></div>
+                }
+            </div>
+            <figcaption>@((MarkupString)L["Guide.Fig.DiceInherit"].Value)</figcaption>
+        </figure>
+        <figure>
+            <div class="vbars">
+                @foreach (var (label, share) in Shares(Data.Mechanics.PassiveRandomAddWeights, 0, Data.Mechanics.MaxPassives - 1, "+"))
+                {
+                    <div class="vb"><span class="v num">@Percent(share)</span><i style="@("height:" + F(share * 200) + "px")"></i><span class="x">@label</span></div>
+                }
+            </div>
+            <figcaption>@((MarkupString)L["Guide.Fig.DiceAdd"].Value)</figcaption>
+        </figure>
+    </div>
+</figure>
+
+@code {
+    private static IEnumerable<(string Label, double Share)> Shares(IReadOnlyDictionary<int, int> weights, int from, int to, string prefix)
+    {
+        var total = Enumerable.Range(from, to - from + 1).Sum(i => weights.TryGetValue(i, out var w) ? w : 0);
+        for (var i = from; i <= to; i++)
+            yield return (prefix + i.ToString(CultureInfo.InvariantCulture), total == 0 ? 0 : (weights.TryGetValue(i, out var w) ? w : 0) / (double)total);
+    }
+
+    private string Percent(double share) => L["Guide.Fig.Percent", Math.Round(share * 100).ToString("0", CultureInfo.GetCultureInfo(Lang))].Value;
+
+    private static string F(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+}

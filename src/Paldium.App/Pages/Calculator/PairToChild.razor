@@ -1,0 +1,137 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject CalculatorStateService CalcState
+@inject SettingsStore Store
+@inject PlannerStateService PlannerState
+@inject NavigationManager Navigation
+
+@{
+    var aFilled = Pair.OwnedA != null || (!CalcState.OwnedModeA && Pair.SpeciesA != null);
+    var bFilled = Pair.OwnedB != null || (!CalcState.OwnedModeB && Pair.SpeciesB != null);
+    var hasOutcome = aFilled && bFilled && !Pair.InvalidPair && Pair.MatchingOutcomes.Count > 0;
+    var hasValidOwnedPair = Pair.ValidOwnedChild != null;
+    var wantedSet = hasValidOwnedPair
+        ? CalcState.PairDesiredPassives.ToHashSet(StringComparer.OrdinalIgnoreCase)
+        : null;
+    var pathA = aFilled
+        ? "M268 138 H310 Q328 138 328 156 V250"
+        : "M268 108 H310 Q328 108 328 126 V250";
+    var pathB = bFilled
+        ? "M268 368 H310 Q328 368 328 350 V294"
+        : "M268 348 H310 Q328 348 328 330 V294";
+    var edgeACls = aFilled ? "edge now" : "edge ghost";
+    var edgeBCls = bFilled ? "edge now" : "edge ghost";
+    var edgeOutCls = hasOutcome ? "edge now" : "edge ghost";
+    var joinCls = (aFilled && bFilled) ? "join now" : "join";
+}
+
+<div class="canvas">
+    <div class="canvas-inner" style="--canvas-w:740px;--canvas-h:470px">
+        <svg class="edges" aria-hidden="true">
+            <path class="@edgeACls" d="@pathA" />
+            <path class="@edgeBCls" d="@pathB" />
+            <path class="@edgeOutCls" d="M344 272 H376" />
+        </svg>
+
+        <ParentSlot Label="@L["Pair.ParentA"].Value"
+                    LabelY="12"
+                    NodeY="48"
+                    OwnedMode="@CalcState.OwnedModeA"
+                    OwnedModeChanged="SetOwnedModeAAsync"
+                    Species="@Pair.SpeciesA"
+                    SpeciesChanged="SetSpeciesAAsync"
+                    OwnedPal="@Pair.OwnedA"
+                    OwnedPalChanged="SetOwnedAAsync"
+                    AutoFocusEmpty="@(!aFilled && !bFilled)"
+                    DimEmpty="false"
+                    EmptyHelpText="@L["Calculator.EmptyHelpA"].Value"
+                    WantedPassives="@wantedSet" />
+
+        <ParentSlot Label="@L["Pair.ParentB"].Value"
+                    LabelY="252"
+                    NodeY="288"
+                    OwnedMode="@CalcState.OwnedModeB"
+                    OwnedModeChanged="SetOwnedModeBAsync"
+                    Species="@Pair.SpeciesB"
+                    SpeciesChanged="SetSpeciesBAsync"
+                    OwnedPal="@Pair.OwnedB"
+                    OwnedPalChanged="SetOwnedBAsync"
+                    AutoFocusEmpty="false"
+                    DimEmpty="@(!bFilled)"
+                    EmptyHelpText="@L["Calculator.EmptyHelpB"].Value"
+                    WantedPassives="@wantedSet" />
+
+        <div class="@joinCls" style="--x:328px;--y:272px">
+            <Icon Name="egg" Class="eg" />
+        </div>
+
+        <ChildNode SpeciesA="@Pair.SpeciesA"
+                   SpeciesB="@Pair.SpeciesB"
+                   OwnedA="@Pair.OwnedA"
+                   OwnedB="@Pair.OwnedB"
+                   MatchingOutcomes="@Pair.MatchingOutcomes"
+                   SpeciesFallbackChild="@Pair.FallbackChild"
+                   SameGender="@Pair.SameGender"
+                   ConflictingGender="@Pair.ConflictingGender"
+                   OnOpenParents="OpenParentsAsync"
+                   OnMakePlannerTarget="MakePlannerTargetAsync"
+                   OnSelectSuggestedB="SelectSuggestedBAsync"
+                   OnClearAndFocusB="ClearBForPickAsync"
+                   OnSwitchToSpeciesMode="SwitchToSpeciesAsync" />
+    </div>
+</div>
+
+<CalculatorStrip OnChanged="OnChanged" />
+
+@code {
+    [Parameter, EditorRequired] public PairResolution Pair { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task SetOwnedModeAAsync(bool owned) { CalcState.SetOwnedMode(isA: true, owned); await OnChanged.InvokeAsync(); }
+    private async Task SetOwnedModeBAsync(bool owned) { CalcState.SetOwnedMode(isA: false, owned); await OnChanged.InvokeAsync(); }
+    private async Task SetSpeciesAAsync(PalSpecies? pal) { CalcState.SetSpecies(isA: true, pal); await OnChanged.InvokeAsync(); }
+    private async Task SetSpeciesBAsync(PalSpecies? pal) { CalcState.SetSpecies(isA: false, pal); await OnChanged.InvokeAsync(); }
+    private async Task SetOwnedAAsync(OwnedPal? pal) { CalcState.SetOwned(isA: true, pal); await OnChanged.InvokeAsync(); }
+    private async Task SetOwnedBAsync(OwnedPal? pal) { CalcState.SetOwned(isA: false, pal); await OnChanged.InvokeAsync(); }
+
+    private async Task SelectSuggestedBAsync(OwnedPal pal)
+    {
+        CalcState.OwnedModeB = true;
+        CalcState.OwnedBKey = pal.SelectionKey;
+        CalcState.SpeciesBId = pal.SpeciesId;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task ClearBForPickAsync()
+    {
+        CalcState.OwnedModeB = true;
+        CalcState.OwnedBKey = null;
+        CalcState.SpeciesBId = null;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task SwitchToSpeciesAsync()
+    {
+        CalcState.SwitchPairToSpeciesMode(Pair.OwnedA, Pair.OwnedB);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OpenParentsAsync(string childId)
+    {
+        CalcState.TargetSpeciesId = childId;
+        CalcState.Mode = CalculatorStateService.ModeParents;
+        await OnChanged.InvokeAsync();
+    }
+
+    private Task MakePlannerTargetAsync(string childId)
+    {
+        if (!string.Equals(Store.Current.Planner.TargetId, childId, StringComparison.OrdinalIgnoreCase))
+        {
+            Store.Update(s => s with { Planner = s.Planner with { TargetId = childId } });
+            PlannerState.Reset();
+        }
+        Navigation.NavigateTo($"planner?target={Uri.EscapeDataString(childId)}");
+        return Task.CompletedTask;
+    }
+}

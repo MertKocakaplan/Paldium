@@ -1,0 +1,531 @@
+@inherits LocalizedComponentBase
+@inject SourcesService Sources
+@inject ISyncService Sync
+@inject ISaveWorldReader Reader
+@inject IFilePickerService Picker
+@inject ModInstallService ModInstaller
+@inject BridgeScanService Scan
+@inject BridgePageStore PageStore
+@inject IGameData GameData
+@inject SettingsStore Settings
+@inject IDialogService Dialogs
+
+@* The sources of the Pals (screens/settings.md, mockups a-genel and a-kaynak-hata): one row per source with its state, a menu, the add buttons and the error box. *@
+@if (_message != null)
+{
+    <div class="@("smsg " + (_severity == Severity.Error ? "bad" : _severity == Severity.Success ? "ok" : ""))" role="@(_severity == Severity.Error ? "alert" : "status")">
+        <span>@_message</span>
+        <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="() => _message = null"><Icon Name="x" Size="14" /></button>
+    </div>
+}
+
+@if (Sources.Sources.Count == 0)
+{
+    <p class="gsub">@L["Sources.None"]</p>
+}
+
+@foreach (var source in Sources.Sources)
+{
+    var status = StatusOf(source.Id);
+    var bad = HasError(source);
+    <div class="@("src2" + (bad ? " bad" : ""))">
+        <span class="st">
+            @if (status?.State == SourceState.Reading && source.Enabled) { <span class="spin" aria-hidden="true"></span> }
+            else { <span class="@("dot" + (!source.Enabled ? " off" : ""))" aria-hidden="true"></span> }
+        </span>
+        <div class="si">
+            <b>@SourceTitle(source)</b>
+            <span title="@source.Path">@TypeName(source.Type) · @MiddleTruncate(source.Path, 64)</span>
+            <span class="m">@StatusLine(source, status)</span>
+            @if (source.Type == SourceType.ModBridgeFile && SummaryOf(source, status) is { } summary)
+            {
+                <span class="m">@L["Sources.ModSummary", summary.ExportedAtUtc?.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) ?? "-", status?.PalCount ?? summary.ImportedCount]</span>
+                @if (summary.Skipped.Count > 0)
+                {
+                    <span>@SkippedText(summary)</span>
+                }
+                @foreach (var box in summary.Coverage)
+                {
+                    <span class="cov">
+                        @CoverageText(box)
+                        @if (IsUnknownStorage(box))
+                        {
+                            <Dropdown TValue="string" Label="@L["Sources.OwnerLabel"].Value" AriaLabel="@L["Sources.OwnerLabel"].Value"
+                                      Items="@OwnerItems(source)" ValueChanged="v => SetOwnerAsync(source, summary, box, v)" />
+                        }
+                    </span>
+                }
+                @if (ScanText() is { } scanText)
+                {
+                    <span class="@(Scan.Current?.State == BridgeScanState.Failed ? "neg" : "")" title="@Scan.Current?.Message">@scanText</span>
+                }
+                <span class="mbtn"><button type="button" class="ghostb" @onclick="() => ClearPagesAsync(source)">@L["Sources.ClearPages"]</button></span>
+            }
+        </div>
+        <div class="sa">
+            <button type="button" class="ghostb" disabled="@(!source.Enabled)" @onclick="() => Sources.RefreshAsync(source.Id)">@(bad ? L["Sources.Retry"] : L["Sources.Refresh"])</button>
+            <Dropdown TValue="string" Items="@MenuItems(source)" ValueChanged="a => OnMenuAsync(source, a)" TriggerClass="ib2" ShowChevron="false"
+                      AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" AriaLabel="@L["Sources.MoreActions"].Value">
+                <TriggerContent><Icon Name="more" Size="16" /></TriggerContent>
+            </Dropdown>
+        </div>
+    </div>
+    @if (bad && status?.Error is { } error)
+    {
+        <div class="srcerr" role="alert">
+            <Icon Name="warn" Size="16" />
+            <div>
+                <b>@(!_oozAvailable && source.Type != SourceType.ModBridgeFile ? L["Sources.OozMissing"].Value : ErrorText(error))</b>
+                <span>@L["Sources.ErrorNote", status.PalCount]</span>
+                <div class="act">
+                    @if (!_oozAvailable && source.Type != SourceType.ModBridgeFile)
+                    {
+                        <a class="btn2 acc" href="https://aka.ms/vc14/vc_redist.x64.exe" target="_blank" rel="noopener">@L["Sources.OozInstall"]</a>
+                    }
+                    <button type="button" class="btn2" @onclick="OpenLogs">@L["Settings.OpenLogs"]</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@if (_modState is { } modState)
+{
+    <p class="hint2">@L[modState switch { ModInstallState.Current => "Sources.ModStateCurrent", ModInstallState.Outdated => "Sources.ModStateOutdated", ModInstallState.LegacyInstalled => "Sources.ModStateLegacy", _ => "Sources.ModStateMissing" }]</p>
+}
+
+<p class="hint2">@L["Sources.ModHint"] @L["Sources.ModPartyHint"]</p>
+
+<div class="adds">
+    <Dropdown TValue="string" Open="_discoverOpen" OpenChanged="OnDiscoverOpenChanged" TriggerClass="btn2" ShowChevron="false" Disabled="_busy"
+              AriaLabel="@L["Sources.FindLocal"].Value">
+        <TriggerContent><Icon Name="search" Size="14" />@L["Sources.FindLocal"]</TriggerContent>
+        <ChildContent>
+            <div class="pop-panel disc">
+                @if (_discovered == null) { <span class="gsub">@L["Sources.State.Reading"]</span> }
+                else if (_discovered.Count == 0) { <span class="gsub">@L["Sources.NoWorlds"]</span> }
+                else
+                {
+                    @foreach (var world in _discovered)
+                    {
+                        var added = Sources.IsKnown(SourceType.WorldFolder, world.FolderPath);
+                        <div class="disc-row">
+                            <div class="si">
+                                <b>@(world.WorldName ?? L["Sources.Unnamed"].Value) <span class="num">@world.WorldId[..8]</span></b>
+                                <span>@L["Sources.SavedAt", world.LastWriteUtc.ToLocalTime().ToString("g", CultureInfo.GetCultureInfo(Lang))]@(world.HasLevelSave ? "" : " \u00b7 " + L["Sources.HostedElsewhere"].Value)</span>
+                            </div>
+                            <button type="button" class="btn2" disabled="@(!world.HasLevelSave || added)" @onclick="() => AddWorld(world)">@(added ? L["Sources.Added"] : L["Sources.Add"])</button>
+                        </div>
+                    }
+                }
+            </div>
+        </ChildContent>
+    </Dropdown>
+    <button type="button" class="btn2" disabled="@_busy" @onclick="PickFolder">@L["Sources.PickFolder"]</button>
+    <button type="button" class="btn2" disabled="@_busy" @onclick="ImportZipAsync">@L["Sources.ImportZip"]</button>
+    <button type="button" class="btn2" disabled="@_busy" @onclick="InstallModAsync">@L["Sources.InstallMod"]</button>
+    @if (Sources.BridgeSuggested)
+    {
+        <button type="button" class="btn2 acc" @onclick="AddBridge">@L["Sources.AddBridge"]</button>
+    }
+    <button type="button" class="ghostb" disabled="@_busy" @onclick="AddGlobal">@L["Sources.AddGlobal"]</button>
+    <button type="button" class="ghostb" disabled="@(Sources.Sources.Count == 0)" @onclick="RefreshAllAsync">@L["Sources.RefreshAll"]</button>
+</div>
+
+@code {
+    private bool _busy;
+    private bool _oozAvailable = true;
+    private string? _message;
+    private Severity _severity = Severity.Info;
+    private IReadOnlyList<DiscoveredWorld>? _discovered;
+
+
+    private bool _discoverOpen;
+
+    private async Task OnDiscoverOpenChanged(bool open)
+    {
+        _discoverOpen = open;
+        if (open && _discovered == null) await FindLocalAsync();
+    }
+
+    // The title of a source row: the mod and the Global Palbox have fixed names, folders and zips are named by their folder.
+    private string SourceTitle(SourceConfig source) => source.Type switch
+    {
+        SourceType.ModBridgeFile => L["Sources.TypeMod"].Value,
+        SourceType.GlobalStorageFile => Term("GlobalPalbox"),
+        _ => System.IO.Path.GetFileName(source.Path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : source.Path,
+    };
+
+    // A long path keeps its beginning and its end ("C:\Users\...\4F2A0B"); the whole path is in the tooltip.
+    private static string MiddleTruncate(string path, int max)
+    {
+        if (path.Length <= max) return path;
+        var keep = (max - 1) / 2;
+        return path[..keep] + "\u2026" + path[^keep..];
+    }
+
+    private bool HasError(SourceConfig source) => source.Enabled && StatusOf(source.Id) is { State: SourceState.Error };
+
+    // "OK \u00b7 2 min ago \u00b7 352 Pals", or for an error "Could not read \u00b7 last good read 21:40 \u00b7 352 Pals".
+    private string StatusLine(SourceConfig source, SourceStatus? status)
+    {
+        if (!source.Enabled) return L["Sources.State.Idle"].Value;
+        if (status == null || status.State == SourceState.Idle) return L["Sources.State.Idle"].Value;
+        if (status.State == SourceState.Reading) return L["Sources.State.Reading"].Value;
+        if (status.State == SourceState.Error)
+            return L["Sources.StatusError", status.LastSyncUtc?.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) ?? "-", status.PalCount].Value;
+        return string.Join(" \u00b7 ", new[] { L["Sources.State.Ok"].Value, status.LastSyncUtc is { } at ? Ago(at) : null, L["Sources.PalCount", status.PalCount].Value }.Where(s => s != null));
+    }
+
+    private IReadOnlyList<DropdownItem<string>> MenuItems(SourceConfig source)
+    {
+        var items = new List<DropdownItem<string>>
+        {
+            new("toggle", source.Enabled ? L["Sources.Disable"].Value : L["Sources.Enable"].Value),
+        };
+        if (source.Type != SourceType.ZipImport) items.Add(new("open", L["Sources.OpenFolder"].Value));
+        items.Add(new("remove", L["Sources.RemoveMenu"].Value));
+        return items;
+    }
+
+    private async Task OnMenuAsync(SourceConfig source, string action)
+    {
+        switch (action)
+        {
+            case "toggle":
+                Sources.SetEnabled(source.Id, !source.Enabled);
+                break;
+            case "open":
+                var folder = System.IO.Directory.Exists(source.Path) ? source.Path : System.IO.Path.GetDirectoryName(source.Path);
+                if (!string.IsNullOrEmpty(folder) && System.IO.Directory.Exists(folder))
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = folder, UseShellExecute = true });
+                break;
+            case "remove":
+                var confirmed = await Dialogs.ShowMessageBoxAsync(L["Sources.RemoveMenu"].Value, L["Sources.RemoveAsk", SourceTitle(source)].Value,
+                    yesText: L["Sources.RemoveYes"].Value, cancelText: L["Common.Cancel"].Value);
+                if (confirmed == true) Sources.Remove(source.Id);
+                break;
+        }
+    }
+
+    private static void OpenLogs()
+    {
+        System.IO.Directory.CreateDirectory(AppServices.LogFolder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = AppServices.LogFolder, UseShellExecute = true });
+    }
+
+    private ModInstallState? _modState;
+
+    // Whether the mod in the game folder is the one shipped with the app (checked when the panel opens, after an install and on "Refresh all").
+    private void RefreshModState()
+    {
+        var game = ModInstaller.FindGameFolder(Settings.Current.PalworldFolderPicked);
+        _modState = game == null ? null : ModInstaller.GetState(game);
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        RefreshModState();
+        await Sources.RefreshAsync();
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        RefreshModState();
+        _oozAvailable = SaveWorldReader.IsDecompressionAvailable;
+        Sources.Changed += OnChanged;
+        Scan.Changed += OnChanged;
+        Sync.StatusesChanged += OnChanged;
+    }
+
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private SourceStatus? StatusOf(string id) => Sync.Statuses.FirstOrDefault(s => s.SourceId == id);
+
+    private string TypeName(SourceType type) => type switch
+    {
+        SourceType.GlobalStorageFile => Term("GlobalPalbox"),
+        SourceType.ZipImport => L["Sources.TypeZip"].Value,
+        SourceType.ModBridgeFile => L["Sources.TypeMod"].Value,
+        _ => L["Sources.TypeWorld"].Value,
+    };
+
+    private string StateText(SourceStatus? status, SourceConfig source) =>
+        !source.Enabled ? L["Sources.State.Idle"].Value : L["Sources.State." + (status?.State ?? SourceState.Idle)].Value;
+
+    private static string StateClass(SourceStatus? status, SourceConfig source) =>
+        !source.Enabled ? "sources-idle" : (status?.State ?? SourceState.Idle) switch
+        {
+            SourceState.Ok => "sources-ok",
+            SourceState.Error => "sources-bad",
+            SourceState.Reading => "sources-busy",
+            _ => "sources-idle",
+        };
+
+    // Errors that carry a localization key are translated; other errors show the technical message.
+    private string ErrorText(string error)
+    {
+        if (!error.StartsWith("Import.Error.", StringComparison.Ordinal)) return error;
+        var text = L[error];
+        return text.ResourceNotFound ? error : text.Value;
+    }
+
+    private void Show(string message, Severity severity)
+    {
+        _message = message;
+        _severity = severity;
+    }
+
+    private async Task FindLocalAsync()
+    {
+        _busy = true;
+        try
+        {
+            _discovered = await Task.Run(() => Reader.DiscoverLocalWorlds());
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private readonly Dictionary<string, (DateTimeOffset? At, BridgeSummary? Summary)> _summaries = [];
+
+    // The bridge file is small; it is parsed again only after the source was read again.
+    private BridgeSummary? SummaryOf(SourceConfig source, SourceStatus? status)
+    {
+        if (_summaries.TryGetValue(source.Id, out var cached) && cached.At == status?.LastSyncUtc) return cached.Summary;
+        var summary = ModBridgeReader.Summarize(source.Path, GameData);
+        // The coverage of ALL stored pages (earlier game sessions included), not only of the last file.
+        if (summary != null)
+        {
+            var stored = PageStore.Coverage(source.Id, summary.WorldId ?? "unknown");
+            if (stored.Count > 0) summary = summary with { Coverage = stored };
+        }
+        _summaries[source.Id] = (status?.LastSyncUtc, summary);
+        return summary;
+    }
+
+    private const string OtherOwner = "other";
+
+    private IReadOnlyList<DropdownItem<string>> OwnerItems(SourceConfig source) =>
+        PageStore.Players(source.Id).Where(p => !string.IsNullOrEmpty(p.Name)).Select(p => new DropdownItem<string>(p.Uid, p.Name!))
+            .Append(new DropdownItem<string>(OtherOwner, L["Sources.OwnerOther"].Value)).ToList();
+
+    // A Dimensional Pal Storage whose owner neither the game nor the user told (T60).
+    private static bool IsUnknownStorage(BridgeCoverage box) =>
+        box.Kind == "DimensionalStorage" && string.IsNullOrEmpty(box.OwnerName) && ModBridgeReader.NormalizeOwner(box.BoxOwnerUid) == null
+        && box.BoxId != null && box.BoxId.StartsWith("unknown", StringComparison.Ordinal);
+
+    // "Whose is this storage?": the choice is stored with the box (it survives the next sessions) and the Pals are read again with the owner's name.
+    private async Task SetOwnerAsync(SourceConfig source, BridgeSummary summary, BridgeCoverage box, string choice)
+    {
+        if (string.IsNullOrEmpty(choice) || box.BoxId == null) return;
+        var player = PageStore.Players(source.Id).FirstOrDefault(p => p.Uid == choice);
+        var uid = choice == OtherOwner ? null : choice;
+        var name = choice == OtherOwner ? L["Sources.OwnerOther"].Value : player?.Name;
+        PageStore.SetBoxOwner(source.Id, summary.WorldId ?? "unknown", box.BoxId, uid, name);
+        _summaries.Remove(source.Id);
+        await Sources.RefreshAsync();
+    }
+
+    // "Dimensional Pal Storage (…0001): 12 pages read, 4, 8, 11, 13 not read; open these pages once."
+    private string CoverageText(BridgeCoverage box)
+    {
+        var name = box.Kind == "DimensionalStorage" ? Terms.Location(Paldium.Core.Domain.LocationKind.DimensionalStorage)
+            : box.Kind == "Party" ? Terms.Location(Paldium.Core.Domain.LocationKind.Party)
+            : box.Kind == "Base" ? Terms.Location(Paldium.Core.Domain.LocationKind.Base) + (!string.IsNullOrEmpty(box.OwnerName) ? " " + box.OwnerName : string.IsNullOrEmpty(box.BoxId) ? "" : " …" + box.BoxId[^Math.Min(8, box.BoxId.Length)..])
+            : Terms.Location(Paldium.Core.Domain.LocationKind.Palbox);
+        // The owner's name when the mod read it, else the end of the uid; a box whose owner is unknown says so (an all-zero uid is no owner).
+        if (box.Kind == "DimensionalStorage")
+        {
+            var owner = !string.IsNullOrEmpty(box.OwnerName) ? box.OwnerName
+                : ModBridgeReader.NormalizeOwner(box.BoxOwnerUid) is { } uid ? "…" + uid[^Math.Min(8, uid.Length)..]
+                : L["Sources.CoverageUnknownOwner"].Value;
+            name += " (" + owner + ")";
+        }
+        var text = L["Sources.CoverageRead", name, box.PagesRead.Count].Value;
+        if (box.Kind == "DimensionalStorage" && box.PalCount is { } palCount) text += " · " + L["Sources.CoveragePals", palCount].Value;
+        if (box.OldestReadUtc is { } oldest) text += " · " + L["Sources.CoverageOldest", Ago(oldest)].Value;
+        var missing = box.MissingPages;
+        if (missing.Count > 0) text += " " + L["Sources.CoverageMissing", string.Join(", ", missing.Select(p => p + 1))].Value;
+        return text;
+    }
+
+    // "Scanning: Pal Box 3/8", the "open the Pal Box" hint, or the result of the last scan. Statuses of older sessions are not shown.
+    private string? ScanText()
+    {
+        var status = Scan.Current;
+        // A scan is started with the shortcut in the game; an old result (more than two minutes) is not shown.
+        if (status == null || !(Scan.IsRunning || (status.UpdatedAtUtc is { } at && DateTimeOffset.UtcNow - at < TimeSpan.FromMinutes(2)))) return null;
+        var kind = status.Kind == "DimensionalStorage" ? Terms.Location(Paldium.Core.Domain.LocationKind.DimensionalStorage) : Terms.Location(Paldium.Core.Domain.LocationKind.Palbox);
+        return status.State switch
+        {
+            BridgeScanState.WaitingForUi => L["Sources.ScanWaiting"].Value,
+            BridgeScanState.Scanning => L["Sources.ScanProgress", kind, (status.Page ?? 0) + 1, status.PageCount?.ToString() ?? "?"].Value,
+            // The mod's own (English) message stays in the tooltip and the log; the sentence shown is translated.
+            BridgeScanState.Done => L["Sources.ScanDone"].Value,
+            BridgeScanState.Cancelled => L["Sources.ScanCancelled"].Value,
+            BridgeScanState.Failed => L["Sources.ScanFailed"].Value,
+            _ => null,
+        };
+    }
+
+    // "1 not imported: human Hunter_Bat." (humans are captured NPCs, never part of breeding)
+    private string SkippedText(BridgeSummary summary)
+    {
+        var parts = summary.Skipped.Select(k => k.IsHuman ? L["Sources.ModSkippedHuman", k.Id].Value : L["Sources.ModSkippedUnknown", k.Id].Value).Distinct();
+        return L["Sources.ModSkipped", summary.Skipped.Count, string.Join(", ", parts)].Value;
+    }
+
+    private string Ago(DateTimeOffset at)
+    {
+        var span = DateTimeOffset.UtcNow - at;
+        if (span < TimeSpan.FromMinutes(1)) return L["Sources.AgoNow"].Value;
+        if (span < TimeSpan.FromHours(1)) return L["Sources.AgoMinutes", (int)span.TotalMinutes].Value;
+        if (span < TimeSpan.FromDays(1)) return L["Sources.AgoHours", (int)span.TotalHours].Value;
+        return L["Sources.AgoDays", (int)span.TotalDays].Value;
+    }
+
+    // Forgets the pages kept from earlier game sessions (the list is rebuilt as the boxes are opened again).
+    private async Task ClearPagesAsync(SourceConfig source)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(L["Sources.ClearPages"].Value, L["Sources.ClearPagesAsk"].Value,
+            yesText: L["Sources.ClearPagesYes"].Value, cancelText: L["Common.Cancel"].Value);
+        if (confirmed != true) return;
+        PageStore.Clear(source.Id);
+        _summaries.Remove(source.Id);
+        await Sources.RefreshAsync(source.Id);
+    }
+
+    private void AddBridge()
+    {
+        Sources.AddBridgeFile();
+        _message = null;
+    }
+
+    private async Task InstallModAsync()
+    {
+        var game = ModInstaller.FindGameFolder(Settings.Current.PalworldFolderPicked);
+        while (true)
+        {
+            if (game == null)
+            {
+                game = PickGameFolder();
+                if (game == null) return;
+            }
+
+            var target = ModInstallService.TargetFolder(game);
+            var question = L["Sources.InstallModAsk", target].Value;
+            if (ModInstaller.IsGameRunning()) question += "\n\n" + L["Sources.InstallModRunning"].Value;
+            var answer = await Dialogs.ShowMessageBoxAsync(L["Sources.InstallMod"].Value, question,
+                yesText: L["Sources.InstallModYes"].Value, noText: L["Sources.InstallModChange"].Value, cancelText: L["Common.Cancel"].Value);
+            if (answer == null) return;
+            if (answer == false)
+            {
+                var picked = PickGameFolder();
+                if (picked != null) game = picked;
+                continue;
+            }
+
+            try
+            {
+                ModInstaller.Install(game);
+                Show(L["Sources.InstallModDone", target].Value, Severity.Success);
+            }
+            catch (ModInstallException ex)
+            {
+                Show($"{L[ex.Key].Value} {ex.Message}", Severity.Error);
+            }
+
+            RefreshModState();
+
+            return;
+        }
+    }
+
+    // The folder the user picks is remembered; a folder found through Steam is looked up again each time.
+    private string? PickGameFolder()
+    {
+        var folder = Picker.PickFolder(L["Sources.PickGameTitle"].Value);
+        if (folder == null) return null;
+        if (!ModInstallService.IsGameFolder(folder))
+        {
+            Show(L["Mod.NoGame"].Value + " " + folder, Severity.Error);
+            return null;
+        }
+
+        Settings.Update(s => s with { PalworldFolderPicked = folder });
+        RefreshModState();
+        return folder;
+    }
+    private void AddWorld(DiscoveredWorld world)
+    {
+        Sources.AddDiscoveredWorld(world);
+        _message = null;
+    }
+
+    private void PickFolder()
+    {
+        var folder = Picker.PickFolder(L["Sources.PickFolderTitle"].Value);
+        if (folder == null) return;
+        Try(() => Sources.AddWorldFolder(folder));
+    }
+
+    private async Task ImportZipAsync()
+    {
+        var zip = Picker.PickFile(L["Sources.PickZipTitle"].Value, L["Sources.ZipFilter"].Value);
+        if (zip == null) return;
+
+        _busy = true;
+        try
+        {
+            await Task.Run(() => Sources.AddZip(zip));
+            _message = null;
+        }
+        catch (SourceException ex)
+        {
+            Show($"{L[ex.Key].Value} {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AddGlobal()
+    {
+        if (Sources.FindLocalGlobalPalboxFiles().Count > 0)
+        {
+            var added = Sources.AddLocalGlobalPalboxes();
+            Show(L["Sources.GlobalAdded", added.Count].Value, Severity.Success);
+            return;
+        }
+
+        var file = Picker.PickFile(L["Sources.PickGlobalTitle"].Value, L["Sources.SaveFilter"].Value);
+        if (file == null) return;
+        Try(() => Sources.AddGlobalStorageFile(file));
+    }
+
+    private void Try(Action action)
+    {
+        try
+        {
+            action();
+            _message = null;
+        }
+        catch (SourceException ex)
+        {
+            Show(L[ex.Key].Value, Severity.Error);
+        }
+    }
+
+    public override void Dispose()
+    {
+        Sources.Changed -= OnChanged;
+        Scan.Changed -= OnChanged;
+        Sync.StatusesChanged -= OnChanged;
+        base.Dispose();
+    }
+}

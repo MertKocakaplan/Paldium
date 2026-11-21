@@ -1,0 +1,190 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+
+@if (Target == null)
+{
+    <div class="node target empty" style="@($"--x:{X}px;--y:{Y}px")" aria-label="@L["Plan.Target"].Value">
+        <div class="top">
+            <span class="ph" aria-hidden="true"><Icon Name="plus" Size="20" /></span>
+            <div>
+                <div class="t">@L["Plan.EmptyTargetTitle"]</div>
+                <div class="m">@L["Plan.EmptyTargetSub"]</div>
+            </div>
+        </div>
+        <PalPicker Mode="PalPicker.PickerMode.Species"
+                   InlineSearch="true"
+                   AutoFocus="true"
+                   Placeholder="@L["Plan.TargetSearchPlaceholder"].Value"
+                   AriaLabel="@L["Plan.TargetSearchPlaceholder"].Value"
+                   ValueChanged="OnPickTargetAsync"
+                   OnOpenChanged="OnPickerOpenChanged" />
+        <p class="hint">@L["Plan.EmptyTargetHint"]</p>
+    </div>
+}
+else
+{
+    var penalties = PassivePresets.PenaltyOf(Data, Query.DesiredPassives);
+    <div class="node target" style="@($"--x:{X}px;--y:{Y}px")" aria-label="@L["Plan.Target"].Value">
+        <div class="top">
+            <PalPicker Mode="PalPicker.PickerMode.Species"
+                       Value="Target"
+                       AllowClear="true"
+                       ValueChanged="OnPickTargetAsync"
+                       OnOpenChanged="OnPickerOpenChanged"
+                       Class="target-pick-wrap">
+                <button type="button"
+                        class="target-btn"
+                        aria-label="@L["Plan.ChangeTargetAria", Target.DisplayName(Lang)].Value"
+                        @onclick="context">
+                    <PalIcon Pal="Target" Size="56" />
+                    <div>
+                        <div class="t">@Target.DisplayName(Lang)</div>
+                        <div class="m">
+                            @L["Plan.Target"] · <span class="num">#@Target.DexNo</span> · @ElementsText(Target)
+                        </div>
+                    </div>
+                </button>
+            </PalPicker>
+        </div>
+
+        <div class="lbl">@L["Common.Gender"]</div>
+        <GenderSegmented Value="TargetGender()"
+                         ValueChanged="OnGenderChangedAsync"
+                         AllowAny="true"
+                         AriaLabel="@L["Plan.TargetGender"].Value" />
+
+        <div class="lbl">@L["Plan.SocketsLabel", Query.DesiredPassives.Count]</div>
+        <div class="sock">
+            @for (var i = 0; i < 4; i++)
+            {
+                var idx = i;
+                var pid = idx < Query.DesiredPassives.Count ? Query.DesiredPassives[idx] : null;
+                var exclude = ExcludeForSlot(idx);
+                <PassiveSocket PassiveId="@pid"
+                               OwnedCount="@(pid == null ? 0 : PassiveOwnedCount(pid))"
+                               Exclude="@exclude"
+                               OnPick="id => SetPassiveSlotAsync(idx, id)"
+                               OnRemove="() => RemovePassiveSlotAsync(idx)"
+                               OnPickerOpenChanged="OnPickerOpenChanged" />
+            }
+        </div>
+
+        @if (penalties.Count > 0)
+        {
+            <p class="hint">
+                @string.Join(" ", penalties.Select(id => L["Plan.PenaltyWarn", PassiveName(id), string.Join(", ", Data.Passive(id).PenaltyTags.Select(TagName))].Value))
+            </p>
+        }
+    </div>
+}
+
+@code {
+    private Dictionary<string, int>? _passiveCounts;
+
+    [Parameter] public PalSpecies? Target { get; set; }
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnPickerOpenChanged { get; set; }
+    [Parameter] public int X { get; set; } = 360;
+    [Parameter] public int Y { get; set; } = 48;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        _passiveCounts = null;
+    }
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e)
+    {
+        _passiveCounts = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private GenderReq TargetGender() => Query.TargetGender switch
+    {
+        "male" => GenderReq.Male,
+        "female" => GenderReq.Female,
+        _ => GenderReq.Any,
+    };
+
+    private Task OnGenderChangedAsync(GenderReq req)
+    {
+        var g = req switch
+        {
+            GenderReq.Male => "male",
+            GenderReq.Female => "female",
+            _ => "any",
+        };
+        return QueryChanged.InvokeAsync(Query with { TargetGender = g });
+    }
+
+    private Task OnPickTargetAsync(PalSpecies? pal) =>
+        QueryChanged.InvokeAsync(Query with { TargetId = pal?.Id });
+
+    private IReadOnlyList<string> ExcludeForSlot(int idx)
+    {
+        var list = new List<string>(4);
+        for (var i = 0; i < Query.DesiredPassives.Count; i++)
+        {
+            if (i != idx) list.Add(Query.DesiredPassives[i]);
+        }
+        return list;
+    }
+
+    private Task SetPassiveSlotAsync(int idx, string id)
+    {
+        var list = Query.DesiredPassives.ToList();
+        if (idx < list.Count)
+            list[idx] = id;
+        else if (!list.Contains(id, StringComparer.Ordinal) && list.Count < 4)
+            list.Add(id);
+
+        return QueryChanged.InvokeAsync(Query with { DesiredPassives = list.Distinct(StringComparer.Ordinal).Take(4).ToList() });
+    }
+
+    private Task RemovePassiveSlotAsync(int idx)
+    {
+        if (idx < 0 || idx >= Query.DesiredPassives.Count) return Task.CompletedTask;
+        var list = Query.DesiredPassives.Where((_, i) => i != idx).ToList();
+        return QueryChanged.InvokeAsync(Query with { DesiredPassives = list });
+    }
+
+    private int PassiveOwnedCount(string passiveId)
+    {
+        if (_passiveCounts == null)
+        {
+            _passiveCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pal in Scope.ScopedPals)
+            {
+                foreach (var p in pal.Passives.Distinct(StringComparer.OrdinalIgnoreCase))
+                    _passiveCounts[p] = _passiveCounts.GetValueOrDefault(p) + 1;
+            }
+        }
+        return _passiveCounts.GetValueOrDefault(passiveId);
+    }
+
+    private string ElementsText(PalSpecies sp) =>
+        string.Join(" / ", sp.Elements.Select(e => Terms.T("Element." + e)));
+
+    private string PassiveName(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string TagName(string tag) => L["Tag." + tag] is { ResourceNotFound: false } text ? text.Value : tag;
+}

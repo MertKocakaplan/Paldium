@@ -1,0 +1,103 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Domain
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+<section class="gsteps" style="@StyleAttr()" aria-labelledby="@HeadingId">
+    <h2 id="@HeadingId">@L["Plan.StepsTitle"]</h2>
+    <ol>
+        @for (var i = 0; i < _steps.Count; i++)
+        {
+            var idx = i;
+            var step = _steps[i];
+            var isDone = Done.Contains(idx);
+            var isCur = idx == _currentIdx;
+            var cls = isCur ? "cur" : (isDone ? "done" : "");
+            <li class="@cls">
+                <button type="button"
+                        class="step-btn"
+                        aria-pressed="@(isDone ? "true" : "false")"
+                        @onclick="() => OnToggleStep.InvokeAsync(idx)">
+                    @if (isDone)
+                    {
+                        <span class="step-check" aria-hidden="true"><Icon Name="check" Size="14" /></span>
+                    }
+                    else
+                    {
+                        <Icon Name="egg" Class="egg" />
+                    }
+                    <span class="t">@L["Plan.BreedSpeciesAction", SpeciesName(step.ChildSpeciesId)]</span>
+                    <span class="p">
+                        <PalIcon PalId="@step.ParentA.SpeciesId" Size="22" />
+                        <b>@ParentDisplay(step.ParentA)</b>
+                        <GenderIcon Gender="@NodeGender(step.ParentA)" Size="14" />
+                        <span>+</span>
+                        <PalIcon PalId="@step.ParentB.SpeciesId" Size="22" />
+                        <b>@ParentDisplay(step.ParentB)</b>
+                        <GenderIcon Gender="@NodeGender(step.ParentB)" Size="14" />
+                        @if (ParentLocationSuffix(step.ParentA, step.ParentB) is { } locNote)
+                        {
+                            <span> · @locNote</span>
+                        }
+                    </span>
+                    <span class="e">@L["Plan.ExpectedEggsShort", "~" + Eggs(step.ExpectedEggs)]</span>
+                </button>
+            </li>
+        }
+    </ol>
+</section>
+
+@code {
+    private IReadOnlyList<BreedStep> _steps = [];
+    private int _currentIdx = -1;
+
+    [Parameter, EditorRequired] public BreedingPlan Plan { get; set; } = default!;
+    [Parameter] public IReadOnlySet<int> Done { get; set; } = new HashSet<int>();
+    [Parameter] public EventCallback<int> OnToggleStep { get; set; }
+    [Parameter] public int? CanvasTop { get; set; }
+    [Parameter] public string HeadingId { get; set; } = "st-h";
+
+    protected override void OnParametersSet()
+    {
+        _steps = PlanText.StepsOf(Plan);
+        _currentIdx = PlanText.CurrentStepIndex(_steps, Done);
+    }
+
+    private string? StyleAttr() => CanvasTop is { } y ? $"--top:{y}px" : null;
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string ParentDisplay(PlanNode n) => n switch
+    {
+        OwnedLeaf { Pal.Nickname: { } nick } => nick,
+        _ => SpeciesName(n.SpeciesId),
+    };
+
+    private static Gender? NodeGender(PlanNode n) => n switch
+    {
+        OwnedLeaf o => o.Pal.Gender,
+        _ => n.Gender switch
+        {
+            GenderReq.Male => Gender.Male,
+            GenderReq.Female => Gender.Female,
+            _ => null,
+        },
+    };
+
+    private string? ParentLocationSuffix(PlanNode a, PlanNode b)
+    {
+        var parts = new List<string>(2);
+        if (a is OwnedLeaf oa) parts.Add(LocationText.ShortPlace(oa.Pal, Terms, L));
+        else if (a is WildLeaf wa) parts.Add(PlanText.ObtainLabel(wa.ObtainMethod, L));
+        if (b is OwnedLeaf ob) parts.Add(LocationText.ShortPlace(ob.Pal, Terms, L));
+        else if (b is WildLeaf wb) parts.Add(PlanText.ObtainLabel(wb.ObtainMethod, L));
+        return parts.Count > 0 ? string.Join(", ", parts.Distinct()) : null;
+    }
+
+    private string Eggs(double v) => v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+}

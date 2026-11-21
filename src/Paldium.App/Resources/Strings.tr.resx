@@ -1,0 +1,1621 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+
+  <data name="Nav.Planner" xml:space="preserve"><value>Planlayıcı</value></data>
+  <data name="Nav.Calculator" xml:space="preserve"><value>Hesaplayıcı</value></data>
+  <data name="Nav.Paldex" xml:space="preserve"><value>Paldex</value></data>
+  <data name="Nav.Skills" xml:space="preserve"><value>Yetenekler</value></data>
+  <data name="Nav.MyPals" xml:space="preserve"><value>Pal'larım</value></data>
+  <data name="Nav.Guides" xml:space="preserve"><value>Rehberler</value></data>
+  <data name="Nav.Settings" xml:space="preserve"><value>Ayarlar</value></data>
+
+  <data name="Common.Language" xml:space="preserve"><value>Dil</value></data>
+  <data name="Common.Male" xml:space="preserve"><value>Erkek</value></data>
+  <data name="Common.Female" xml:space="preserve"><value>Dişi</value></data>
+
+  <data name="Error.DataTitle" xml:space="preserve"><value>Oyun verisi yüklenemedi</value></data>
+  <data name="Error.DataBody" xml:space="preserve"><value>Paldium veri paketini okuyamadı. Uygulamayı yeniden kur ya da data klasörünü DataBuilder aracıyla yeniden üret.</value></data>
+  <data name="Error.DataFolder" xml:space="preserve"><value>Veri klasörü</value></data>
+  <data name="Error.DataDetails" xml:space="preserve"><value>Ayrıntı</value></data>
+
+  <data name="Settings.Title" xml:space="preserve"><value>Ayarlar</value></data>
+  <data name="Settings.Language" xml:space="preserve"><value>Dil</value></data>
+  <data name="Settings.DataBundle" xml:space="preserve"><value>Veri paketi</value></data>
+  <data name="Settings.GameVersion" xml:space="preserve"><value>Oyun sürümü</value></data>
+  <data name="Settings.GameBuild" xml:space="preserve"><value>Oyun yapısı (build)</value></data>
+  <data name="Settings.GeneratedAt" xml:space="preserve"><value>Üretim zamanı</value></data>
+  <data name="Settings.Sources" xml:space="preserve"><value>Veri kaynakları</value></data>
+  <data name="Settings.Counts" xml:space="preserve"><value>İçerik</value></data>
+  <data name="Settings.CountsValue" xml:space="preserve"><value>{0} Pal, {1} pasif, {2} aktif yetenek</value></data>
+  <data name="Settings.OpenLogs" xml:space="preserve"><value>Log klasörünü aç</value></data>
+
+  <data name="Picker.Placeholder" xml:space="preserve"><value>Ad veya dex numarasıyla ara</value></data>
+  <data name="Picker.NoResults" xml:space="preserve"><value>Pal bulunamadı</value></data>
+
+  <data name="Calculator.Tab.PairToChild" xml:space="preserve"><value>Çift → yavru</value></data>
+  <data name="Calculator.Tab.TargetToParents" xml:space="preserve"><value>Hedef → ebeveynler</value></data>
+
+  <data name="Pair.ParentA" xml:space="preserve"><value>Ebeveyn A</value></data>
+  <data name="Pair.ParentB" xml:space="preserve"><value>Ebeveyn B</value></data>
+  <data name="Pair.Gender" xml:space="preserve"><value>Cinsiyet</value></data>
+  <data name="Pair.GenderAny" xml:space="preserve"><value>Fark etmez</value></data>
+  <data name="Pair.Swap" xml:space="preserve"><value>Ebeveynleri değiştir</value></data>
+  <data name="Pair.Hint" xml:space="preserve"><value>Yavruyu görmek için iki Pal seç.</value></data>
+  <data name="Pair.Result" xml:space="preserve"><value>Sonuç</value></data>
+  <data name="Pair.Child" xml:space="preserve"><value>Yavru</value></data>
+  <data name="Pair.GenderRatio" xml:space="preserve"><value>Cinsiyet oranı</value></data>
+  <data name="Pair.AlphaNote" xml:space="preserve"><value>Her yavrunun {0} çıkma ihtimali {1}.</value></data>
+  <data name="Pair.GenderDependent" xml:space="preserve"><value>Bu çift, ebeveynlerin cinsiyetine göre farklı bir Pal verir.</value></data>
+  <data name="Pair.SameGender" xml:space="preserve"><value>Aynı cinsiyetten iki Pal çiftleşemez.</value></data>
+  <data name="Pair.NoOutcome" xml:space="preserve"><value>Bu cinsiyet kombinasyonu için tarif yok.</value></data>
+  <data name="Pair.SameSpecies" xml:space="preserve"><value>Aynı türden iki Pal her zaman o türü verir.</value></data>
+
+  <data name="Egg.Normal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Egg.Large" xml:space="preserve"><value>Büyük</value></data>
+  <data name="Egg.Huge" xml:space="preserve"><value>Dev</value></data>
+
+  <data name="Target.Label" xml:space="preserve"><value>Hedef Pal</value></data>
+  <data name="Target.Hint" xml:space="preserve"><value>Hedefi veren bütün ebeveyn çiftlerini görmek için Pal seç.</value></data>
+  <data name="Target.Search" xml:space="preserve"><value>Çiftlerde ara</value></data>
+  <data name="Target.OwnedOnly" xml:space="preserve"><value>Sadece sahip olduklarım</value></data>
+  <data name="Target.OwnedOnlyHint" xml:space="preserve"><value>Yalnızca sahip olduğun Pal'larla kurabileceğin çiftler.</value></data>
+  <data name="Target.PairCount" xml:space="preserve"><value>{0} ebeveyn çifti</value></data>
+  <data name="Target.PairCountFiltered" xml:space="preserve"><value>{1} ebeveyn çiftinden {0} tanesi</value></data>
+  <data name="Target.ColParentA" xml:space="preserve"><value>Ebeveyn A</value></data>
+  <data name="Target.ColParentB" xml:space="preserve"><value>Ebeveyn B</value></data>
+  <data name="Target.ColPowerSum" xml:space="preserve"><value>{0} toplamı</value></data>
+  <data name="Target.SameSpeciesOnly" xml:space="preserve"><value>Yalnızca kendi türünden iki Pal ile üretilebilir.</value></data>
+  <data name="Target.NoPairs" xml:space="preserve"><value>Eşleşen ebeveyn çifti yok.</value></data>
+
+  <data name="Common.Yes" xml:space="preserve"><value>Evet</value></data>
+  <data name="Common.No" xml:space="preserve"><value>Hayır</value></data>
+  <data name="Common.Any" xml:space="preserve"><value>Fark etmez</value></data>
+  <data name="Common.Close" xml:space="preserve"><value>Kapat</value></data>
+  <data name="Common.None" xml:space="preserve"><value>Yok</value></data>
+
+  <data name="Paldex.Search" xml:space="preserve"><value>Ad veya numara ile ara</value></data>
+  <data name="Paldex.Filters" xml:space="preserve"><value>Filtreler</value></data>
+  <data name="Paldex.ClearFilters" xml:space="preserve"><value>Filtreleri temizle</value></data>
+  <data name="Paldex.ViewTable" xml:space="preserve"><value>Tablo görünümü</value></data>
+  <data name="Paldex.ViewCards" xml:space="preserve"><value>Kart görünümü</value></data>
+  <data name="Paldex.SortBy" xml:space="preserve"><value>Sıralama</value></data>
+  <data name="Paldex.Ascending" xml:space="preserve"><value>Artan</value></data>
+  <data name="Paldex.Descending" xml:space="preserve"><value>Azalan</value></data>
+  <data name="Paldex.ResultCount" xml:space="preserve"><value>{1} Pal'dan {0} tanesi</value></data>
+  <data name="Paldex.NoResults" xml:space="preserve"><value>Bu filtrelere uyan Pal yok.</value></data>
+  <data name="Paldex.Elements" xml:space="preserve"><value>Elementler</value></data>
+  <data name="Paldex.WorkTypes" xml:space="preserve"><value>İş uygunluğu (en düşük seviye)</value></data>
+  <data name="Paldex.Rarity" xml:space="preserve"><value>Nadirlik</value></data>
+  <data name="Paldex.Variants" xml:space="preserve"><value>Varyantlar</value></data>
+  <data name="Paldex.Nocturnal" xml:space="preserve"><value>Gececil</value></data>
+  <data name="Paldex.SameSpeciesOnly" xml:space="preserve"><value>Sadece aynı türle</value></data>
+  <data name="Paldex.WildCatchable" xml:space="preserve"><value>Vahşi doğada yakalanabilir</value></data>
+  <data name="Paldex.ColNo" xml:space="preserve"><value>No</value></data>
+  <data name="Paldex.ColName" xml:space="preserve"><value>Ad</value></data>
+  <data name="Paldex.ColWork" xml:space="preserve"><value>İş</value></data>
+  <data name="Paldex.ColNight" xml:space="preserve"><value>Gece</value></data>
+
+  <data name="Sort.DexNo" xml:space="preserve"><value>Dex numarası</value></data>
+  <data name="Sort.Name" xml:space="preserve"><value>Ad</value></data>
+  <data name="Sort.Rarity" xml:space="preserve"><value>Nadirlik</value></data>
+  <data name="Sort.Hp" xml:space="preserve"><value>HP</value></data>
+  <data name="Sort.Attack" xml:space="preserve"><value>Saldırı</value></data>
+  <data name="Sort.Defense" xml:space="preserve"><value>Savunma</value></data>
+  <data name="Sort.WalkSpeed" xml:space="preserve"><value>Yürüme hızı</value></data>
+  <data name="Sort.RunSpeed" xml:space="preserve"><value>Koşma hızı</value></data>
+  <data name="Sort.RideSprintSpeed" xml:space="preserve"><value>Binek sprint hızı</value></data>
+  <data name="Sort.TransportSpeed" xml:space="preserve"><value>Taşıma hızı</value></data>
+  <data name="Sort.Stamina" xml:space="preserve"><value>Dayanıklılık</value></data>
+  <data name="Sort.MaxFullStomach" xml:space="preserve"><value>Maks. tokluk</value></data>
+  <data name="Sort.FoodAmount" xml:space="preserve"><value>Yiyecek miktarı</value></data>
+  <data name="Sort.CraftSpeed" xml:space="preserve"><value>Üretim hızı</value></data>
+  <data name="Sort.Price" xml:space="preserve"><value>Fiyat</value></data>
+  <data name="Sort.Work" xml:space="preserve"><value>İş: {0}</value></data>
+
+  <data name="Detail.Stats" xml:space="preserve"><value>İstatistikler</value></data>
+  <data name="Detail.Size" xml:space="preserve"><value>Boyut</value></data>
+  <data name="Detail.Work" xml:space="preserve"><value>İş uygunluğu</value></data>
+  <data name="Detail.Skills" xml:space="preserve"><value>Aktif yetenekler</value></data>
+  <data name="Detail.SkillLevel" xml:space="preserve"><value>Sv</value></data>
+  <data name="Detail.Power" xml:space="preserve"><value>Güç</value></data>
+  <data name="Detail.Cooldown" xml:space="preserve"><value>Bekleme</value></data>
+  <data name="Detail.Passives" xml:space="preserve"><value>Garantili pasifler</value></data>
+  <data name="Detail.BestParents" xml:space="preserve"><value>En iyi ebeveyn çiftleri</value></data>
+  <data name="Detail.BestParentsHint" xml:space="preserve"><value>Ortalama {0} bu Pal'ınkine en yakın olan çiftler önce gelir.</value></data>
+  <data name="Detail.SeeAll" xml:space="preserve"><value>Hesaplayıcı'da aç ({0} çift)</value></data>
+  <data name="Detail.PartnerRank" xml:space="preserve"><value>Rütbe</value></data>
+  <data name="Detail.Drops" xml:space="preserve"><value>Düşen eşyalar</value></data>
+  <data name="Detail.DropItem" xml:space="preserve"><value>Eşya</value></data>
+  <data name="Detail.DropRate" xml:space="preserve"><value>Şans</value></data>
+  <data name="Detail.DropAmount" xml:space="preserve"><value>Adet</value></data>
+  <data name="Obtain.Method.Wild" xml:space="preserve"><value>Vahşi</value></data>
+  <data name="Obtain.Method.Imprisoned" xml:space="preserve"><value>Hapsedilmiş boss</value></data>
+  <data name="Obtain.Method.DungeonBoss" xml:space="preserve"><value>Zindan boss'u</value></data>
+  <data name="Obtain.Method.Cage" xml:space="preserve"><value>Kafes</value></data>
+  <data name="Obtain.Method.Merchant" xml:space="preserve"><value>Tüccar</value></data>
+  <data name="Obtain.Method.SameSpeciesOnly" xml:space="preserve"><value>Yalnızca aynı türden</value></data>
+  <data name="Obtain.Method.Recipe" xml:space="preserve"><value>Özel tarif</value></data>
+  <data name="Obtain.ColRegion" xml:space="preserve"><value>Bölge</value></data>
+  <data name="Obtain.ColLevel" xml:space="preserve"><value>Seviye</value></data>
+  <data name="Obtain.ColTime" xml:space="preserve"><value>Zaman</value></data>
+  <data name="Obtain.ColAreas" xml:space="preserve"><value>Alanlar</value></data>
+  <data name="Obtain.ColKind" xml:space="preserve"><value>Tür</value></data>
+  <data name="Obtain.ColPosition" xml:space="preserve"><value>Harita konumu</value></data>
+  <data name="Obtain.ColArea" xml:space="preserve"><value>Alan</value></data>
+  <data name="Obtain.AnyTime" xml:space="preserve"><value>Gündüz ve gece</value></data>
+  <data name="Obtain.Night" xml:space="preserve"><value>Yalnızca gece</value></data>
+  <data name="Guide.Group.reference" xml:space="preserve"><value>Başvuru</value></data>
+  <data name="Guide.GroupDesc.reference" xml:space="preserve"><value>Oyun verisinden tablolar; okunmaz, aranır.</value></data>
+  <data name="Ranch.Title" xml:space="preserve"><value>Ağıl: kim ne düşürür</value></data>
+  <data name="Ranch.BaseFarming" xml:space="preserve"><value>Temel Çiftçilik {0}</value></data>
+  <data name="Ranch.Level" xml:space="preserve"><value>Seviye {0}</value></data>
+  <data name="Ranch.BelowBase" xml:space="preserve"><value>Bu türün temel seviyesi {0}</value></data>
+  <data name="Ranch.Summary" xml:space="preserve"><value>Ağıl'a atanan Pal'ların düşürdüğü eşyalar; birden çok eşya varsa her birinin olasılığı ve Çiftçilik seviyesine göre adet.</value></data>
+  <data name="Ranch.Scope" xml:space="preserve"><value>{0} Pal · {1} eşya</value></data>
+  <data name="Ranch.SearchTool" xml:space="preserve"><value>Pal ya da eşya ara</value></data>
+  <data name="Ranch.InRanchHit" xml:space="preserve"><value>Ağıl'da: {0} · {1} Pal</value></data>
+  <data name="Ranch.LevelNote" xml:space="preserve"><value>Temel seviye 1–4; Uygulamalı Çiftçilik El Kitabı ve pasiflerle 10'a kadar çıkar.</value></data>
+  <data name="Ranch.ByPal" xml:space="preserve"><value>Pal'a göre</value></data>
+  <data name="Ranch.ByItem" xml:space="preserve"><value>Eşyaya göre</value></data>
+  <data name="Ranch.Search" xml:space="preserve"><value>Pal ya da eşya ara</value></data>
+  <data name="Ranch.OnlyOwned" xml:space="preserve"><value>Yalnız sende olanlar</value></data>
+  <data name="Ranch.MyPalsEmpty" xml:space="preserve"><value>Pal'larım boş</value></data>
+  <data name="Ranch.PalCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Ranch.ItemCount" xml:space="preserve"><value>{0} eşya</value></data>
+  <data name="Ranch.PalsCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Ranch.ItemsCount" xml:space="preserve"><value>{0} eşya</value></data>
+  <data name="Ranch.ItemWord" xml:space="preserve"><value>eşya</value></data>
+  <data name="Ranch.OpenByItem" xml:space="preserve"><value>Eşyaya göre aç</value></data>
+  <data name="Ranch.Owned" xml:space="preserve"><value>Sende {0}</value></data>
+  <data name="Ranch.OwnedPals" xml:space="preserve"><value>Sende {0} Pal</value></data>
+  <data name="Ranch.NoResults" xml:space="preserve"><value>"{0}" ile eşleşen Pal ya da eşya yok.</value></data>
+  <data name="Ranch.ClearSearch" xml:space="preserve"><value>Aramayı temizle</value></data>
+  <data name="Ranch.OpenPaldex" xml:space="preserve"><value>Paldex'te aç</value></data>
+  <data name="Ranch.PalLevel" xml:space="preserve"><value>Sv. {0}</value></data>
+  <data name="Ranch.ShowInMyPals" xml:space="preserve"><value>Pal'larım'da göster</value></data>
+  <data name="Ranch.NotOwned" xml:space="preserve"><value>Sende yok</value></data>
+  <data name="Ranch.MakeInPlanner" xml:space="preserve"><value>Planlayıcı'da üret</value></data>
+  <data name="Ranch.EveryDrop" xml:space="preserve"><value>Çiftçilik seviyesi {0}'da her düşüşte</value></data>
+  <data name="Ranch.PalHintMulti" xml:space="preserve"><value>Her düşüşte tek eşya çıkar; olasılıklar toplamı %100. Seviye yükseldikçe yeni eşyalar ve daha çok adet gelir. Sağdaki tablo bütün seviyeleri gösterir; üstte olasılık, altta adet.</value></data>
+  <data name="Ranch.PalHintSingle" xml:space="preserve"><value>Her düşüşte bu eşya çıkar; seviye yalnız adedi büyütür. Tablo bütün seviyeleri gösterir; hücrede adet.</value></data>
+  <data name="Ranch.Item" xml:space="preserve"><value>Eşya</value></data>
+  <data name="Ranch.PalWord" xml:space="preserve"><value>Pal</value></data>
+  <data name="Ranch.ChanceAt" xml:space="preserve"><value>Seviye {0}'da olasılık</value></data>
+  <data name="Ranch.Amount" xml:space="preserve"><value>Adet</value></data>
+  <data name="Ranch.Average" xml:space="preserve"><value>Ortalama</value></data>
+  <data name="Ranch.AverageHint" xml:space="preserve"><value>Ortalama = olasılık × ortalama adet: bu Pal'ın her düşüşünde gelen beklenen {0}. Kaç dakikada bir düştüğü veride yok.</value></data>
+  <data name="Ranch.LevelHeader" xml:space="preserve"><value>Seviye · bir sayıya tıkla</value></data>
+  <data name="Ranch.LevelAria" xml:space="preserve"><value>Çiftçilik seviyesi {0}</value></data>
+  <data name="Ranch.Always" xml:space="preserve"><value>her düşüşte</value></data>
+  <data name="Ranch.FromLevel" xml:space="preserve"><value>seviye {0}'dan itibaren</value></data>
+  <data name="Ranch.CellAria" xml:space="preserve"><value>Seviye {0}: {1}, {2} adet</value></data>
+  <data name="Ranch.CellAriaSingle" xml:space="preserve"><value>Seviye {0}: {1} adet</value></data>
+  <data name="Ranch.ItemSub" xml:space="preserve"><value>Ağıl'da {0} Pal düşürür · sıra: düşüş başına ortalama adet</value></data>
+  <data name="Ranch.MoreItems" xml:space="preserve"><value>+{0} eşya daha</value></data>
+  <data name="Ranch.OnlyThis" xml:space="preserve"><value>yalnız bu eşya</value></data>
+  <data name="Ranch.InRanch" xml:space="preserve"><value>Ağıl'da</value></data>
+  <data name="Ranch.LevelRange" xml:space="preserve"><value>seviye {2}: {0} · seviye 10: {1}</value></data>
+  <data name="Ranch.MoreFromLevel" xml:space="preserve"><value>+{0} eşya seviye {1} ve üstünde</value></data>
+  <data name="Ranch.OpenTable" xml:space="preserve"><value>Ağıl tablosunda aç</value></data>
+  <data name="Obtain.NightOnlyTitle" xml:space="preserve"><value>Yalnız gece çıkar</value></data>
+  <data name="Detail.Map.LegendNight" xml:space="preserve"><value>Yalnız gece doğan alan (içi boş nokta)</value></data>
+  <data name="Detail.Map.NightArea" xml:space="preserve"><value>Doğma alanı, yalnız gece</value></data>
+  <data name="Obtain.Aura" xml:space="preserve"><value>Dünya Ağacı aurası</value></data>
+  <data name="Obtain.AreaCount" xml:space="preserve"><value>{0} alan</value></data>
+  <data name="Obtain.Level" xml:space="preserve"><value>Sv {0}–{1}</value></data>
+  <data name="Obtain.LevelOne" xml:space="preserve"><value>Sv {0}</value></data>
+  <data name="Obtain.TreeMap" xml:space="preserve"><value>Dünya Ağacı haritası</value></data>
+  <data name="Obtain.RankNormal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Obtain.RankMidBoss" xml:space="preserve"><value>Ara boss</value></data>
+  <data name="Obtain.RankBoss" xml:space="preserve"><value>Boss</value></data>
+  <data name="Obtain.BreedingPairs" xml:space="preserve"><value>{0}: {1} ebeveyn çifti</value></data>
+  <data name="Obtain.BreedingOnly" xml:space="preserve"><value>Breeding dışında elde edilemez.</value></data>
+  <data name="Obtain.Filter" xml:space="preserve"><value>Elde etme yöntemi</value></data>
+  <data name="Obtain.FilterOnly" xml:space="preserve"><value>Yalnızca seçilen yöntemlerle (breeding hariç)</value></data>
+  <data name="Detail.Obtain" xml:space="preserve"><value>Nasıl bulunur</value></data>
+  <data name="Detail.WildLevel" xml:space="preserve"><value>Vahşi: Sv {0}–{1}</value></data>
+  <data name="Detail.NotWild" xml:space="preserve"><value>Vahşi doğada bulunmaz</value></data>
+  <data name="Detail.Nocturnal" xml:space="preserve"><value>Gececil</value></data>
+  <data name="Detail.Price" xml:space="preserve"><value>Fiyat</value></data>
+  <data name="Detail.Rarity" xml:space="preserve"><value>Nadirlik</value></data>
+  <data name="Detail.StatHp" xml:space="preserve"><value>HP</value></data>
+  <data name="Detail.StatAttack" xml:space="preserve"><value>Saldırı</value></data>
+  <data name="Detail.StatDefense" xml:space="preserve"><value>Savunma</value></data>
+  <data name="Detail.StatWalk" xml:space="preserve"><value>Yürüme hızı</value></data>
+  <data name="Detail.StatRun" xml:space="preserve"><value>Koşma hızı</value></data>
+  <data name="Detail.StatRide" xml:space="preserve"><value>Binek sprint hızı</value></data>
+  <data name="Detail.StatTransport" xml:space="preserve"><value>Taşıma hızı</value></data>
+  <data name="Detail.StatStamina" xml:space="preserve"><value>Dayanıklılık</value></data>
+  <data name="Detail.StatFullStomach" xml:space="preserve"><value>Maks. tokluk</value></data>
+  <data name="Detail.StatFood" xml:space="preserve"><value>Yiyecek miktarı</value></data>
+  <data name="Detail.StatCraft" xml:space="preserve"><value>Üretim hızı</value></data>
+
+  <data name="Skills.TabPassives" xml:space="preserve"><value>Pasifler</value></data>
+  <data name="Skills.TabActives" xml:space="preserve"><value>Aktif yetenekler</value></data>
+  <data name="Skills.Search" xml:space="preserve"><value>Yetenek ara</value></data>
+  <data name="Skills.Tags" xml:space="preserve"><value>Etiketler</value></data>
+  <data name="Skills.RankMin" xml:space="preserve"><value>En düşük rank</value></data>
+  <data name="Skills.RankMax" xml:space="preserve"><value>En yüksek rank</value></data>
+  <data name="Skills.ColName" xml:space="preserve"><value>Ad</value></data>
+  <data name="Skills.ColRank" xml:space="preserve"><value>Rank</value></data>
+  <data name="Skills.ColDescription" xml:space="preserve"><value>Etki</value></data>
+  <data name="Skills.ColTags" xml:space="preserve"><value>Etiketler</value></data>
+  <data name="Skills.ColRandom" xml:space="preserve"><value>Rastgele</value></data>
+  <data name="Skills.ColSurgery" xml:space="preserve"><value>Ameliyat</value></data>
+  <data name="Skills.ColElement" xml:space="preserve"><value>Element</value></data>
+  <data name="Skills.ColPower" xml:space="preserve"><value>Güç</value></data>
+  <data name="Skills.ColCooldown" xml:space="preserve"><value>Bekleme</value></data>
+  <data name="Skills.ColInherit" xml:space="preserve"><value>Kalıtılabilir</value></data>
+  <data name="Skills.ColFruit" xml:space="preserve"><value>Yetenek meyvesi</value></data>
+  <data name="Skills.RandomYes" xml:space="preserve"><value>Rastgele çıkabilir (ağırlık {0})</value></data>
+  <data name="Skills.RandomNo" xml:space="preserve"><value>Rastgele çıkmaz</value></data>
+  <data name="Skills.SurgeryYes" xml:space="preserve"><value>Ameliyat masasında uygulanabilir</value></data>
+  <data name="Skills.SurgeryNo" xml:space="preserve"><value>Ameliyat masasında uygulanamaz</value></data>
+  <data name="Skills.SurgeryItem" xml:space="preserve"><value>Gereken eşya</value></data>
+  <data name="Skills.PenaltyTip" xml:space="preserve"><value>Kötüleştirir: {0}</value></data>
+  <data name="Skills.PassiveCount" xml:space="preserve"><value>{1} pasiften {0} tanesi</value></data>
+  <data name="Skills.ActiveCount" xml:space="preserve"><value>{1} aktif yetenekten {0} tanesi</value></data>
+  <data name="Skills.NoResults" xml:space="preserve"><value>Bu filtrelere uyan yetenek yok.</value></data>
+  <data name="Skills.OwnedPals" xml:space="preserve"><value>Bu pasife sahip Pal'larım ({0})</value></data>
+  <data name="Skills.OwnedPalsHint" xml:space="preserve"><value>Bu pasife sahip hiç Pal'ın yok.</value></data>
+  <data name="Skills.GuaranteedBy" xml:space="preserve"><value>Garantili olduğu Pal'lar</value></data>
+  <data name="Skills.Id" xml:space="preserve"><value>Dahili ad</value></data>
+
+  <data name="Tag.WorkSpeed" xml:space="preserve"><value>Çalışma hızı</value></data>
+  <data name="Tag.Attack" xml:space="preserve"><value>Saldırı</value></data>
+  <data name="Tag.Defense" xml:space="preserve"><value>Savunma</value></data>
+  <data name="Tag.Movement" xml:space="preserve"><value>Hareket</value></data>
+  <data name="Tag.Stamina" xml:space="preserve"><value>Dayanıklılık</value></data>
+  <data name="Tag.Hunger" xml:space="preserve"><value>Açlık</value></data>
+  <data name="Tag.Sanity" xml:space="preserve"><value>Akıl sağlığı</value></data>
+  <data name="Tag.ElementDamage" xml:space="preserve"><value>Element hasarı</value></data>
+  <data name="Tag.ElementResist" xml:space="preserve"><value>Element direnci</value></data>
+  <data name="Tag.Mount" xml:space="preserve"><value>Binek</value></data>
+  <data name="Tag.Base" xml:space="preserve"><value>Üs</value></data>
+  <data name="Tag.Negative" xml:space="preserve"><value>Olumsuz</value></data>
+  <data name="Tag.Mutation" xml:space="preserve"><value>Mutasyon</value></data>
+  <data name="Tag.WorldTree" xml:space="preserve"><value>Dünya Ağacı</value></data>
+  <data name="Tag.Other" xml:space="preserve"><value>Diğer</value></data>
+
+  <data name="Common.Save" xml:space="preserve"><value>Kaydet</value></data>
+  <data name="Common.Cancel" xml:space="preserve"><value>Vazgeç</value></data>
+  <data name="Common.Edit" xml:space="preserve"><value>Düzenle</value></data>
+  <data name="Common.Remove" xml:space="preserve"><value>Kaldır</value></data>
+  <data name="Common.All" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Common.Unknown" xml:space="preserve"><value>Bilinmiyor</value></data>
+
+  <data name="MyPals.Add" xml:space="preserve"><value>Pal ekle</value></data>
+  <data name="MyPals.Count" xml:space="preserve"><value>{1} Pal'dan {0} tanesi</value></data>
+  <data name="MyPals.ScopeInfo" xml:space="preserve"><value>{0} tanesi planlamada kullanılıyor</value></data>
+  <data name="MyPals.Empty" xml:space="preserve"><value>Henüz Pal yok. Elle ekle ya da kaynaklar panelinden bir dünya içe aktar.</value></data>
+  <data name="MyPals.NoMatch" xml:space="preserve"><value>Bu filtrelere uyan Pal yok.</value></data>
+  <data name="MyPals.FilterSpecies" xml:space="preserve"><value>Tür</value></data>
+  <data name="MyPals.FilterPassives" xml:space="preserve"><value>Bu pasiflerin hepsine sahip</value></data>
+  <data name="MyPals.FilterGender" xml:space="preserve"><value>Cinsiyet</value></data>
+  <data name="MyPals.FilterLocation" xml:space="preserve"><value>Konum</value></data>
+  <data name="MyPals.FilterOwner" xml:space="preserve"><value>Sahip</value></data>
+  <data name="MyPals.FilterSource" xml:space="preserve"><value>Kaynak</value></data>
+  <data name="MyPals.ClearFilters" xml:space="preserve"><value>Filtreleri temizle</value></data>
+  <data name="MyPals.ColPal" xml:space="preserve"><value>Pal</value></data>
+  <data name="MyPals.ColLevel" xml:space="preserve"><value>Sv</value></data>
+  <data name="MyPals.ColIvs" xml:space="preserve"><value>IV</value></data>
+  <data name="MyPals.ColLocation" xml:space="preserve"><value>Konum</value></data>
+  <data name="MyPals.ColOwner" xml:space="preserve"><value>Sahip</value></data>
+  <data name="MyPals.ColSource" xml:space="preserve"><value>Kaynak</value></data>
+  <data name="MyPals.ColUse" xml:space="preserve"><value>Planlamada kullan</value></data>
+  <data name="MyPals.Edited" xml:space="preserve"><value>Senin düzelttiğin</value></data>
+  <data name="MyPals.OutOfScope" xml:space="preserve"><value>Sahiplik kapsamı dışında, planlamada kullanılmaz</value></data>
+  <data name="MyPals.Slot" xml:space="preserve"><value>yuva {0}</value></data>
+  <data name="MyPals.ConfirmRemove" xml:space="preserve"><value>Bu Pal listeden kaldırılsın mı?</value></data>
+  <data name="MyPals.OrphanOverrides" xml:space="preserve"><value>{0} düzeltme artık hiçbir kaynakta bulunmayan Pal'lara ait. Saklanıyor, Pal'lar geri gelirse yeniden uygulanır.</value></data>
+  <data name="MyPals.Duplicates" xml:space="preserve"><value>{0} kopya gizlendi (aynı Pal birden çok kaynaktan geliyor)</value></data>
+
+  <data name="Location.Party" xml:space="preserve"><value>Takım</value></data>
+  <data name="Term.Breeding" xml:space="preserve"><value>Breeding</value></data>
+  <data name="Term.BreedingPower" xml:space="preserve"><value>Breeding gücü</value></data>
+  <data name="Term.Mutation" xml:space="preserve"><value>Mutasyon</value></data>
+  <data name="Term.Dungeon" xml:space="preserve"><value>Zindan</value></data>
+  <data name="Term.TowerBoss" xml:space="preserve"><value>Kule Boss'u</value></data>
+  <data name="Term.Palbox" xml:space="preserve"><value>Pal Kutusu</value></data>
+  <data name="Term.ViewingCage" xml:space="preserve"><value>Sergileme Kafesi</value></data>
+  <data name="Term.DimensionalPalStorage" xml:space="preserve"><value>Boyutsal Pal Deposu</value></data>
+  <data name="Term.GlobalPalbox" xml:space="preserve"><value>Global Pal Kutusu</value></data>
+  <data name="Term.Alpha" xml:space="preserve"><value>Alfa Pal</value></data>
+  <data name="Location.Base" xml:space="preserve"><value>Üs</value></data>
+  <data name="Location.Unknown" xml:space="preserve"><value>Bilinmiyor</value></data>
+
+  <data name="SourceKind.Save" xml:space="preserve"><value>Save</value></data>
+  <data name="SourceKind.ModBridge" xml:space="preserve"><value>Mod</value></data>
+  <data name="SourceKind.Manual" xml:space="preserve"><value>Elle</value></data>
+
+  <data name="Editor.AddTitle" xml:space="preserve"><value>Pal ekle</value></data>
+  <data name="Editor.EditTitle" xml:space="preserve"><value>Pal düzenle</value></data>
+  <data name="Editor.Species" xml:space="preserve"><value>Tür</value></data>
+  <data name="Editor.Gender" xml:space="preserve"><value>Cinsiyet</value></data>
+  <data name="Editor.Level" xml:space="preserve"><value>Seviye</value></data>
+  <data name="Editor.Rank" xml:space="preserve"><value>Yoğunlaştırma seviyesi (1–5)</value></data>
+  <data name="Editor.Passives" xml:space="preserve"><value>Pasifler</value></data>
+  <data name="Editor.Ivs" xml:space="preserve"><value>IV gir (isteğe bağlı)</value></data>
+  <data name="Editor.IvHp" xml:space="preserve"><value>HP</value></data>
+  <data name="Editor.IvAttack" xml:space="preserve"><value>Saldırı</value></data>
+  <data name="Editor.IvDefense" xml:space="preserve"><value>Savunma</value></data>
+  <data name="Editor.Nickname" xml:space="preserve"><value>Takma ad</value></data>
+  <data name="Editor.SourceNote" xml:space="preserve"><value>Bu Pal bir save'den ya da moddan geliyor. Değişikliklerin düzeltme olarak saklanır ve her yenilemeden sonra yeniden uygulanır.</value></data>
+  <data name="Editor.Revert" xml:space="preserve"><value>Kaynağa döndür</value></data>
+  <data name="Editor.SpeciesRequired" xml:space="preserve"><value>Bir tür seç.</value></data>
+
+  <data name="Owned.Error.UnknownSpecies" xml:space="preserve"><value>Bilinmeyen tür.</value></data>
+  <data name="Owned.Error.UnknownPassive" xml:space="preserve"><value>Bilinmeyen pasif.</value></data>
+  <data name="Owned.Error.TooManyPassives" xml:space="preserve"><value>Bir Pal'ın en fazla 4 pasifi olabilir.</value></data>
+  <data name="Owned.Error.DuplicatePassive" xml:space="preserve"><value>Aynı pasif iki kez eklendi.</value></data>
+  <data name="Owned.Error.IvRange" xml:space="preserve"><value>IV değerleri 0 ile 100 arasında olmalı.</value></data>
+  <data name="Owned.Error.LevelRange" xml:space="preserve"><value>Seviye 1 ile 100 arasında olmalı.</value></data>
+  <data name="Owned.Error.RankRange" xml:space="preserve"><value>Yoğunlaştırma seviyesi 1 ile 5 arasında olmalı.</value></data>
+  <data name="Owned.Error.NotManual" xml:space="preserve"><value>Yalnızca elle eklenen Pal'lar bu şekilde değiştirilebilir.</value></data>
+
+  <data name="PassivePicker.Add" xml:space="preserve"><value>Pasif ekle</value></data>
+  <data name="PassivePicker.Full" xml:space="preserve"><value>En fazla {0} pasif eklenebilir</value></data>
+  <data name="PassivePicker.NoResults" xml:space="preserve"><value>Pasif bulunamadı</value></data>
+
+  <data name="Picker.OwnedPlaceholder" xml:space="preserve"><value>Pal'larında ara</value></data>
+  <data name="Picker.NoOwned" xml:space="preserve"><value>Sahip olunan Pal bulunamadı</value></data>
+  <data name="Pair.FromMyPals" xml:space="preserve"><value>Pal'larımdan</value></data>
+
+  <data name="Scope.Title" xml:space="preserve"><value>Sahiplik kapsamı</value></data>
+  <data name="Scope.Intro" xml:space="preserve"><value>Planlayıcının ve "sadece sahip olduklarım" filtrelerinin hangi Pal'larını kullanabileceğini belirler.</value></data>
+  <data name="Scope.Mine" xml:space="preserve"><value>Sadece benimkiler</value></data>
+  <data name="Scope.Selected" xml:space="preserve"><value>Seçili oyuncular</value></data>
+  <data name="Scope.All" xml:space="preserve"><value>Tüm oyuncular</value></data>
+  <data name="Scope.IAm" xml:space="preserve"><value>Ben buyum</value></data>
+  <data name="Scope.Players" xml:space="preserve"><value>Oyuncular</value></data>
+  <data name="Scope.NoPlayers" xml:space="preserve"><value>Henüz bilinen oyuncu yok. Bir dünya içe aktarılınca görünürler.</value></data>
+  <data name="Scope.Locations" xml:space="preserve"><value>Sayılan konumlar</value></data>
+
+  <data name="Sources.Title" xml:space="preserve"><value>Kaynaklar</value></data>
+  <data name="Sources.Summary" xml:space="preserve"><value>{0} kaynak</value></data>
+  <data name="Sources.FindLocal" xml:space="preserve"><value>Yerel dünyaları bul</value></data>
+  <data name="Sources.PickFolder" xml:space="preserve"><value>Klasör seç</value></data>
+  <data name="Sources.ImportZip" xml:space="preserve"><value>Zip içe aktar</value></data>
+  <data name="Sources.AddGlobal" xml:space="preserve"><value>Global Pal Kutusu ekle (gelişmiş)</value></data>
+  <data name="Sources.Refresh" xml:space="preserve"><value>Şimdi yenile</value></data>
+  <data name="Sources.RefreshAll" xml:space="preserve"><value>Hepsini yenile</value></data>
+  <data name="Sources.Remove" xml:space="preserve"><value>Kaynağı kaldır</value></data>
+  <data name="Sources.None" xml:space="preserve"><value>Henüz kaynak yok. Yerel dünyalarını bul, senkronize bir klasör seç ya da zip içe aktar.</value></data>
+  <data name="Sources.TypeWorld" xml:space="preserve"><value>Dünya klasörü</value></data>
+  <data name="Sources.TypeZip" xml:space="preserve"><value>Zip içe aktarma</value></data>
+  <data name="Sources.State.Idle" xml:space="preserve"><value>Bekliyor</value></data>
+  <data name="Sources.State.Reading" xml:space="preserve"><value>Okunuyor…</value></data>
+  <data name="Sources.State.Ok" xml:space="preserve"><value>Tamam</value></data>
+  <data name="Sources.State.Error" xml:space="preserve"><value>Hata</value></data>
+  <data name="Sources.LastSync" xml:space="preserve"><value>Son eşitleme: {0}</value></data>
+  <data name="Sources.NeverSynced" xml:space="preserve"><value>Henüz okunmadı</value></data>
+  <data name="Sources.PalCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Sources.Enabled" xml:space="preserve"><value>Etkin</value></data>
+  <data name="Sources.Discovered" xml:space="preserve"><value>Bu bilgisayardaki dünyalar</value></data>
+  <data name="Sources.NoWorlds" xml:space="preserve"><value>Bu bilgisayarda Palworld dünyası bulunamadı.</value></data>
+  <data name="Sources.Unnamed" xml:space="preserve"><value>(adsız dünya)</value></data>
+  <data name="Sources.Add" xml:space="preserve"><value>Ekle</value></data>
+  <data name="Sources.Added" xml:space="preserve"><value>Ekli</value></data>
+  <data name="Sources.SavedAt" xml:space="preserve"><value>Kaydedilme: {0}</value></data>
+  <data name="Sources.HostedElsewhere" xml:space="preserve"><value>Katıldığın dünya: Pal verisi host'ta duruyor. Senkronize klasör, host'tan gelen zip ya da yardımcı modu kullan.</value></data>
+  <data name="Sources.NoLevel" xml:space="preserve"><value>Bu klasörde dünya (Level.sav) bulunamadı.</value></data>
+  <data name="Sources.ZipFailed" xml:space="preserve"><value>Zip içe aktarılamadı.</value></data>
+  <data name="Sources.NoGlobalFound" xml:space="preserve"><value>Bu bilgisayarda Global Pal Kutusu dosyası bulunamadı. Bunun yerine GlobalPalStorage.sav dosyasını seç.</value></data>
+  <data name="Sources.GlobalAdded" xml:space="preserve"><value>{0} Global Pal Kutusu kaynağı eklendi.</value></data>
+  <data name="Sources.PickFolderTitle" xml:space="preserve"><value>Bir dünya klasörü seç</value></data>
+  <data name="Sources.PickZipTitle" xml:space="preserve"><value>Dünya içeren bir zip dosyası seç</value></data>
+  <data name="Sources.PickGlobalTitle" xml:space="preserve"><value>GlobalPalStorage.sav seç</value></data>
+  <data name="Sources.ZipFilter" xml:space="preserve"><value>Zip dosyaları|*.zip</value></data>
+  <data name="Sources.SaveFilter" xml:space="preserve"><value>Palworld save|GlobalPalStorage.sav</value></data>
+  <data name="Sources.OozMissing" xml:space="preserve"><value>Save dosyaları okunamıyor: Visual C++ x64 çalışma zamanı eksik.</value></data>
+  <data name="Sources.OozInstall" xml:space="preserve"><value>Çalışma zamanını indir</value></data>
+  <data name="Import.Error.HostedElsewhere" xml:space="preserve"><value>Bu dünya başka bir oyuncuda host ediliyor; Pal verisi bu bilgisayarda yok.</value></data>
+
+  <data name="Sync.NoSource" xml:space="preserve"><value>Pal kaynağı yok</value></data>
+  <data name="Sync.Badge" xml:space="preserve"><value>{0} Pal · {1}</value></data>
+  <data name="Sync.BadgeNever" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Calculator.Tab.PassiveOdds" xml:space="preserve"><value>Pasif olasılığı</value></data>
+  <data name="Odds.Title" xml:space="preserve"><value>Pasif kalıtım olasılığı</value></data>
+  <data name="Odds.ParentA" xml:space="preserve"><value>Ebeveyn A pasifleri</value></data>
+  <data name="Odds.ParentB" xml:space="preserve"><value>Ebeveyn B pasifleri</value></data>
+  <data name="Odds.UnknownA" xml:space="preserve"><value>A'nın bilinmeyen pasifleri</value></data>
+  <data name="Odds.UnknownB" xml:space="preserve"><value>B'nin bilinmeyen pasifleri</value></data>
+  <data name="Odds.Desired" xml:space="preserve"><value>İstenen pasifler</value></data>
+  <data name="Odds.UsePositive" xml:space="preserve"><value>Ebeveynlerin olumlu pasiflerini kullan</value></data>
+  <data name="Odds.MaxUnwanted" xml:space="preserve"><value>İzin verilen en fazla istenmeyen pasif</value></data>
+  <data name="Odds.SpecialCake" xml:space="preserve"><value>Özel Kek</value></data>
+  <data name="Odds.PerEgg" xml:space="preserve"><value>Yumurta başına şans</value></data>
+  <data name="Odds.ExpectedEggs" xml:space="preserve"><value>Beklenen yumurta</value></data>
+  <data name="Odds.Distribution" xml:space="preserve"><value>Ebeveynlerden gelen pasif sayısı</value></data>
+  <data name="Odds.InheritedCount" xml:space="preserve"><value>{0} pasif</value></data>
+  <data name="Odds.Impossible" xml:space="preserve"><value>imkânsız</value></data>
+  <data name="Odds.FromOwnedA" xml:space="preserve"><value>Pal'ımdan doldur (A)</value></data>
+  <data name="Odds.FromOwnedB" xml:space="preserve"><value>Pal'ımdan doldur (B)</value></data>
+  <data name="Odds.Warn.DesiredMissing" xml:space="preserve"><value>İstenen bir pasif ebeveynlerin havuzunda yok.</value></data>
+  <data name="Odds.Warn.PoolTooLarge" xml:space="preserve"><value>Havuzda 4'ten fazla pasif var, şans düşer.</value></data>
+  <data name="Odds.Warn.RandomAddFailure" xml:space="preserve"><value>Oyundaki rastgele ekleme hatası (en çok ~%1,6) modellenmedi.</value></data>
+  <data name="Plan.Target" xml:space="preserve"><value>Hedef</value></data>
+  <data name="Plan.Start" xml:space="preserve"><value>Başlangıç ebeveyni</value></data>
+  <data name="Plan.StartNone" xml:space="preserve"><value>Yok</value></data>
+  <data name="Plan.StartOwned" xml:space="preserve"><value>Pal'larımdan biri</value></data>
+  <data name="Plan.StartSpecies" xml:space="preserve"><value>Bir tür</value></data>
+  <data name="Plan.PreferredAdd" xml:space="preserve"><value>Tercihli Pal'lar (ekle)</value></data>
+  <data name="Plan.PassivesDisabled" xml:space="preserve"><value>İstenen pasifler (pasif çözücüyle gelecek)</value></data>
+  <data name="Plan.AllowWild" xml:space="preserve"><value>Vahşi Pal'a izin ver</value></data>
+  <data name="Plan.MaxWild" xml:space="preserve"><value>En fazla vahşi</value></data>
+  <data name="Plan.MaxSteps" xml:space="preserve"><value>En fazla adım</value></data>
+  <data name="Plan.ExcludeLegendary" xml:space="preserve"><value>Efsanevi vahşi Pal'ları atla</value></data>
+  <data name="Plan.Compute" xml:space="preserve"><value>Plan bul</value></data>
+  <data name="Plan.Cancel" xml:space="preserve"><value>İptal</value></data>
+  <data name="Plan.Stale" xml:space="preserve"><value>Sonuçlar eski. Pal'ların değişti; yeniden hesapla.</value></data>
+  <data name="Plan.Alternative" xml:space="preserve"><value>Plan {0}</value></data>
+  <data name="Plan.CardSteps" xml:space="preserve"><value>{0} adım</value></data>
+  <data name="Plan.CardWild" xml:space="preserve"><value>{0} vahşi Pal</value></data>
+  <data name="Plan.CardEggs" xml:space="preserve"><value>Beklenen yumurta: {0}</value></data>
+  <data name="Plan.TreeTitle" xml:space="preserve"><value>Breeding ağacı</value></data>
+  <data name="Plan.ChecklistTitle" xml:space="preserve"><value>Adım adım</value></data>
+  <data name="Plan.StepNo" xml:space="preserve"><value>Adım {0}</value></data>
+  <data name="Plan.FromStep" xml:space="preserve"><value>önceki adımlardan</value></data>
+  <data name="Plan.ExpectedEggsShort" xml:space="preserve"><value>{0} yumurta</value></data>
+  <data name="Plan.PreferredTitle" xml:space="preserve"><value>Tercihli Pal'lar</value></data>
+  <data name="Plan.PreferredUsable" xml:space="preserve"><value>Kullanılabilir ({0} adım)</value></data>
+  <data name="Plan.PalboxSlot" xml:space="preserve"><value>{0} {1}. sayfa ({2},{3})</value></data>
+  <data name="Plan.SlotInLocation" xml:space="preserve"><value>{0}, {1}. yuva</value></data>
+  <data name="Plan.Obtain.Wild" xml:space="preserve"><value>Yakala</value></data>
+  <data name="Plan.Obtain.Cage" xml:space="preserve"><value>Kafesten al</value></data>
+  <data name="Plan.Obtain.Merchant" xml:space="preserve"><value>Tüccardan satın al</value></data>
+  <data name="Plan.Obtain.Fishing" xml:space="preserve"><value>Balık tut</value></data>
+  <data name="Plan.Obtain.Dungeon" xml:space="preserve"><value>Zindanda bul</value></data>
+  <data name="Plan.Obtain.AlphaBoss" xml:space="preserve"><value>Alfa Pal'ı yen</value></data>
+  <data name="Plan.Obtain.Imprisoned" xml:space="preserve"><value>Hapsedilmiş boss'u yen</value></data>
+  <data name="Plan.Obtain.DungeonBoss" xml:space="preserve"><value>Zindan boss'unu yen</value></data>
+  <data name="Plan.Obtain.Raid" xml:space="preserve"><value>Akın</value></data>
+  <data name="Plan.Note.TargetOwned" xml:space="preserve"><value>Bu Pal zaten sende var.</value></data>
+  <data name="Plan.Note.SameSpeciesWild" xml:space="preserve"><value>{0} yalnızca aynı türle elde edilir; yakalaman gerekir.</value></data>
+  <data name="Plan.Note.StartAssumed" xml:space="preserve"><value>Başlangıç ebeveyni {0} elde edilebilir varsayıldı.</value></data>
+  <data name="Plan.Diag.NoPlan" xml:space="preserve"><value>Bu ayarlarla plan bulunamadı.</value></data>
+  <data name="Plan.Diag.WildOff" xml:space="preserve"><value>Vahşi Pal'lar kapalı; daha fazla türe ulaşmak için izin ver.</value></data>
+  <data name="Plan.Diag.StepLimit" xml:space="preserve"><value>Hedef izin verilenden fazla adım gerektiriyor; adım sınırını artır.</value></data>
+  <data name="Plan.Diag.WildLimit" xml:space="preserve"><value>Daha fazla vahşi Pal'a izin vermeyi dene.</value></data>
+  <data name="Plan.Diag.StartUnused" xml:space="preserve"><value>Hiçbir plan seçilen başlangıç ebeveynini kullanmıyor.</value></data>
+  <data name="Plan.Diag.PreferredUnused" xml:space="preserve"><value>Hiçbir plan tercihli Pal'lardan birini kullanmıyor.</value></data>
+  <data name="Plan.Reason.NotUsable" xml:space="preserve"><value>Onu kullanan plan bulunamadı.</value></data>
+  <data name="Plan.Passives" xml:space="preserve"><value>İstenen pasifler</value></data>
+  <data name="Plan.Presets" xml:space="preserve"><value>Hazır setler</value></data>
+  <data name="Plan.PresetName" xml:space="preserve"><value>Set adı</value></data>
+  <data name="Plan.PresetSave" xml:space="preserve"><value>Seti kaydet</value></data>
+  <data name="Plan.PenaltyWarn" xml:space="preserve"><value>{0} şunu da düşürür: {1}</value></data>
+  <data name="Plan.HelperTitle" xml:space="preserve"><value>Tercihli Pal'larının pasifleri (olumlu olanlar seçili):</value></data>
+  <data name="Plan.HelperTooMany" xml:space="preserve"><value>Bu Pal'larda {0} pasif var; en çok dördünü seç.</value></data>
+  <data name="Plan.HelperApply" xml:space="preserve"><value>Seçimi kullan</value></data>
+  <data name="Plan.MaxUnwanted" xml:space="preserve"><value>En fazla istenmeyen</value></data>
+  <data name="Plan.WildUnwanted" xml:space="preserve"><value>Vahşide istenmeyen</value></data>
+  <data name="Plan.TimeLimit" xml:space="preserve"><value>Zaman sınırı (sn)</value></data>
+  <data name="Plan.RequirePreferred" xml:space="preserve"><value>Tercihli Pal kullan</value></data>
+  <data name="Plan.FeasPal" xml:space="preserve"><value>Tercihli Pal</value></data>
+  <data name="Plan.FeasResult" xml:space="preserve"><value>En iyi plan</value></data>
+  <data name="Plan.FeasUsable" xml:space="preserve"><value>{0} adım, {1} yumurta</value></data>
+  <data name="Plan.Reason.StepLimit" xml:space="preserve"><value>Adım sınırı içinde hedefe ulaşılamıyor.</value></data>
+  <data name="Plan.Reason.NoWantedPassives" xml:space="preserve"><value>İstenen pasifler bu Pal'da yok.</value></data>
+  <data name="Plan.DoFirst" xml:space="preserve"><value>Önce şunu yap:</value></data>
+  <data name="Plan.DoLast" xml:space="preserve"><value>Sonra:</value></data>
+  <data name="Plan.StepPassives" xml:space="preserve"><value>Hedef pasifler:</value></data>
+  <data name="Plan.PerEgg" xml:space="preserve"><value>yumurta başına {0}</value></data>
+  <data name="Plan.Diag.PassiveMissing" xml:space="preserve"><value>Pal'larından hiçbirinde {0} pasifi yok.</value></data>
+  <data name="Plan.Diag.TargetSameSpeciesOnly" xml:space="preserve"><value>{0} yalnızca aynı türden iki Pal ile elde edilir ve ikisini edinemiyorsun.</value></data>
+  <data name="Plan.Diag.LegendaryExcluded" xml:space="preserve"><value>Efsanevi Pal yakalama kapalı; {0} yakalanamıyor.</value></data>
+  <data name="Plan.Diag.TimedOut" xml:space="preserve"><value>Zaman sınırına ulaşıldı; şimdiye kadarki en iyi planlar gösteriliyor.</value></data>
+  <data name="Plan.Diag.TimedOutNoPlan" xml:space="preserve"><value>Arama bir plan bulamadan süre doldu. Bu, plan olmadığı anlamına gelmez: daha fazla süre ver (Aramaya devam et) ya da ayarları gevşet.</value></data>
+  <data name="Plan.Exclude.Section" xml:space="preserve"><value>Bu planlarda kullanma</value></data>
+  <data name="Plan.Exclude.ThisPal" xml:space="preserve"><value>Bu Pal'ı kullanma</value></data>
+  <data name="Plan.Exclude.Species" xml:space="preserve"><value>{0} türünü kullanma</value></data>
+  <data name="Plan.Exclude.Group" xml:space="preserve"><value>{0} Pal'larını kullanma</value></data>
+  <data name="Plan.Exclude.GroupTitle" xml:space="preserve"><value>{0} Pal'ları</value></data>
+  <data name="Plan.Exclude.GroupName.terraria" xml:space="preserve"><value>Terraria</value></data>
+  <data name="Plan.Exclude.GroupCount" xml:space="preserve"><value>[{0} tür]</value></data>
+  <data name="Plan.Exclude.GroupSub" xml:space="preserve"><value>Grup · {0} tür</value></data>
+  <data name="Plan.Exclude.KindSpecies" xml:space="preserve"><value>Tür</value></data>
+  <data name="Plan.Exclude.KindPal" xml:space="preserve"><value>Bu Pal · {0}</value></data>
+  <data name="Plan.Exclude.Button" xml:space="preserve"><value>Kullanılmayan {0}</value></data>
+  <data name="Plan.Exclude.ListTitle" xml:space="preserve"><value>Kullanılmayanlar</value></data>
+  <data name="Plan.Exclude.ListSub" xml:space="preserve"><value>Bu plan sorgusunun parçası; hedefi değiştirince de kalır. Kaldırınca plan yeniden çözülür.</value></data>
+  <data name="Plan.Exclude.Add" xml:space="preserve"><value>Tür ya da grup ekle</value></data>
+  <data name="Plan.Exclude.ClearAll" xml:space="preserve"><value>Hepsini kaldır</value></data>
+  <data name="Plan.Exclude.Band" xml:space="preserve"><value>{0} artık kullanılmıyor.</value></data>
+  <data name="Plan.Exclude.PathsFound" xml:space="preserve"><value>{0} farklı yol bulundu.</value></data>
+  <data name="Plan.Exclude.BandChange" xml:space="preserve"><value>Plan yeniden çözüldü: {0} → {1} yumurta.</value></data>
+  <data name="Plan.Exclude.BandChangeSteps" xml:space="preserve"><value>Plan yeniden çözüldü: {0} → {1} adım, {2} → {3} yumurta.</value></data>
+  <data name="Plan.Exclude.Restore" xml:space="preserve"><value>{0} kullan</value></data>
+  <data name="Plan.Exclude.RemoveAria" xml:space="preserve"><value>{0} yeniden kullan</value></data>
+  <data name="Plan.Exclude.Orphan" xml:space="preserve"><value>Artık Pal'larında yok</value></data>
+  <data name="Plan.Exclude.ShelfTag" xml:space="preserve"><value>Kullanılmıyor</value></data>
+  <data name="Plan.Exclude.Footer" xml:space="preserve"><value>Seçince plan yeniden çözülür. Geri almak için: üstte 'Kullanılmayan'.</value></data>
+  <data name="Plan.Node.OrMoreSpecies" xml:space="preserve"><value>ya da {0} tür daha</value></data>
+  <data name="Plan.NodeOwnedSteps" xml:space="preserve"><value>Sende · {0} adımda</value></data>
+  <data name="Plan.InPlanTagSteps" xml:space="preserve"><value>Planda · {0} adım</value></data>
+  <data name="Plan.Node.PartnerInStep" xml:space="preserve"><value>{0}. adımda eş</value></data>
+  <data name="Plan.Node.PartnerInSteps" xml:space="preserve"><value>{0} adımda eş</value></data>
+  <data name="Plan.Node.SamePathInstead" xml:space="preserve"><value>Aynı yolda yerine</value></data>
+  <data name="Plan.Node.ThisPath" xml:space="preserve"><value>bu yol {0}</value></data>
+  <data name="Plan.Exclude.BandPlural" xml:space="preserve"><value>{0} artık kullanılmıyor.</value></data>
+  <data name="Plan.Diag.ExcludedPlural" xml:space="preserve"><value>{0} kullanılmıyor.</value></data>
+  <data name="Plan.Diag.ExcludedNotBlockingPlural" xml:space="preserve"><value>{0} da kullanılmıyor, ama engel o değil.</value></data>
+  <data name="Plan.Exclude.InsteadOfPartner" xml:space="preserve"><value>Bu eşin yerine</value></data>
+  <data name="Plan.Exclude.InsteadLead" xml:space="preserve"><value>{0} ile {1} veren {2} tür daha var.</value></data>
+  <data name="Plan.Exclude.PalSentence" xml:space="preserve"><value>Yalnız bu Pal ({0}). Aynı türün diğer Pal'ları kullanılabilir.</value></data>
+  <data name="Plan.Exclude.PalSentenceMany" xml:space="preserve"><value>Yalnız bu Pal ({0}); kullanıldığı {1} adımın hepsinde. Aynı türün diğer Pal'ları kullanılabilir.</value></data>
+  <data name="Plan.Exclude.SpeciesSentence" xml:space="preserve"><value>Hiçbir {0} kullanılmaz; ona bağlı adımlar değişir.</value></data>
+  <data name="Plan.Exclude.WildSentence" xml:space="preserve"><value>Yalnız bu tür; plan yeniden çözülür.</value></data>
+  <data name="Plan.Exclude.StepSentence" xml:space="preserve"><value>Yalnız bu tür; plan başka bir yola geçer.</value></data>
+  <data name="Plan.Exclude.GroupSentence" xml:space="preserve"><value>{1} {0} türünün hiçbiri kullanılmaz; plan başka bir yola geçer.</value></data>
+  <data name="Plan.Diag.Excluded" xml:space="preserve"><value>{0} kullanılmıyor.</value></data>
+  <data name="Plan.Diag.ExcludedRelated" xml:space="preserve"><value>İlgili: Kullanılmayanlar: {0} · kaldırınca en iyi plan {1} yumurta, {2} adım</value></data>
+  <data name="Plan.Diag.ExcludedNotBlocking" xml:space="preserve"><value>{0} da kullanılmıyor, ama engel o değil.</value></data>
+  <data name="Plan.Tab.PathAria" xml:space="preserve"><value>Plan {0}: yaklaşık {1} yumurta, {2}. Yol: {3}.</value></data>
+  <data name="Plan.Diag.StateLimit" xml:space="preserve"><value>Arama durum sınırında durduruldu; daha iyi planlar olabilir.</value></data>
+  <data name="Plan.Exhaustive" xml:space="preserve"><value>Kapsamlı arama (süre sınırı yok)</value></data>
+  <data name="Plan.ExhaustiveHint" xml:space="preserve"><value>Daha iyisi kalmayana kadar planı iyileştirir. Uzun sürebilir; istediğin zaman iptal edip şimdiki en iyi planı koruyabilirsin.</value></data>
+  <data name="Plan.ModeExhaustive" xml:space="preserve"><value>Kapsamlı aramayla bulundu.</value></data>
+  <data name="Plan.ModeDefault" xml:space="preserve"><value>Hızlı aramayla bulundu (daha iyi plan olabilir; kapsamlı aramayı dene).</value></data>
+  <data name="Plan.Improving" xml:space="preserve"><value>Plan iyileştiriliyor… (iptal edersen şimdiki en iyi plan kalır)</value></data>
+  <data name="Plan.Improved" xml:space="preserve"><value>İyileştirildi: {0} → {1} yumurta</value></data>
+  <data name="Plan.Diag.BetterMayExist" xml:space="preserve"><value>Daha iyi plan olabilir; aramaya daha fazla süre ver ya da kapsamlı aramayı kullan.</value></data>
+  <data name="Obtain.Unbreedable" xml:space="preserve"><value>{0} ile elde edilemez</value></data>
+  <data name="Plan.Diag.TargetUnbreedable" xml:space="preserve"><value>Hiçbir ebeveyn çifti {0} vermiyor; ancak başka yollarla edinilebilir.</value></data>
+  <data name="Settings.Solver" xml:space="preserve"><value>Planlayıcı</value></data>
+  <data name="Settings.SolverHint" xml:space="preserve"><value>İlk plan gösterildikten sonra iyileştirme aramasının kullanabileceği süre (Planlayıcı'dan da değiştirilir).</value></data>
+  <data name="Calculator.Tab.Mutation" xml:space="preserve"><value>Mutasyon</value></data>
+  <data name="Mutation.PairTitle" xml:space="preserve"><value>Çiftten mutasyona</value></data>
+  <data name="Mutation.ReverseTitle" xml:space="preserve"><value>Hedeften çiftlere</value></data>
+  <data name="Mutation.Cake" xml:space="preserve"><value>Kek</value></data>
+  <data name="Mutation.NoCake" xml:space="preserve"><value>Kek yok</value></data>
+  <data name="Mutation.Hint" xml:space="preserve"><value>Mutasyon çocuklarını görmek için iki ebeveyn seç.</value></data>
+  <data name="Mutation.NormalChild" xml:space="preserve"><value>Normal çocuk</value></data>
+  <data name="Mutation.Rate" xml:space="preserve"><value>Yumurtanın mutasyona uğrama şansı: {0}</value></data>
+  <data name="Mutation.Facts" xml:space="preserve"><value>Mutant yumurta her zaman {0} çıkar, 4 pasifi olur (en az biri mutasyona özel) ve IV'leri {1}–100 arasındadır.</value></data>
+  <data name="Mutation.ColShare" xml:space="preserve"><value>Mutasyonlar içinde pay</value></data>
+  <data name="Mutation.ColPerEgg" xml:space="preserve"><value>Yumurta başına şans</value></data>
+  <data name="Mutation.NoPairs" xml:space="preserve"><value>Hiçbir çift bu Pal'a mutasyonla dönüşemiyor.</value></data>
+  <data name="Mutation.ReverseInfo" xml:space="preserve"><value>{0} çift gösteriliyor ({1} ms).</value></data>
+  <data name="Sources.TypeMod" xml:space="preserve"><value>Pal Kutusu modu</value></data>
+  <data name="Sources.InstallMod" xml:space="preserve"><value>Modu kur</value></data>
+  <data name="Sources.AddBridge" xml:space="preserve"><value>Mod verisini ekle</value></data>
+  <data name="Sources.PickGameTitle" xml:space="preserve"><value>Palworld oyun klasörünü seç</value></data>
+  <data name="Sources.InstallModAsk" xml:space="preserve"><value>Mod klasörü şuraya kopyalanacak:
+{0}
+
+Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
+  <data name="Sources.InstallModRunning" xml:space="preserve"><value>Palworld açık. Mod, oyun bir sonraki açılışta yüklenir.</value></data>
+  <data name="Sources.InstallModYes" xml:space="preserve"><value>Kur</value></data>
+  <data name="Sources.InstallModDone" xml:space="preserve"><value>Mod şuraya kuruldu: {0}. Palworld&apos;u başlat, dünyana gir ve Pal Kutusu&apos;nu bir kez gez.</value></data>
+  <data name="Sources.ModSummary" xml:space="preserve"><value>Mod: son dışa aktarma {0} · {1} Pal</value></data>
+  <data name="Sources.ModHint" xml:space="preserve"><value>Listenin tamamlanması için oyunda Pal Kutusu&apos;nun ve Boyutsal Pal Deposu&apos;nun tüm sayfalarını bir kez gez.</value></data>
+  <data name="Mod.NoGame" xml:space="preserve"><value>Palworld klasörü bulunamadı.</value></data>
+  <data name="Mod.NoUe4ss" xml:space="preserve"><value>Oyunda UE4SS kurulu değil (klasör yok). Önce Palworld mod yöneticisiyle kur:</value></data>
+  <data name="Mod.NoSource" xml:space="preserve"><value>Mod dosyaları bu kurulumda bulunamadı:</value></data>
+  <data name="Mod.CopyFailed" xml:space="preserve"><value>Mod kopyalanamadı:</value></data>
+  <data name="Sources.InstallModChange" xml:space="preserve"><value>Klasörü değiştir</value></data>
+  <data name="MyPals.GeneticCopy" xml:space="preserve"><value>genetik kopya: bu dünyada doğrudan kullanılamaz</value></data>
+  <data name="MyPals.PageSlot" xml:space="preserve"><value>sayfa {0}, yuva {1}</value></data>
+  <data name="Scope.ShareGuild" xml:space="preserve"><value>Üs ve Boyutsal Pal Deposu Pal&apos;ları sahibi kim olursa olsun sayılır</value></data>
+  <data name="Scope.ShareGuildHint" xml:space="preserve"><value>Bu yerleri lonca ortak kullanır; içindeki Pal&apos;lar başka bir üye sahibi olsa bile senin sayılır.</value></data>
+  <data name="Sources.CoverageRead" xml:space="preserve"><value>{0}: {1} sayfa okundu.</value></data>
+  <data name="Sources.CoverageMissing" xml:space="preserve"><value>Okunmadı: {0}. Bu sayfaları oyunda bir kez aç.</value></data>
+  <data name="Sources.ScanWaiting" xml:space="preserve"><value>Oyunda Pal Kutusu&apos;nu ya da Boyutsal Pal Deposu&apos;nu aç.</value></data>
+  <data name="Sources.ScanProgress" xml:space="preserve"><value>Taranıyor: {0} {1}/{2}</value></data>
+  <data name="Sources.ScanDone" xml:space="preserve"><value>Tarama bitti.</value></data>
+  <data name="Sources.ScanCancelled" xml:space="preserve"><value>Tarama iptal edildi.</value></data>
+  <data name="Sources.ScanFailed" xml:space="preserve"><value>Tarama başarısız.</value></data>
+  <data name="ModKeys.Title" xml:space="preserve"><value>Mod kısayolları</value></data>
+  <data name="ModKeys.Hint" xml:space="preserve"><value>Oyundaki Pal Kutusu modunun tuşları. Bir tuş seç, istersen Ctrl / Shift / Alt ekle.</value></data>
+  <data name="ModKeys.scanKey" xml:space="preserve"><value>Tüm sayfaları tara</value></data>
+  <data name="ModKeys.probeKey" xml:space="preserve"><value>Keşif (log)</value></data>
+  <data name="ModKeys.clearKey" xml:space="preserve"><value>Modun önbelleğini temizle</value></data>
+  <data name="ModKeys.scanMode" xml:space="preserve"><value>Tarama modu</value></data>
+  <data name="ModKeys.Smart" xml:space="preserve"><value>Akıllı (5 boş sayfada durur)</value></data>
+  <data name="ModKeys.Full" xml:space="preserve"><value>Tam (her sayfa)</value></data>
+  <data name="ModKeys.Restart" xml:space="preserve"><value>Değişiklik oyun yeniden başlatılınca geçerli olur (mod bu ayarları açılışta okur).</value></data>
+  <data name="ModKeys.Duplicate" xml:space="preserve"><value>İki eylem aynı kısayolu kullanamaz. Hiçbir şey kaydedilmedi.</value></data>
+  <data name="ModKeys.Invalid" xml:space="preserve"><value>Bu kısayol geçerli değil. Hiçbir şey kaydedilmedi.</value></data>
+  <data name="Sources.ModSkipped" xml:space="preserve"><value>{0} kayıt alınmadı: {1}.</value></data>
+  <data name="Sources.ModSkippedHuman" xml:space="preserve"><value>insan {0}</value></data>
+  <data name="Sources.ModSkippedUnknown" xml:space="preserve"><value>tanınmayan tür {0}</value></data>
+  <data name="Paldex.ColOwned" xml:space="preserve"><value>Sahip</value></data>
+  <data name="Paldex.Owned" xml:space="preserve"><value>Sahip olunan</value></data>
+  <data name="Paldex.OwnedBadgeHint" xml:space="preserve"><value>Her iki cinsiyet de var: bu türden iki Pal breeding yapabilir.</value></data>
+  <data name="Paldex.Ownership" xml:space="preserve"><value>Sahiplik</value></data>
+  <data name="Ownership.Any" xml:space="preserve"><value>Tümü</value></data>
+  <data name="Ownership.Owned" xml:space="preserve"><value>Sahip olduklarım</value></data>
+  <data name="Ownership.NotOwned" xml:space="preserve"><value>Sahip olmadıklarım</value></data>
+  <data name="Ownership.MissingGender" xml:space="preserve"><value>Eksik cinsiyet</value></data>
+  <data name="Ownership.Pair" xml:space="preserve"><value>Çifti tam (erkek ve dişi)</value></data>
+  <data name="Sort.OwnedCount" xml:space="preserve"><value>Sahip olunan sayı</value></data>
+  <data name="Detail.Owned" xml:space="preserve"><value>Sahip olduğun</value></data>
+  <data name="Detail.OwnedLink" xml:space="preserve"><value>Pal&apos;larım&apos;da göster</value></data>
+  <data name="Sources.CoverageUnknownOwner" xml:space="preserve"><value>sahibi bilinmiyor</value></data>
+  <data name="Sources.ModPartyHint" xml:space="preserve"><value>Arkadaşlarının takımı yalnızca host&apos;un dünya klasöründen okunabilir.</value></data>
+  <data name="Plan.OwnedNote" xml:space="preserve"><value>Zaten {1} tane {0} sende var{2}: {3}. Aşağıdaki planlar yenisini üretir (en az bir breeding adımı).</value></data>
+  <data name="Plan.OwnedMatching" xml:space="preserve"><value>{0} tanesi istenen pasiflere zaten sahip.</value></data>
+  <data name="Plan.TargetGender" xml:space="preserve"><value>İstenen cinsiyet</value></data>
+  <data name="Plan.GenderAny" xml:space="preserve"><value>Fark etmez</value></data>
+  <data name="Sources.CoverageOldest" xml:space="preserve"><value>en eski okuma {0}</value></data>
+  <data name="Sources.AgoNow" xml:space="preserve"><value>az önce</value></data>
+  <data name="Sources.AgoMinutes" xml:space="preserve"><value>{0} dk önce</value></data>
+  <data name="Sources.AgoHours" xml:space="preserve"><value>{0} sa önce</value></data>
+  <data name="Sources.AgoDays" xml:space="preserve"><value>{0} gün önce</value></data>
+  <data name="Sources.ClearPages" xml:space="preserve"><value>Sayfa önbelleğini temizle</value></data>
+  <data name="Sources.ClearPagesAsk" xml:space="preserve"><value>Modun önceki oyun oturumlarında okuduğu sayfalar unutulsun mu? Kutuları yeniden açtıkça liste yeniden oluşur.</value></data>
+  <data name="Sources.ClearPagesYes" xml:space="preserve"><value>Temizle</value></data>
+  <data name="Pal.OnExpedition" xml:space="preserve"><value>seferde</value></data>
+  <data name="Editor.IvsUnknownHint" xml:space="preserve"><value>Kapalıyken IV değerleri bilinmiyor sayılır. Kaynağın değerine dönmek için "Kaynağa döndür"ü kullanın.</value></data>
+  <data name="Mutation.ColPerEggCake" xml:space="preserve"><value>Yumurta başına şans (yukarıda seçilen kekle)</value></data>
+  <data name="Skills.SurgeryItemOf" xml:space="preserve"><value>pasif değiştirme eşyası: {0}</value></data>
+  <data name="Obtain.Field.Viking1" xml:space="preserve"><value>Viking bölgesi</value></data>
+  <data name="Obtain.Fishing.FishingSpot" xml:space="preserve"><value>Balık tutma noktası</value></data>
+  <data name="Obtain.SeaSuffix" xml:space="preserve"><value>deniz</value></data>
+  <data name="Obtain.Region.green" xml:space="preserve"><value>yeşil bölge</value></data>
+  <data name="Obtain.Region.yellow" xml:space="preserve"><value>sarı bölge</value></data>
+  <data name="Obtain.Region.blue" xml:space="preserve"><value>mavi bölge</value></data>
+  <data name="Obtain.Region.orange" xml:space="preserve"><value>turuncu bölge</value></data>
+  <data name="Obtain.Region.purple" xml:space="preserve"><value>mor bölge</value></data>
+  <data name="Obtain.Region.red" xml:space="preserve"><value>kırmızı bölge</value></data>
+  <data name="Obtain.Region.sanctuary" xml:space="preserve"><value>koruma alanı</value></data>
+  <data name="Obtain.Region.island" xml:space="preserve"><value>ada</value></data>
+  <data name="Obtain.Region.desertisland" xml:space="preserve"><value>çöl adası</value></data>
+  <data name="Obtain.Region.volcanoiskand" xml:space="preserve"><value>volkan adası</value></data>
+  <data name="Obtain.Region.remainsIsland" xml:space="preserve"><value>harabe adası</value></data>
+  <data name="Plan.Role.CombatBalanced" xml:space="preserve"><value>Savaş (dengeli)</value></data>
+  <data name="Plan.Role.CombatDamage" xml:space="preserve"><value>Savaş (en yüksek hasar)</value></data>
+  <data name="Plan.Role.CombatTank" xml:space="preserve"><value>Savaş (tank)</value></data>
+  <data name="Plan.Role.CombatElement" xml:space="preserve"><value>Savaş (hedefin elementi)</value></data>
+  <data name="Plan.Role.MountSpeed" xml:space="preserve"><value>Binek (hız)</value></data>
+  <data name="Plan.Role.MountLong" xml:space="preserve"><value>Binek (uzun yol / uçan)</value></data>
+  <data name="Plan.Role.MountWater" xml:space="preserve"><value>Binek (su)</value></data>
+  <data name="Plan.Role.MountJump" xml:space="preserve"><value>Binek (zıplama)</value></data>
+  <data name="Plan.Role.WorkerNight" xml:space="preserve"><value>İşçi (gece çalışan)</value></data>
+  <data name="Plan.Role.WorkerDay" xml:space="preserve"><value>İşçi (gündüz türü)</value></data>
+  <data name="Plan.Role.BreedingFarm" xml:space="preserve"><value>Breeding çiftliği</value></data>
+  <data name="Plan.Variant.Best" xml:space="preserve"><value>En iyi</value></data>
+  <data name="Plan.Variant.Easy" xml:space="preserve"><value>Kolay elde edilen</value></data>
+  <data name="Plan.RoleNeedsTarget" xml:space="preserve"><value>Önce bir hedef Pal seç: bu set onun elementine göre belirlenir.</value></data>
+  <data name="Passive.Origin.Wild" xml:space="preserve"><value>vahşide çıkabilir</value></data>
+  <data name="Passive.Origin.MutationOnly" xml:space="preserve"><value>yalnızca mutasyon</value></data>
+  <data name="Passive.Origin.WorldTree" xml:space="preserve"><value>Dünya Ağacı</value></data>
+  <data name="Passive.Origin.NotWild" xml:space="preserve"><value>vahşide çıkmaz</value></data>
+  <data name="Passive.GuaranteedOn" xml:space="preserve"><value>garanti taşıyanlar: {0}</value></data>
+  <data name="Passive.YouOwn" xml:space="preserve"><value>sende bu pasife sahip {0} Pal var</value></data>
+  <data name="Passive.YouOwnNone" xml:space="preserve"><value>hiçbir Pal'ında yok</value></data>
+  <data name="Paldex.ModeList" xml:space="preserve"><value>Pal listesi</value></data>
+  <data name="Paldex.ModeWorkers" xml:space="preserve"><value>En iyi işçiler</value></data>
+  <data name="Workers.Note" xml:space="preserve"><value>Liste oyun verisinden hesaplanır; topluluk rehberleri farklı seçimler önerebilir. Bir Pal, breeding dışında elde edilebildiği en düşük seviyeye göre aşamaya girer.</value></data>
+  <data name="Workers.Stage.Early" xml:space="preserve"><value>Erken oyun (15. seviyeye kadar)</value></data>
+  <data name="Workers.Stage.Mid" xml:space="preserve"><value>Orta oyun (35. seviyeye kadar)</value></data>
+  <data name="Workers.Stage.Late" xml:space="preserve"><value>Son oyun (tüm Pal'lar)</value></data>
+  <data name="Workers.WorkLevel" xml:space="preserve"><value>sv. {0}</value></data>
+  <data name="Workers.Earliest" xml:space="preserve"><value>{0}, sv. {1}</value></data>
+  <data name="Workers.BreedingOnly" xml:space="preserve"><value>yalnızca breeding</value></data>
+  <data name="Workers.Owned" xml:space="preserve"><value>sende {0} tane</value></data>
+  <data name="Mod.VerifyFailed" xml:space="preserve"><value>Kopyalanan mod uygulamayla gelen modla aynı değil:</value></data>
+  <data name="Sources.ModStateCurrent" xml:space="preserve"><value>Yardımcı mod kurulu ve güncel.</value></data>
+  <data name="Sources.ModStateOutdated" xml:space="preserve"><value>Kurulu yardımcı mod güncel değil. "Modu kur"a bas.</value></data>
+  <data name="Sources.ModStateMissing" xml:space="preserve"><value>Yardımcı mod kurulu değil.</value></data>
+  <data name="Sources.OwnerLabel" xml:space="preserve"><value>Sahibi</value></data>
+  <data name="Sources.OwnerOther" xml:space="preserve"><value>Başka</value></data>
+  <data name="Sources.CoveragePals" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Plan.FromStepN" xml:space="preserve"><value>{0}. adımdan</value></data>
+  <data name="Plan.PreferredLabel" xml:space="preserve"><value>Tercihli: {0}</value></data>
+  <data name="Plan.FeasOpen" xml:space="preserve"><value>Bu planı aç</value></data>
+  <data name="Detail.GeneratePlan" xml:space="preserve"><value>Planlayıcı'da üret</value></data>
+  <data name="Plan.MoreLeaves" xml:space="preserve"><value>+{0}</value></data>
+  <data name="Scope.Summary" xml:space="preserve"><value>Kapsam: {0} · {1} konum</value></data>
+  <data name="MyPals.ColRank" xml:space="preserve"><value>Rank</value></data>
+  <data name="MyPals.FilterMinIv" xml:space="preserve"><value>IV toplamı en az</value></data>
+  <data name="MyPals.SortBy" xml:space="preserve"><value>Sırala</value></data>
+  <data name="MyPals.SortDirection" xml:space="preserve"><value>Sıralama yönü</value></data>
+  <data name="MyPals.IvTotal" xml:space="preserve"><value>IV toplamı {0}</value></data>
+  <data name="MyPals.EquippedAttacks" xml:space="preserve"><value>Takılı yetenekler: {0}</value></data>
+  <data name="MyPals.Sort.Default" xml:space="preserve"><value>Pal no</value></data>
+  <data name="MyPals.Sort.Species" xml:space="preserve"><value>Tür</value></data>
+  <data name="MyPals.Sort.Level" xml:space="preserve"><value>Seviye</value></data>
+  <data name="MyPals.Sort.Gender" xml:space="preserve"><value>Cinsiyet</value></data>
+  <data name="MyPals.Sort.IvTotal" xml:space="preserve"><value>IV toplamı</value></data>
+  <data name="MyPals.Sort.IvHp" xml:space="preserve"><value>HP IV</value></data>
+  <data name="MyPals.Sort.IvAttack" xml:space="preserve"><value>Saldırı IV</value></data>
+  <data name="MyPals.Sort.IvDefense" xml:space="preserve"><value>Savunma IV</value></data>
+  <data name="MyPals.Sort.Location" xml:space="preserve"><value>Konum</value></data>
+  <data name="Chip.OpenPal" xml:space="preserve"><value>Bu Pal'ın ayrıntısını aç</value></data>
+  <data name="Detail.OpenPairInCalculator" xml:space="preserve"><value>Bu çifti Hesaplayıcı'da aç</value></data>
+  <data name="Nav.Pages" xml:space="preserve"><value>Sayfalar</value></data>
+  <data name="Layout.SkipToContent" xml:space="preserve"><value>İçeriğe atla</value></data>
+  <data name="Layout.LanguageLabel" xml:space="preserve"><value>Dil: {0}</value></data>
+  <data name="Sync.JustNow" xml:space="preserve"><value>az önce</value></data>
+  <data name="Sync.MinutesAgo" xml:space="preserve"><value>{0} dk önce</value></data>
+  <data name="Sync.HoursAgo" xml:space="preserve"><value>{0} sa önce</value></data>
+  <data name="Sync.Reading" xml:space="preserve"><value>Okunuyor…</value></data>
+  <data name="Sync.Error" xml:space="preserve"><value>Okuma hatası</value></data>
+  <data name="Sync.RefreshLabel" xml:space="preserve"><value>Kaynakları şimdi yenile</value></data>
+  <data name="Sync.Pals" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Sync.PalsOfTotal" xml:space="preserve"><value>{0} / {1} Pal</value></data>
+  <data name="Sync.ScopeNarrowed" xml:space="preserve"><value>Kapsam: Pal’ların yalnızca bir kısmı sayılıyor</value></data>
+  <data name="Sync.Aria" xml:space="preserve"><value>Pal kaynakları: {0}</value></data>
+  <data name="Sync.AriaTimed" xml:space="preserve"><value>Pal kaynakları: {0}, {1} güncellendi</value></data>
+  <data name="Sync.ErrorOne" xml:space="preserve"><value>1 kaynak okunamadı</value></data>
+  <data name="Sync.ErrorMany" xml:space="preserve"><value>{0} kaynak okunamadı</value></data>
+  <data name="Sync.StalePals" xml:space="preserve"><value>{0} Pal eski veriden</value></data>
+  <data name="Sources.TypeDemo" xml:space="preserve"><value>Örnek Pal'lar</value></data>
+  <data name="Common.Gender" xml:space="preserve"><value>Cinsiyet</value></data>
+  <data name="Location.RowCol" xml:space="preserve"><value>{0}. satır, {1}. sütun</value></data>
+  <data name="Skill.RankLabel" xml:space="preserve"><value>Rank {0}</value></data>
+  <data name="Skill.NegativeRankLabel" xml:space="preserve"><value>Olumsuz {0}</value></data>
+  <data name="Error.DataBodyBefore" xml:space="preserve"><value>Uygulamanın yanında gelen </value></data>
+  <data name="Error.DataBodyAfter" xml:space="preserve"><value> dosyası açılamadı ya da bozuk. Pal, pasif ve breeding bilgisi bu dosyadan geldiği için sayfalar açılamıyor. Pal'ların ve ayarların bundan etkilenmez.</value></data>
+  <data name="Error.StepReinstallTitle" xml:space="preserve"><value>Uygulamayı yeniden kur.</value></data>
+  <data name="Error.StepReinstallBody" xml:space="preserve"><value>Kurulum dosyası veri paketini de yeniler; ayarların ve kaynakların silinmez.</value></data>
+  <data name="Error.StepAntivirusTitle" xml:space="preserve"><value>Antivirüs dosyayı karantinaya aldıysa</value></data>
+  <data name="Error.StepAntivirusBody" xml:space="preserve"><value>geri yükle ve uygulamayı yeniden aç.</value></data>
+  <data name="Error.Retry" xml:space="preserve"><value>Yeniden dene</value></data>
+  <data name="Error.CopyDetails" xml:space="preserve"><value>Hata ayrıntısını kopyala</value></data>
+  <data name="Error.Copied" xml:space="preserve"><value>Kopyalandı</value></data>
+  <data name="Error.DetailMeta" xml:space="preserve"><value>Şema sürümü: beklenen {0} · Uygulama {1} · {2}</value></data>
+  <data name="Location.ShortPalboxPaged" xml:space="preserve"><value>Kutu {0}</value></data>
+  <data name="Location.ShortPalbox" xml:space="preserve"><value>Kutu</value></data>
+  <data name="Location.ShortStoragePaged" xml:space="preserve"><value>Depo {0}</value></data>
+  <data name="Location.ShortStorage" xml:space="preserve"><value>Depo</value></data>
+  <data name="Location.ShortGlobalPaged" xml:space="preserve"><value>Global {0}</value></data>
+  <data name="Location.ShortGlobal" xml:space="preserve"><value>Global</value></data>
+  <data name="Location.ShortCage" xml:space="preserve"><value>Kafes</value></data>
+  <data name="Common.Clear" xml:space="preserve"><value>Temizle</value></data>
+  <data name="PassivePicker.Search" xml:space="preserve"><value>Pasif ara</value></data>
+  <data name="Plan.SpeciesOwnedCount" xml:space="preserve"><value>sende {0}</value></data>
+  <data name="Plan.StartTitle" xml:space="preserve"><value>Başlangıç Pal'ı</value></data>
+  <data name="Plan.SocketOwnedCount" xml:space="preserve"><value>sende {0}</value></data>
+  <data name="Plan.SocketRemoveAria" xml:space="preserve"><value>{0}, {1}, kaldır</value></data>
+  <data name="Scope.DropdownSummary" xml:space="preserve"><value>{0} · {1} konum</value></data>
+  <data name="Plan.ShelfAria" xml:space="preserve"><value>Raf: sahip olduğun Pal'lar</value></data>
+  <data name="Plan.ShelfTitle" xml:space="preserve"><value>Raf</value></data>
+  <data name="Plan.ShelfSearchPlaceholder" xml:space="preserve"><value>Pal ya da pasif ara</value></data>
+  <data name="Plan.ShelfFilterAria" xml:space="preserve"><value>Raf süzgeci</value></data>
+  <data name="Plan.ShelfListAria" xml:space="preserve"><value>Pal'lar</value></data>
+  <data name="Plan.InPlanTag" xml:space="preserve"><value>Planda</value></data>
+  <data name="Plan.AsStartTag" xml:space="preserve"><value>Başlangıç</value></data>
+  <data name="Plan.ShelfRowActionsAria" xml:space="preserve"><value>{0} işlemleri</value></data>
+  <data name="Plan.ClearStart" xml:space="preserve"><value>Başlangıcı kaldır</value></data>
+  <data name="Plan.MakeStart" xml:space="preserve"><value>Başlangıç yap</value></data>
+  <data name="Plan.UnmarkPreferred" xml:space="preserve"><value>Tercihlilerden çıkar</value></data>
+  <data name="Plan.MarkPreferred" xml:space="preserve"><value>Tercihli yap</value></data>
+  <data name="Plan.ShelfShowMore" xml:space="preserve"><value>Devamı (+{0})</value></data>
+  <data name="Plan.ShelfTabWanted" xml:space="preserve"><value>İstenen pasifli</value></data>
+  <data name="Plan.ShelfTabPreferred" xml:space="preserve"><value>Tercihli</value></data>
+  <data name="Plan.ShelfGroupPreferred" xml:space="preserve"><value>Tercihli</value></data>
+  <data name="Plan.ShelfGroupMostWanted" xml:space="preserve"><value>En çok istenen pasif taşıyanlar</value></data>
+  <data name="Plan.ShelfGroupByDex" xml:space="preserve"><value>Pal no sırasıyla</value></data>
+  <data name="Plan.ShelfMatchingCount" xml:space="preserve"><value>{0} Pal uygun</value></data>
+  <data name="Plan.ShelfTotalCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Plan.ShelfNoPreferred" xml:space="preserve"><value>Henüz tercihli Pal yok; satırın ⋯ menüsünden ekleyebilirsin.</value></data>
+  <data name="Plan.ShelfNoWantedMatch" xml:space="preserve"><value>Bu istenen pasifleri taşıyan Pal bulunamadı.</value></data>
+  <data name="Plan.ShelfNoPassives" xml:space="preserve"><value>Pasif yok</value></data>
+  <data name="Plan.ShelfNoWantedPassives" xml:space="preserve"><value>İstenen pasif yok</value></data>
+  <data name="Plan.ShelfOtherCount" xml:space="preserve"><value>+{0}</value></data>
+  <data name="Plan.StartSlotTitle" xml:space="preserve"><value>Başlangıç Pal'ı</value></data>
+  <data name="Plan.StartOwnedTag" xml:space="preserve"><value>Sende</value></data>
+  <data name="Plan.StartSpeciesTag" xml:space="preserve"><value>Tür</value></data>
+  <data name="Plan.StartSlotTextEmpty" xml:space="preserve"><value>İsteğe bağlı. Raftan bir Pal'ı buraya bırakırsan plan ondan başlar.</value></data>
+  <data name="Plan.StartSlotTextTarget" xml:space="preserve"><value>İstersen raftan bir Pal'ı buraya bırak; plan ondan başlar.</value></data>
+  <data name="Plan.EmptyTargetTitle" xml:space="preserve"><value>Ne üretmek istiyorsun?</value></data>
+  <data name="Plan.EmptyTargetSub" xml:space="preserve"><value>Hedef Pal'ı seç; pasifleri sonra eklenir.</value></data>
+  <data name="Plan.TargetSearchPlaceholder" xml:space="preserve"><value>Pal adı ya da numarası</value></data>
+  <data name="Plan.EmptyTargetHint" xml:space="preserve"><value>Paldex ve Pal'larım'daki "Planlayıcı'da üret" de hedefi buraya getirir.</value></data>
+  <data name="Plan.ChangeTargetAria" xml:space="preserve"><value>Hedefi değiştir: {0}</value></data>
+  <data name="Plan.SocketsLabel" xml:space="preserve"><value>Pasif yuvaları · {0} / 4</value></data>
+  <data name="Plan.ShelfButton" xml:space="preserve"><value>Raf</value></data>
+  <data name="Plan.NewPlan" xml:space="preserve"><value>Yeni plan</value></data>
+  <data name="Plan.NoTarget" xml:space="preserve"><value>hedef yok</value></data>
+  <data name="Plan.NotSolvedYet" xml:space="preserve"><value>henüz çözülmedi</value></data>
+  <data name="Plan.SavedSets" xml:space="preserve"><value>Kayıtlı setler</value></data>
+  <data name="Plan.SavedSetsEmpty" xml:space="preserve"><value>Henüz kayıtlı pasif seti yok.</value></data>
+  <data name="Plan.DeleteSavedSetAria" xml:space="preserve"><value>{0} setini sil</value></data>
+  <data name="Plan.SearchingStage1" xml:space="preserve"><value>Aranıyor…</value></data>
+  <data name="Plan.TempSolvedCount" xml:space="preserve"><value>{0} plan bulundu</value></data>
+  <data name="Plan.WildPalsShort" xml:space="preserve"><value>Vahşi Pal</value></data>
+  <data name="Plan.LegendaryWildShort" xml:space="preserve"><value>Efsanevi vahşi</value></data>
+  <data name="Plan.ScopeLabel" xml:space="preserve"><value>Kapsam</value></data>
+  <data name="Plan.MoreOptions" xml:space="preserve"><value>Diğer</value></data>
+  <data name="Plan.MoreOptionsTitle" xml:space="preserve"><value>Diğer seçenekler</value></data>
+  <data name="Plan.RequirePreferredAtLeastOne" xml:space="preserve"><value>Tercihli Pal'lardan en az biri</value></data>
+  <data name="Plan.ExhaustiveShort" xml:space="preserve"><value>Kapsamlı arama</value></data>
+  <data name="Plan.SelectTargetFirst" xml:space="preserve"><value>Önce hedef seç</value></data>
+  <data name="Plan.Solve" xml:space="preserve"><value>Çöz</value></data>
+  <data name="Plan.Stop" xml:space="preserve"><value>Durdur</value></data>
+  <data name="Plan.Skip" xml:space="preserve"><value>Atla</value></data>
+  <data name="Plan.Use" xml:space="preserve"><value>Kullan</value></data>
+  <data name="Plan.Off" xml:space="preserve"><value>Kapalı</value></data>
+  <data name="Plan.On" xml:space="preserve"><value>Açık</value></data>
+  <data name="Plan.Optional" xml:space="preserve"><value>İsteğe bağlı</value></data>
+  <data name="Plan.Required" xml:space="preserve"><value>Zorunlu</value></data>
+  <data name="Plan.FastSearch" xml:space="preserve"><value>Hızlı</value></data>
+  <data name="Plan.ExhaustiveSearch" xml:space="preserve"><value>Kapsamlı</value></data>
+  <data name="Location.BoxPageTitle" xml:space="preserve"><value>{0}, {1}. sayfa</value></data>
+  <data name="Location.SlotSubtitle" xml:space="preserve"><value>{0}. yuva</value></data>
+  <data name="Plan.NoPassives" xml:space="preserve"><value>Pasif yok</value></data>
+  <data name="Plan.ExpectedEggsAria" xml:space="preserve"><value>yaklaşık {0} yumurta</value></data>
+  <data name="Plan.NodeOwned" xml:space="preserve"><value>Sende</value></data>
+  <data name="Plan.NodeStepChild" xml:space="preserve"><value>{0}. adımın yavrusu</value></data>
+  <data name="Plan.NodeWild" xml:space="preserve"><value>Vahşi</value></data>
+  <data name="Plan.WillHatch" xml:space="preserve"><value>Yumurtadan çıkacak</value></data>
+  <data name="Plan.KeepMale" xml:space="preserve"><value>Erkek olanı</value></data>
+  <data name="Plan.KeepFemale" xml:space="preserve"><value>Dişi olanı</value></data>
+  <data name="Plan.KeepAny" xml:space="preserve"><value>Çıkanlardan birini</value></data>
+  <data name="Plan.KeepWithPassives" xml:space="preserve"><value>{0}, bu {1} pasifi taşıyanı sakla</value></data>
+  <data name="Plan.KeepOnly" xml:space="preserve"><value>{0} sakla</value></data>
+  <data name="Plan.WildLevelRange" xml:space="preserve"><value>Sv {0}–{1}</value></data>
+  <data name="Plan.WildObtainHint" xml:space="preserve"><value>Doğadan ya da oyundan</value></data>
+  <data name="Plan.OutOfScopeTag" xml:space="preserve"><value>Artık kapsamda değil</value></data>
+  <data name="Plan.PlanTabsAria" xml:space="preserve"><value>Planlar</value></data>
+  <data name="Plan.SearchingTab" xml:space="preserve"><value>Aranıyor</value></data>
+  <data name="Plan.SearchingStage1Sub" xml:space="preserve"><value>Aşama 1 · ilk plan</value></data>
+  <data name="Plan.SearchingRun" xml:space="preserve"><value>Plan aranıyor</value></data>
+  <data name="Plan.ElapsedSeconds" xml:space="preserve"><value>{0} sn</value></data>
+  <data name="Plan.EggsWord" xml:space="preserve"><value>yumurta</value></data>
+  <data name="Plan.NoWild" xml:space="preserve"><value>vahşi yok</value></data>
+  <data name="Plan.WildCount" xml:space="preserve"><value>{0} vahşi</value></data>
+  <data name="Plan.StepsAndWild" xml:space="preserve"><value>{0} adım · {1}</value></data>
+  <data name="Plan.StepAndWild" xml:space="preserve"><value>{0} adım · {1}</value></data>
+  <data name="Plan.Glance.OtherHatched" xml:space="preserve"><value>Başka bir {0} çıktı…</value></data>
+  <data name="Plan.Flex.Which" xml:space="preserve"><value>Hangisi çıktı?</value></data>
+  <data name="Plan.EitherGender" xml:space="preserve"><value>Cinsiyet fark etmez</value></data>
+  <data name="Plan.AltLead" xml:space="preserve"><value>{0} {1} çıkarsa:</value></data>
+  <data name="Plan.AltCatch" xml:space="preserve"><value>yakala</value></data>
+  <data name="Plan.NodeAria" xml:space="preserve"><value>{0}, {1}: ayrıntı ve elindeki Pal</value></data>
+  <data name="Plan.Node.PanelAria" xml:space="preserve"><value>Düğüm ayrıntısı</value></data>
+  <data name="Plan.Node.OpenPaldex" xml:space="preserve"><value>Paldex'te aç</value></data>
+  <data name="Plan.Node.Close" xml:space="preserve"><value>Paneli kapat (Esc)</value></data>
+  <data name="Plan.Node.SubStep" xml:space="preserve"><value>{0}. adımın yavrusu · {1} yumurta</value></data>
+  <data name="Plan.Node.SubWildFor" xml:space="preserve"><value>Yakalanacak · {0} · {1}. adımın eşi</value></data>
+  <data name="Plan.Node.Wants" xml:space="preserve"><value>Bu adımın istediği</value></data>
+  <data name="Plan.Node.EitherGender" xml:space="preserve"><value>Fark etmez</value></data>
+  <data name="Plan.Node.UnwantedLabel" xml:space="preserve"><value>İstenmeyen pasif</value></data>
+  <data name="Plan.Node.UnwantedNone" xml:space="preserve"><value>yok</value></data>
+  <data name="Plan.Node.UnwantedUpTo" xml:space="preserve"><value>en fazla {0}</value></data>
+  <data name="Plan.Node.EveryCatch" xml:space="preserve"><value>Her yakalamada</value></data>
+  <data name="Plan.Node.CatchAssumed" xml:space="preserve"><value>Plan, yakalanan Pal'ın {0} istenmeyen pasifi olacağını varsaydı (Ayarlar › Planlayıcı).</value></data>
+  <data name="Plan.Node.Catch.fewer" xml:space="preserve"><value>Varsayımdan az</value></data>
+  <data name="Plan.Node.Catch.equal" xml:space="preserve"><value>Varsayım kadar</value></data>
+  <data name="Plan.Node.Catch.more" xml:space="preserve"><value>Varsayımdan çok</value></data>
+  <data name="Plan.Node.CatchEqualText" xml:space="preserve"><value>Planın varsaydığı; plan değişmez.</value></data>
+  <data name="Plan.Node.CatchStepText" xml:space="preserve"><value>Bunu kullanan adım: {0} → {1} yumurta.</value></data>
+  <data name="Plan.Node.Where" xml:space="preserve"><value>Nerede</value></data>
+  <data name="Plan.Node.OpenInMyPals" xml:space="preserve"><value>Pal'larım'da aç</value></data>
+  <data name="Plan.Node.AskHatched" xml:space="preserve"><value>Yumurtadan çıktı mı? Elindekini belirt; plan ondan devam eder.</value></data>
+  <data name="Plan.Node.PickMine" xml:space="preserve"><value>Pal'larım'dan seç</value></data>
+  <data name="Plan.Node.EnterPassives" xml:space="preserve"><value>Pasiflerini gir</value></data>
+  <data name="Plan.Node.Computing" xml:space="preserve"><value>Hesaplanıyor...</value></data>
+  <data name="Plan.Node.PickFirst" xml:space="preserve"><value>Karşılaştırmak için bir Pal seç ya da gir.</value></data>
+  <data name="Plan.Node.HandTabsAria" xml:space="preserve"><value>Elindeki Pal nasıl belirtilir</value></data>
+  <data name="Plan.Node.NoneOwned" xml:space="preserve"><value>Kapsamda bu türden Pal'ın yok. Pasiflerini girebilirsin.</value></data>
+  <data name="Plan.Node.CandidatesAria" xml:space="preserve"><value>Bu türden Pal'ların; her birinden devam edersen kalan yumurta</value></data>
+  <data name="Plan.Node.NotEnough" xml:space="preserve"><value>yetmez</value></data>
+  <data name="Plan.Node.NoPassives" xml:space="preserve"><value>pasifsiz</value></data>
+  <data name="Plan.Node.PassivesCount" xml:space="preserve"><value>Pasifler · {0} / 4</value></data>
+  <data name="Plan.Node.EnterHelp" xml:space="preserve"><value>Boş bırakırsan pasifsiz kaydedilir. Pal'larım'a elle eklenir (kaynak: Elle).</value></data>
+  <data name="Plan.Node.InHand" xml:space="preserve"><value>Elindeki {0}</value></data>
+  <data name="Plan.Node.V.WildBetter" xml:space="preserve"><value>Varsayımdan iyi</value></data>
+  <data name="Plan.Node.V.WildWorse" xml:space="preserve"><value>Varsayımdan kötü</value></data>
+  <data name="Plan.Node.V.Exact.Yes" xml:space="preserve"><value>Bu adımın istediği Pal bu</value></data>
+  <data name="Plan.Node.V.Exact.No" xml:space="preserve"><value>Bu adımın istediği Pal, ama yeniden denemek daha ucuz</value></data>
+  <data name="Plan.Node.V.ExtraWanted.Yes" xml:space="preserve"><value>İstenenden iyi: fazladan istenen pasifi var</value></data>
+  <data name="Plan.Node.V.ExtraWanted.No" xml:space="preserve"><value>Fazladan istenen var, ama bu planda karşılığı yok</value></data>
+  <data name="Plan.Node.V.Unwanted.Yes" xml:space="preserve"><value>Kullanılır, ama istenmeyen pasifi var</value></data>
+  <data name="Plan.Node.V.Unwanted.No" xml:space="preserve"><value>Fazla istenmeyen pasifi var</value></data>
+  <data name="Plan.Node.V.OtherGender.Yes" xml:space="preserve"><value>Kullanılır: ters cinsiyet, ama plan devam edebilir</value></data>
+  <data name="Plan.Node.V.OtherGender.No" xml:space="preserve"><value>Ters cinsiyet bu planda kullanılamaz</value></data>
+  <data name="Plan.Node.V.Missing.Yes" xml:space="preserve"><value>Bir pasifi eksik, ama onunla daha ucuz bir yol var</value></data>
+  <data name="Plan.Node.V.Missing.No" xml:space="preserve"><value>Bu adım için yetmez: istenen pasiflerden biri eksik</value></data>
+  <data name="Plan.Node.V.BodyUse" xml:space="preserve"><value>Bu Pal'dan devam edersen kalan {1} yumurta; yeniden denersen {0}.</value></data>
+  <data name="Plan.Node.V.BodySame" xml:space="preserve"><value>Bu Pal'dan devam edersen kalan yine {0} yumurta; planın beklentisi değişmez.</value></data>
+  <data name="Plan.Node.V.BodyRetry" xml:space="preserve"><value>Bu Pal'la kalan {0}; yeniden denersen {1}. Ebeveynler tükenmez, yeniden denemek her zaman mümkündür.</value></data>
+  <data name="Plan.Node.V.BodyNoPlan" xml:space="preserve"><value>Çözücü bu Pal'la plan bulamıyor.</value></data>
+  <data name="Plan.Node.CmpWithPal" xml:space="preserve"><value>Bu Pal'la kalan</value></data>
+  <data name="Plan.Node.CmpWithPlan" xml:space="preserve"><value>Bu Pal'la plan</value></data>
+  <data name="Plan.Node.CmpCurrent" xml:space="preserve"><value>Şimdiki plan</value></data>
+  <data name="Plan.Node.CmpRetry" xml:space="preserve"><value>Yeniden denersen</value></data>
+  <data name="Plan.Node.NoPlanShort" xml:space="preserve"><value>plan yok</value></data>
+  <data name="Plan.Node.SaveContinue" xml:space="preserve"><value>Kaydet ve devam et</value></data>
+  <data name="Plan.Node.ContinueFrom" xml:space="preserve"><value>Bu Pal'dan devam et</value></data>
+  <data name="Plan.Node.CatchOther" xml:space="preserve"><value>Başkasını yakala</value></data>
+  <data name="Plan.Node.Retry" xml:space="preserve"><value>Yeniden dene</value></data>
+  <data name="Plan.Node.EveryEgg" xml:space="preserve"><value>Her yumurtada</value></data>
+  <data name="Plan.Node.NoPassiveCatch" xml:space="preserve"><value>Pasif istenmiyor; her yakalama uygun.</value></data>
+  <data name="Plan.Node.NoPassiveEgg" xml:space="preserve"><value>Pasif istenmiyor; her yumurta uygun.</value></data>
+  <data name="Plan.Node.NoPassiveEggGender" xml:space="preserve"><value>Pasif istenmiyor; yalnız cinsiyet sayılır: yumurtaların {0} kadarı istenen cinsiyette.</value></data>
+  <data name="Plan.Node.CatchImpossible" xml:space="preserve"><value>Bu adım imkânsız olur.</value></data>
+  <data name="Plan.Node.Impossible" xml:space="preserve"><value>imkânsız</value></data>
+  <data name="Plan.Node.BigLine" xml:space="preserve"><value>bu adımı tamamlar · {0} yumurta</value></data>
+  <data name="Plan.Node.BigHelp" xml:space="preserve"><value>Plan yalnız ilk iki satırı sayar.</value></data>
+  <data name="Plan.Node.O.1" xml:space="preserve"><value>İstenen</value></data>
+  <data name="Plan.Node.O.2" xml:space="preserve"><value>Fazladan istenen</value></data>
+  <data name="Plan.Node.O.3" xml:space="preserve"><value>Ters cinsiyet, fazladan istenenle</value></data>
+  <data name="Plan.Node.O.4" xml:space="preserve"><value>Ters cinsiyet</value></data>
+  <data name="Plan.Node.O.5" xml:space="preserve"><value>Fazladan istenmeyen</value></data>
+  <data name="Plan.Node.O.6" xml:space="preserve"><value>Eksik</value></data>
+  <data name="Plan.Node.O.1t" xml:space="preserve"><value>Sakla; adım tamam.</value></data>
+  <data name="Plan.Node.O.1t.Flex" xml:space="preserve"><value>Sakla; adım tamam. İki cinsiyet de olur: eş ona göre seçilir.</value></data>
+  <data name="Plan.Node.O.2t" xml:space="preserve"><value>Sakla; adım tamam. Belirtirsen plan bu Pal'la yeniden hesaplanır.</value></data>
+  <data name="Plan.Node.O.3t" xml:space="preserve"><value>Sakla ve belirt: başka bir eşle devam edilebilir.</value></data>
+  <data name="Plan.Node.O.4t" xml:space="preserve"><value>Sakla ve belirt: başka bir eşle devam edilebilir.</value></data>
+  <data name="Plan.Node.O.5t" xml:space="preserve"><value>Belirtirsen bu Pal'la kalan ile yeniden denemek karşılaştırılır; çoğunlukla yeniden denemek ucuzdur.</value></data>
+  <data name="Plan.Node.O.6t" xml:space="preserve"><value>Yeniden dene.</value></data>
+  <data name="Plan.Band.Recomputed" xml:space="preserve"><value>Plan {0} {1} ile yeniden hesaplandı.</value></data>
+  <data name="Plan.Node.V.WildSame" xml:space="preserve"><value>Varsayımla aynı</value></data>
+  <data name="Plan.Band.CaughtPreferred" xml:space="preserve"><value>{0} {1} Pal'larına eklendi ve tercihli yapıldı; plan yeniden hesaplandı.</value></data>
+  <data name="Plan.Band.Left" xml:space="preserve"><value>Kalan {0} yumurta; önceki planın kalanı {1}.</value></data>
+  <data name="Plan.Band.StartChanged" xml:space="preserve"><value>Başlangıç Pal'ı {0} yerine {1} oldu.</value></data>
+  <data name="Plan.Band.Undo" xml:space="preserve"><value>Geri al</value></data>
+  <data name="Panel.ResizeAria" xml:space="preserve"><value>Yan paneli yeniden boyutlandır (ok tuşları genişliği değiştirir, çift tıklama sıfırlar)</value></data>
+  <data name="Plan.TimedOutShort" xml:space="preserve"><value>Süre doldu, daha iyi plan olabilir</value></data>
+  <data name="Plan.ContinueSearch" xml:space="preserve"><value>Aramaya devam et</value></data>
+  <data name="Plan.NoteTimedOut" xml:space="preserve"><value>Arama süresi doldu, bu yüzden daha iyi bir plan olabilir. "Aramaya devam et" aramayı bir süre daha sürdürür.</value></data>
+  <data name="Plan.Note.FlexGender" xml:space="preserve"><value>{0} cinsiyeti fark etmez: diğer cinsiyet çıkarsa eş olarak {2} bir {1} kullan.</value></data>
+  <data name="Plan.NotesOne" xml:space="preserve"><value>1 not</value></data>
+  <data name="Plan.NotesCountButton" xml:space="preserve"><value>{0} not</value></data>
+  <data name="Plan.EditTarget" xml:space="preserve"><value>Hedefi düzenle</value></data>
+  <data name="Plan.BackToResult" xml:space="preserve"><value>Plana dön</value></data>
+  <data name="Plan.StepsTitle" xml:space="preserve"><value>Adımlar</value></data>
+  <data name="Plan.BreedSpeciesAction" xml:space="preserve"><value>{0} üret</value></data>
+  <data name="Plan.NotesTitle" xml:space="preserve"><value>Notlar</value></data>
+  <data name="Plan.OwnedNoteCompact" xml:space="preserve"><value>{0} zaten sende var ({1} tane, {2}). Bu planlar yenisini üretir; en az bir breeding adımı var.</value></data>
+  <data name="Plan.NotePreferredReason" xml:space="preserve"><value>Tercihli Pal'ın {0} bu planlarda yok: {1}</value></data>
+  <data name="Plan.NotePreferredNotBest" xml:space="preserve"><value>Tercihli Pal'ın {0} bu planlarda yok; onunla en iyi plan {1} adım ({2} yumurta).</value></data>
+  <data name="Plan.NotePreferredUnused" xml:space="preserve"><value>Tercihli Pal'ın {0} bu planlarda kullanılmadı.</value></data>
+  <data name="Plan.StepProgress" xml:space="preserve"><value>Adım {0} / {1}</value></data>
+  <data name="Plan.AllStepsDone" xml:space="preserve"><value>{0} / {0} adım tamam</value></data>
+  <data name="Plan.NextStepLabel" xml:space="preserve"><value>Sıradaki</value></data>
+  <data name="Plan.Glance" xml:space="preserve"><value>Bakış</value></data>
+  <data name="Plan.StepDone" xml:space="preserve"><value>Tamamlandı</value></data>
+  <data name="Plan.Completed" xml:space="preserve"><value>Tamamlandı</value></data>
+  <data name="Plan.FinishTitle" xml:space="preserve"><value>Planı bitir ve yeni plan hazırla</value></data>
+  <data name="Plan.ImprovingRun" xml:space="preserve"><value>İyileştiriliyor</value></data>
+  <data name="Plan.ImprovingProgressSec" xml:space="preserve"><value>{0} / {1} sn</value></data>
+  <data name="Plan.BetterPlanFound" xml:space="preserve"><value>Daha iyi plan bulundu:</value></data>
+  <data name="Plan.ShowBetterPlan" xml:space="preserve"><value>Göster</value></data>
+  <data name="Plan.NoPlanTab" xml:space="preserve"><value>Plan yok</value></data>
+  <data name="Plan.NoPlanReasonsCount" xml:space="preserve"><value>{0} neden bulundu</value></data>
+  <data name="Plan.Diag.NoPlanHeading" xml:space="preserve"><value>Bu ayarlarla plan bulunamadı</value></data>
+  <data name="Plan.Diag.Sub" xml:space="preserve"><value>Aşağıdakilerden birini değiştirince plan kendiliğinden yeniden aranır. Düğmeler ilgili denetimi alttaki şeritte işaretler.</value></data>
+  <data name="Plan.DiagRelated" xml:space="preserve"><value>İlgili: {0}: {1}</value></data>
+  <data name="Plan.DiagRelatedShelfScope" xml:space="preserve"><value>İlgili: Raf ve kapsam</value></data>
+  <data name="Plan.DiagRelatedStart" xml:space="preserve"><value>İlgili: Başlangıç Pal'ı</value></data>
+  <data name="Plan.DiagRelatedPreferred" xml:space="preserve"><value>İlgili: Tercihli Pal zorunluluğu</value></data>
+  <data name="Plan.DiagAction.AllowWild" xml:space="preserve"><value>Vahşiye izin ver</value></data>
+  <data name="Plan.DiagAction.StepLimit" xml:space="preserve"><value>Sınırı {0} yap</value></data>
+  <data name="Plan.DiagAction.WildLimit" xml:space="preserve"><value>Vahşiyi {0} yap</value></data>
+  <data name="Plan.DiagAction.RemovePassive" xml:space="preserve"><value>Pasifi kaldır</value></data>
+  <data name="Plan.DiagAction.AllowLegendary" xml:space="preserve"><value>Efsaneviye izin ver</value></data>
+  <data name="Plan.DiagAction.ClearStart" xml:space="preserve"><value>Başlangıcı temizle</value></data>
+  <data name="Plan.DiagAction.ClearPreferredReq" xml:space="preserve"><value>Zorunluluğu kaldır</value></data>
+  <data name="Plan.OutOfScopeShortTag" xml:space="preserve"><value>Kapsam dışı</value></data>
+  <data name="Plan.StaleBrokenTitle" xml:space="preserve"><value>Pal'ların değişti; bu plan artık uygulanamaz.</value></data>
+  <data name="Plan.StaleBrokenDetail" xml:space="preserve"><value>{0}. adımdaki {1} kapsam dışında kaldı.</value></data>
+  <data name="Plan.StaleValidTitle" xml:space="preserve"><value>Pal'ların değişti; plan hâlâ geçerli.</value></data>
+  <data name="Plan.StaleLastRead" xml:space="preserve"><value>Son okuma {0}.</value></data>
+  <data name="Plan.Recompute" xml:space="preserve"><value>Yeniden hesapla</value></data>
+  <data name="Location.PageOnly" xml:space="preserve"><value>{0}. sayfa</value></data>
+  <data name="Plan.GlanceChainAria" xml:space="preserve"><value>Adım ilerlemesi</value></data>
+  <data name="Plan.GlanceSummary" xml:space="preserve"><value>{0} · {1} · Plan {2} · toplam {3} yumurta</value></data>
+  <data name="Plan.CloseGlance" xml:space="preserve"><value>Bakışı kapat</value></data>
+  <data name="Plan.GlanceLead" xml:space="preserve"><value>Bu iki Pal'ı Üreme Çiftliği'ne koy. Yaklaşık {0} yumurta.</value></data>
+  <data name="Plan.GlanceLeadAllDone" xml:space="preserve"><value>Bu plandaki bütün adımlar tamamlandı.</value></data>
+  <data name="Plan.PassivesListAria" xml:space="preserve"><value>Pasifleri</value></data>
+  <data name="Plan.FromEgg" xml:space="preserve"><value>Yumurtadan</value></data>
+  <data name="Plan.GlanceGenderFemale" xml:space="preserve"><value>Dişi</value></data>
+  <data name="Plan.GlanceGenderMale" xml:space="preserve"><value>Erkek</value></data>
+  <data name="Plan.GlanceKeepWithPassives" xml:space="preserve"><value>{0} olanı ve {1} taşıyanı sakla.</value></data>
+  <data name="Plan.GlanceKeepPassivesAny" xml:space="preserve"><value>{0} taşıyanı sakla.</value></data>
+  <data name="Plan.GlanceKeepGenderOnly" xml:space="preserve"><value>{0} olanı sakla.</value></data>
+  <data name="Plan.GlanceKeepAny" xml:space="preserve"><value>Çıkan yavruyu sakla.</value></data>
+  <data name="Plan.GlanceStepDone" xml:space="preserve"><value>Bu adım bitti</value></data>
+  <data name="Plan.GlanceThenLabel" xml:space="preserve"><value>Sonra:</value></data>
+  <data name="Plan.GlanceFinalStepHint" xml:space="preserve"><value>Son adım; bitirince hedefin hazır.</value></data>
+  <data name="Common.Decrease" xml:space="preserve"><value>Azalt</value></data>
+  <data name="Common.Increase" xml:space="preserve"><value>Artır</value></data>
+  <data name="Filters.Title" xml:space="preserve"><value>Filtreler</value></data>
+  <data name="Filters.Clear" xml:space="preserve"><value>Temizle</value></data>
+  <data name="Filters.ToggleCount" xml:space="preserve"><value>Filtreler ({0})</value></data>
+  <data name="Filters.ActiveRegion" xml:space="preserve"><value>Etkin filtreler</value></data>
+  <data name="Filters.ActiveLabel" xml:space="preserve"><value>Etkin filtreler</value></data>
+  <data name="Filters.RemoveOne" xml:space="preserve"><value>Filtreyi kaldır: {0}</value></data>
+  <data name="Filters.ClearAll" xml:space="preserve"><value>Tümünü temizle</value></data>
+  <data name="Filters.ClearFilters" xml:space="preserve"><value>Filtreleri temizle</value></data>
+  <data name="View.Label" xml:space="preserve"><value>Görünüm</value></data>
+  <data name="View.Table" xml:space="preserve"><value>Tablo</value></data>
+  <data name="View.Cards" xml:space="preserve"><value>Kartlar</value></data>
+  <data name="View.Dense" xml:space="preserve"><value>Yoğun kartlar</value></data>
+  <data name="View.SoonHint" xml:space="preserve"><value>Kart görünümleri sonraki adımda eklenecek</value></data>
+  <data name="Scope.Prefix" xml:space="preserve"><value>Kapsam: </value></data>
+  <data name="MyPals.SearchPlaceholder" xml:space="preserve"><value>Ad ya da numara</value></data>
+  <data name="MyPals.FilterExpedition" xml:space="preserve"><value>Seferde</value></data>
+  <data name="MyPals.UnknownOwner" xml:space="preserve"><value>Bilinmeyen oyuncu</value></data>
+  <data name="MyPals.FilterSourceModBridge" xml:space="preserve"><value>Mod köprüsü</value></data>
+  <data name="MyPals.FilterSourceManual" xml:space="preserve"><value>Elle eklenen</value></data>
+  <data name="MyPals.SummaryShown" xml:space="preserve"><value>{0} Pal'dan {1} tanesi</value></data>
+  <data name="MyPals.SummaryScoped" xml:space="preserve"><value>· {0}'i planlamada</value></data>
+  <data name="MyPals.SourcesButtonAria" xml:space="preserve"><value>Kaynaklar: {0} kaynak, {1}</value></data>
+  <data name="MyPals.SrcSummary" xml:space="preserve"><value>{0} kaynak · {1}</value></data>
+  <data name="MyPals.SrcNone" xml:space="preserve"><value>Kaynak yok</value></data>
+  <data name="MyPals.SrcOk" xml:space="preserve"><value>Tamam</value></data>
+  <data name="MyPals.SrcDisabled" xml:space="preserve"><value>Kapalı</value></data>
+  <data name="MyPals.SrcWaiting" xml:space="preserve"><value>Bekliyor</value></data>
+  <data name="MyPals.NoSourcesConfigured" xml:space="preserve"><value>Henüz kaynak eklenmedi.</value></data>
+  <data name="MyPals.ManageSources" xml:space="preserve"><value>Kaynakları yönet</value></data>
+  <data name="MyPals.FlagEdited" xml:space="preserve"><value>Düzeltildi</value></data>
+  <data name="MyPals.FlagExpedition" xml:space="preserve"><value>Seferde</value></data>
+  <data name="MyPals.FlagGeneticCopy" xml:space="preserve"><value>Genetik kopya</value></data>
+  <data name="MyPals.FlagOutOfPlan" xml:space="preserve"><value>Planlamada değil</value></data>
+  <data name="MyPals.ExcludedTip" xml:space="preserve"><value>Planlamada kullanılmıyor</value></data>
+  <data name="MyPals.LevelShort" xml:space="preserve"><value>Sv {0}</value></data>
+  <data name="MyPals.UsePalAria" xml:space="preserve"><value>Planlamada kullan: {0}, Sv {1}</value></data>
+  <data name="MyPals.RowActionsAria" xml:space="preserve"><value>Diğer eylemler: Düzenle, Planlayıcı'da üret, Paldex'te aç</value></data>
+  <data name="MyPals.RowActionsShort" xml:space="preserve"><value>Eylemler</value></data>
+  <data name="MyPals.PlanBreed" xml:space="preserve"><value>Planlayıcı'da üret</value></data>
+  <data name="MyPals.PreferredAdded" xml:space="preserve"><value>Tercihlilere eklendi</value></data>
+  <data name="MyPals.PreferredRemoved" xml:space="preserve"><value>Tercihlilerden çıkarıldı</value></data>
+  <data name="MyPals.OpenInPlanner" xml:space="preserve"><value>Planlayıcı'da aç</value></data>
+  <data name="MyPals.AddPreferred" xml:space="preserve"><value>Tercihlilere ekle</value></data>
+  <data name="MyPals.RemovePreferred" xml:space="preserve"><value>Tercihlilerden çıkar</value></data>
+  <data name="MyPals.OpenPaldex" xml:space="preserve"><value>Paldex'te aç</value></data>
+  <data name="MyPals.EmptyTitle" xml:space="preserve"><value>Henüz Pal yok</value></data>
+  <data name="MyPals.EmptyReason" xml:space="preserve"><value>Bir filtreyi kaldırırsan kaç Pal kalacağı:</value></data>
+  <data name="MyPals.RemainCount" xml:space="preserve"><value>{0} Pal kalır</value></data>
+  <data name="MyPals.ChipPassive" xml:space="preserve"><value>Pasif</value></data>
+  <data name="MyPals.ColIvHeader" xml:space="preserve"><value>IV · Can Sld Svn</value></data>
+  <data name="MyPals.ColUseShort" xml:space="preserve"><value>Planda</value></data>
+  <data name="MyPals.ColActionsAria" xml:space="preserve"><value>Eylemler</value></data>
+
+  <data name="Editor.Discard" xml:space="preserve"><value>Vazgeç</value></data>
+  <data name="Editor.AtSource" xml:space="preserve"><value>Kaynakta {0}</value></data>
+  <data name="Editor.PassivesCount" xml:space="preserve"><value>Pasifler · {0} / 4</value></data>
+  <data name="Editor.PassiveAddedHint" xml:space="preserve"><value>{0} kaynakta yoktu; sen ekledin.</value></data>
+  <data name="Editor.PassiveRemovedHint" xml:space="preserve"><value>{0} kaynakta vardı; çıkardın.</value></data>
+  <data name="Editor.PassivesAtSource" xml:space="preserve"><value>Kaynakta: {0}</value></data>
+  <data name="Editor.IvsShort" xml:space="preserve"><value>IV (isteğe bağlı)</value></data>
+  <data name="Editor.IvHpPlaceholder" xml:space="preserve"><value>Can ?</value></data>
+  <data name="Editor.IvAtkPlaceholder" xml:space="preserve"><value>Sld ?</value></data>
+  <data name="Editor.IvDefPlaceholder" xml:space="preserve"><value>Svn ?</value></data>
+  <data name="Editor.IvEmptyHint" xml:space="preserve"><value>Boş bırakılan IV bilinmiyor sayılır.</value></data>
+  <data name="Editor.IvIncomplete" xml:space="preserve"><value>Üç IV değerini de gir ya da hepsini boş bırak.</value></data>
+  <data name="Editor.PlanningLabel" xml:space="preserve"><value>Planlama</value></data>
+  <data name="Editor.RevertConfirmTitle" xml:space="preserve"><value>Değişiklikler kaynağa döndürülsün mü?</value></data>
+  <data name="Editor.RevertConfirmBody" xml:space="preserve"><value>Bu Pal için yapılan bütün düzeltmeler silinir ve kaynaktaki değerler geri gelir.</value></data>
+  <data name="Editor.RemoveConfirmTitle" xml:space="preserve"><value>Elle eklenen Pal kaldırılsın mı?</value></data>
+  <data name="Editor.UnsavedTitle" xml:space="preserve"><value>Kaydedilmemiş değişiklikler var</value></data>
+  <data name="Editor.UnsavedBody" xml:space="preserve"><value>Bu Pal üzerindeki düzenlemelerin henüz kaydedilmedi.</value></data>
+  <data name="Editor.Stay" xml:space="preserve"><value>Düzenlemeye devam et</value></data>
+  <data name="Editor.DiscardAndLeave" xml:space="preserve"><value>Kaydetmeden çık</value></data>
+  <data name="Editor.SaveAndContinue" xml:space="preserve"><value>Kaydet ve devam et</value></data>
+  <data name="Editor.NewSpeciesHint" xml:space="preserve"><value>Önce bir Pal türü seç.</value></data>
+  <data name="Editor.CondenseRankShort" xml:space="preserve"><value>Yoğunlaştırma (1–5)</value></data>
+  <data name="Editor.UnknownHint" xml:space="preserve"><value>Seçilmezse cinsiyet bilinmiyor sayılır.</value></data>
+
+  <data name="Sort.AriaLabel" xml:space="preserve"><value>Sırala: {0}, {1}</value></data>
+  <data name="Sort.Ascending" xml:space="preserve"><value>artan</value></data>
+  <data name="Sort.Descending" xml:space="preserve"><value>azalan</value></data>
+  <data name="Sort.ListLabel" xml:space="preserve"><value>Sıralama seçenekleri</value></data>
+  <data name="Sort.PalNo" xml:space="preserve"><value>Pal no</value></data>
+  <data name="Sort.Level" xml:space="preserve"><value>Seviye</value></data>
+  <data name="Sort.IvTotal" xml:space="preserve"><value>IV toplamı</value></data>
+  <data name="Sort.Location" xml:space="preserve"><value>Konum</value></data>
+  <data name="Sort.RecentlyAdded" xml:space="preserve"><value>Son eklenen</value></data>
+  <data name="MyPals.CardsListAria" xml:space="preserve"><value>Pal'lar</value></data>
+  <data name="MyPals.CardActionsAria" xml:space="preserve"><value>Eylemler: {0}</value></data>
+  <data name="MyPals.ExcludeFromPlan" xml:space="preserve"><value>Planlamadan çıkar</value></data>
+  <data name="MyPals.IncludeInPlan" xml:space="preserve"><value>Planlamaya al</value></data>
+  <data name="MyPals.EmptySlot" xml:space="preserve"><value>Boş yuva</value></data>
+  <data name="MyPals.IvHpShort" xml:space="preserve"><value>Can</value></data>
+  <data name="MyPals.IvAtkShort" xml:space="preserve"><value>Sld</value></data>
+  <data name="MyPals.IvDefShort" xml:space="preserve"><value>Svn</value></data>
+  <data name="MyPals.CondenseTip" xml:space="preserve"><value>Yoğunlaştırma {0}</value></data>
+  <data name="MyPals.NicknameTip" xml:space="preserve"><value>Takma ad: {0}</value></data>
+  <data name="MyPals.AriaLevel" xml:space="preserve"><value>seviye {0}</value></data>
+  <data name="MyPals.CardAria" xml:space="preserve"><value>{0}, {1}. Pasifler: {2}. IV {3}. {4}.</value></data>
+  <data name="MyPals.CardAriaIvs" xml:space="preserve"><value>Can {0}, Saldırı {1}, Savunma {2}</value></data>
+  <data name="MyPals.CardAriaIvsUnknown" xml:space="preserve"><value>bilinmiyor</value></data>
+  <data name="MyPals.CardAriaPassivesNone" xml:space="preserve"><value>yok</value></data>
+  <data name="Paldex.ModeSpecies" xml:space="preserve"><value>Türler</value></data>
+  <data name="Paldex.SummaryShown" xml:space="preserve"><value>{0} türden {1} tanesi</value></data>
+  <data name="Paldex.SummaryOwned" xml:space="preserve"><value>· {0}'ü sende</value></data>
+  <data name="Paldex.CardsListAria" xml:space="preserve"><value>Türler</value></data>
+  <data name="Paldex.FilterSpecies" xml:space="preserve"><value>Tür</value></data>
+  <data name="Paldex.SpeciesPlaceholder" xml:space="preserve"><value>Ad ya da numara</value></data>
+  <data name="Paldex.FilterElements" xml:space="preserve"><value>Element · biri yeter</value></data>
+  <data name="Paldex.FilterWork" xml:space="preserve"><value>İş · hepsi gerekir, en az seviyeyle</value></data>
+  <data name="Paldex.WorkMinLevelAria" xml:space="preserve"><value>{0} en az seviye</value></data>
+  <data name="Paldex.FilterObtain" xml:space="preserve"><value>Elde etme · biri yeter</value></data>
+  <data name="Paldex.FilterOther" xml:space="preserve"><value>Diğer</value></data>
+  <data name="Paldex.FilterNocturnal" xml:space="preserve"><value>Gece aktif</value></data>
+  <data name="Paldex.FilterVariant" xml:space="preserve"><value>Varyant</value></data>
+  <data name="Paldex.FilterSameSpecies" xml:space="preserve"><value>Yalnızca aynı türle</value></data>
+  <data name="Paldex.FilterWildCatchable" xml:space="preserve"><value>Vahşide yakalanabilir</value></data>
+  <data name="Paldex.OwnAny" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Paldex.OwnPair" xml:space="preserve"><value>Çifti tam</value></data>
+  <data name="Paldex.MinRarityAria" xml:space="preserve"><value>En düşük nadirlik</value></data>
+  <data name="Paldex.MaxRarityAria" xml:space="preserve"><value>En yüksek nadirlik</value></data>
+  <data name="Paldex.RarityRangeAria" xml:space="preserve"><value>Nadirlik aralığı</value></data>
+  <data name="Paldex.ChipElement" xml:space="preserve"><value>Element: {0}</value></data>
+  <data name="Paldex.ChipWork" xml:space="preserve"><value>İş: {0} ≥ {1}</value></data>
+  <data name="Paldex.ChipOwnership" xml:space="preserve"><value>Sahiplik: {0}</value></data>
+  <data name="Paldex.ChipObtain" xml:space="preserve"><value>Elde etme: {0}</value></data>
+  <data name="Paldex.ChipRarity" xml:space="preserve"><value>Nadirlik: {0}–{1}</value></data>
+  <data name="Paldex.EmptyTitle" xml:space="preserve"><value>Bu filtrelere uyan tür yok</value></data>
+  <data name="Paldex.EmptyReason" xml:space="preserve"><value>Bir filtreyi kaldırırsan kaç tür kalacağı:</value></data>
+  <data name="Paldex.RemainCount" xml:space="preserve"><value>{0} tür kalır</value></data>
+  <data name="Paldex.OwnedNone" xml:space="preserve"><value>Sende yok</value></data>
+  <data name="Paldex.OwnedTip" xml:space="preserve"><value>Sende {0}: {1} erkek, {2} dişi.</value></data>
+  <data name="Paldex.OwnedTotalAria" xml:space="preserve"><value>Sende {0}</value></data>
+  <data name="Paldex.StatPowerShort" xml:space="preserve"><value>Güç</value></data>
+  <data name="Paldex.StatSizeShort" xml:space="preserve"><value>Boy</value></data>
+  <data name="Paldex.StatHpShort" xml:space="preserve"><value>Can</value></data>
+  <data name="Paldex.StatAtkShort" xml:space="preserve"><value>Sld</value></data>
+  <data name="Paldex.StatDefShort" xml:space="preserve"><value>Svn</value></data>
+  <data name="Paldex.FlagNight" xml:space="preserve"><value>Gece</value></data>
+  <data name="Paldex.FlagSameSpecies" xml:space="preserve"><value>Yalnızca aynı türle</value></data>
+  <data name="Paldex.WorkLevelAria" xml:space="preserve"><value>seviye {0}</value></data>
+  <data name="Paldex.MoreWorks" xml:space="preserve"><value>+{0} iş: {1}</value></data>
+  <data name="Paldex.CardAria" xml:space="preserve"><value>{0}, #{1}, {2}. {3}</value></data>
+  <data name="Paldex.CardAriaWork" xml:space="preserve"><value>İş: {0}.</value></data>
+  <data name="Paldex.CardAriaWorkNone" xml:space="preserve"><value>İş uygunluğu yok.</value></data>
+  <data name="Paldex.ColPalHeader" xml:space="preserve"><value>Pal</value></data>
+  <data name="Paldex.ColOwnedHeader" xml:space="preserve"><value>Sende</value></data>
+  <data name="Paldex.ColPowerHeader" xml:space="preserve"><value>Güç</value></data>
+  <data name="Paldex.ColWorksHeader" xml:space="preserve"><value>İşler</value></data>
+  <data name="Detail.PrevPal" xml:space="preserve"><value>Önceki: {0}</value></data>
+  <data name="Detail.NextPal" xml:space="preserve"><value>Sonraki: {0}</value></data>
+  <data name="Detail.ParentsInCalculator" xml:space="preserve"><value>Hesaplayıcı'da ebeveynler</value></data>
+  <data name="Detail.MineTitle" xml:space="preserve"><value>Sende</value></data>
+  <data name="Detail.MineHint" xml:space="preserve"><value>Kapsamdakilerden en fazla 5 tanesi, konumlarıyla.</value></data>
+  <data name="Detail.MineEmpty" xml:space="preserve"><value>Kapsamdaki kaynaklarda bu türden Pal yok.</value></data>
+  <data name="Detail.OpenInMyPals" xml:space="preserve"><value>Pal'larım'da aç</value></data>
+  <data name="Detail.InThisPage" xml:space="preserve"><value>Bu sayfada</value></data>
+  <data name="Detail.AnchorGeneral" xml:space="preserve"><value>Genel</value></data>
+  <data name="Detail.AnchorWhere" xml:space="preserve"><value>Nerede</value></data>
+  <data name="Detail.AnchorSkills" xml:space="preserve"><value>Yetenekler</value></data>
+  <data name="Detail.AnchorDrops" xml:space="preserve"><value>Düşenler</value></data>
+  <data name="Detail.StatHpShort" xml:space="preserve"><value>Can</value></data>
+  <data name="Detail.StatWalkShort" xml:space="preserve"><value>Yürüme</value></data>
+  <data name="Detail.StatRunShort" xml:space="preserve"><value>Koşma</value></data>
+  <data name="Detail.StatRideShort" xml:space="preserve"><value>Binek sprint</value></data>
+  <data name="Detail.StatFoodShort" xml:space="preserve"><value>Yiyecek</value></data>
+  <data name="Detail.StatFullStomachShort" xml:space="preserve"><value>Tokluk</value></data>
+  <data name="Detail.MaxWorkNote" xml:space="preserve"><value>İş seviyesi oyunda en fazla 8.</value></data>
+  <data name="Detail.SeeInBestWorkers" xml:space="preserve"><value>En iyi işçilerde gör</value></data>
+  <data name="Detail.CondenseRank" xml:space="preserve"><value>Yoğunlaştırma</value></data>
+  <data name="Detail.PairCountOwnedFirst" xml:space="preserve"><value>{0} ebeveyn çifti · önce sende olanlar</value></data>
+  <data name="Detail.OwnedTick" xml:space="preserve"><value>Sende var</value></data>
+  <data name="Detail.InspectParentAria" xml:space="preserve"><value>{0} ayrıntısını aç</value></data>
+  <data name="Detail.SeeAllInCalculator" xml:space="preserve"><value>Hepsini Hesaplayıcı'da gör ({0})</value></data>
+  <data name="Detail.WhereTitle" xml:space="preserve"><value>Dünyada nerede</value></data>
+  <data name="Detail.PlotAria" xml:space="preserve"><value>Ana haritada {0} nokta</value></data>
+  <data name="Detail.PlotHint" xml:space="preserve"><value>Noktalar ana haritadaki doğma alanları; turuncu nokta Alfa Pal. Harita görseli veri paketinde yok, bu yüzden yalnızca dağılım gösterilir.</value></data>
+  <data name="Detail.PlotHintMap" xml:space="preserve"><value>Noktalar oyun haritasındaki ana harita doğma alanlarını gösterir; turuncu nokta bir Alfa Pal.</value></data>
+  <data name="Detail.Map.Close" xml:space="preserve"><value>Kapat</value></data>
+  <data name="Detail.Map.Places" xml:space="preserve"><value>Doğma yerleri</value></data>
+  <data name="Detail.Map.LegendArea" xml:space="preserve"><value>Doğma alanı (merkez)</value></data>
+  <data name="Detail.Map.LegendAlpha" xml:space="preserve"><value>Alfa Pal</value></data>
+  <data name="Detail.Map.LegendRadius" xml:space="preserve"><value>Doğma alanının yarıçapı (yakınlaşınca)</value></data>
+  <data name="Detail.Map.Keys" xml:space="preserve"><value>&lt;b&gt;Sürükle&lt;/b&gt; kaydır · &lt;b&gt;Tekerlek&lt;/b&gt; ya da &lt;b&gt;+ −&lt;/b&gt; yakınlaştır · &lt;b&gt;0&lt;/b&gt; sığdır · &lt;b&gt;Ok tuşları&lt;/b&gt; kaydır · &lt;b&gt;Esc&lt;/b&gt; kapat</value></data>
+  <data name="Detail.Map.CanvasAria" xml:space="preserve"><value>Harita. Kaydırmak için sürükle ya da ok tuşları, yakınlaştırmak için + ve −, sığdırmak için 0.</value></data>
+  <data name="Detail.Map.ZoomIn" xml:space="preserve"><value>Yakınlaştır</value></data>
+  <data name="Detail.Map.ZoomOut" xml:space="preserve"><value>Uzaklaştır</value></data>
+  <data name="Detail.Map.Fit" xml:space="preserve"><value>Bütün haritayı sığdır</value></data>
+  <data name="Detail.Map.Area" xml:space="preserve"><value>Doğma alanı</value></data>
+  <data name="Detail.Map.Alpha" xml:space="preserve"><value>Alfa Pal</value></data>
+  <data name="Detail.Map.Offscreen" xml:space="preserve"><value>Alfa Pal · {0} birim</value></data>
+  <data name="Detail.Map.Cursor" xml:space="preserve"><value>İmleç:</value></data>
+  <data name="Detail.Map.CoordHint" xml:space="preserve"><value>Koordinat imlecin altında görünür</value></data>
+  <data name="Detail.Map.OpenAria" xml:space="preserve"><value>Haritayı tam ekran aç: {0} doğma alanı, {1} Alfa Pal</value></data>
+  <data name="Detail.Map.Fullscreen" xml:space="preserve"><value>Tam ekran</value></data>
+  <data name="Detail.LearnedSkillsTitle" xml:space="preserve"><value>Öğrendiği aktif yetenekler</value></data>
+  <data name="Detail.MainMap" xml:space="preserve"><value>Ana harita</value></data>
+  <data name="Detail.MainMapCoords" xml:space="preserve"><value>Ana harita ({0}, {1})</value></data>
+  <data name="Detail.WildLevelSingle" xml:space="preserve"><value>Sv {0}</value></data>
+  <data name="Detail.WildLevelRange" xml:space="preserve"><value>Sv {0}–{1}</value></data>
+  <data name="Detail.CardAria" xml:space="preserve"><value>{0}, #{1}, {2}</value></data>
+  <data name="Workers.Summary" xml:space="preserve"><value>{0} iş türü · her aşamada ilk {1}</value></data>
+  <data name="Workers.OwnedOnly" xml:space="preserve"><value>Yalnızca sahip olduklarım</value></data>
+  <data name="Workers.ColWork" xml:space="preserve"><value>İş</value></data>
+  <data name="Workers.StageEarly" xml:space="preserve"><value>Erken oyun</value></data>
+  <data name="Workers.StageEarlySub" xml:space="preserve"><value>{0}. seviyeye kadar</value></data>
+  <data name="Workers.StageMid" xml:space="preserve"><value>Orta oyun</value></data>
+  <data name="Workers.StageMidSub" xml:space="preserve"><value>{0}. seviyeye kadar</value></data>
+  <data name="Workers.StageLate" xml:space="preserve"><value>Son oyun</value></data>
+  <data name="Workers.StageLateSub" xml:space="preserve"><value>bütün Pal'lar</value></data>
+  <data name="Workers.WorkLevelAria" xml:space="preserve"><value>iş seviyesi</value></data>
+  <data name="Workers.MethodAlpha" xml:space="preserve"><value>Alfa</value></data>
+  <data name="Workers.MethodFishing" xml:space="preserve"><value>Balık</value></data>
+  <data name="Workers.BreedingOnlyShort" xml:space="preserve"><value>yalnızca breeding</value></data>
+  <data name="Workers.CellTip" xml:space="preserve"><value>{0}: iş seviyesi {1}, {2}</value></data>
+  <data name="Workers.FooterNote" xml:space="preserve"><value>Liste oyun verisinden hesaplanır; topluluk rehberleri farklı seçimler önerebilir. Bir Pal, breeding dışında elde edilebildiği en düşük seviyeye göre aşamaya girer. Sıra: iş seviyesi, sonra en erken elde etme seviyesi.</value></data>
+  <data name="Calculator.TabSub.PairToChild" xml:space="preserve"><value>iki Pal'ın yavrusu</value></data>
+  <data name="Calculator.TabSub.TargetToParents" xml:space="preserve"><value>bir türün bütün çiftleri</value></data>
+  <data name="Calculator.TabSub.PassiveOdds" xml:space="preserve"><value>pasiflerin gelme şansı</value></data>
+  <data name="Calculator.TabSub.Mutation" xml:space="preserve"><value>düşük ihtimalli yavrular</value></data>
+  <data name="Calculator.HowItWorks" xml:space="preserve"><value>Nasıl çalışır?</value></data>
+  <data name="Calculator.SpeciesTag" xml:space="preserve"><value>Tür</value></data>
+  <data name="Calculator.ParentSourceAria" xml:space="preserve"><value>{0} kaynağı</value></data>
+  <data name="Calculator.ChangeParentAria" xml:space="preserve"><value>{0}: {1} değiştir</value></data>
+  <data name="Calculator.ClearParentAria" xml:space="preserve"><value>{0} temizle</value></data>
+  <data name="Calculator.PickParentAria" xml:space="preserve"><value>{0} seç</value></data>
+  <data name="Calculator.SearchSpeciesPlaceholder" xml:space="preserve"><value>Pal adı ya da numarası</value></data>
+  <data name="Calculator.EmptyHelpA" xml:space="preserve"><value>Türden seç ya da üstten "Pal'larımdan"a geç; pasifleri ve cinsiyeti de gelir.</value></data>
+  <data name="Calculator.EmptyHelpB" xml:space="preserve"><value>İkinci ebeveyn.</value></data>
+  <data name="Calculator.EmptyChildHint" xml:space="preserve"><value>İki ebeveyn seçilince burada görünür; ikisi de Pal'larından ise pasif olasılığı da açılır.</value></data>
+  <data name="Calculator.ProducesThisSpecies" xml:space="preserve"><value>Bu türü veren</value></data>
+  <data name="Calculator.PairCountLink" xml:space="preserve"><value>{0} çift</value></data>
+  <data name="Calculator.MakePlannerTarget" xml:space="preserve"><value>Planlayıcı'da hedef yap</value></data>
+  <data name="Calculator.GenderAltOutcome" xml:space="preserve"><value>Diğer cinsiyet dizilişinde: {0}</value></data>
+  <data name="Calculator.ErrNoEggTitle" xml:space="preserve"><value>Bu çift yumurta vermez</value></data>
+  <data name="Calculator.ErrBothMale" xml:space="preserve"><value>İki ebeveyn de erkek.</value></data>
+  <data name="Calculator.ErrBothFemale" xml:space="preserve"><value>İki ebeveyn de dişi.</value></data>
+  <data name="Calculator.ErrSameGenderWhyHtml" xml:space="preserve"><value>Breeding için bir erkek ve bir dişi Pal gerekir. Tür olarak hesaplarsan yavru &lt;b&gt;{0}&lt;/b&gt; olur, ama bu iki Pal'la yumurta alınamaz.</value></data>
+  <data name="Calculator.ErrRecipeMismatchWhyHtml" xml:space="preserve"><value>Bu özel tarifte ebeveynlerin cinsiyeti önemli. Tür olarak hesaplarsan yavru &lt;b&gt;{0}&lt;/b&gt; olur, ama bu cinsiyetlerle yumurta alınamaz.</value></data>
+  <data name="Calculator.FixPickForB" xml:space="preserve"><value>B için {0} bir Pal seç</value></data>
+  <data name="Calculator.FixPickButton" xml:space="preserve"><value>Seç</value></data>
+  <data name="Calculator.FixPickOtherB" xml:space="preserve"><value>B için başka bir Pal seç</value></data>
+  <data name="Calculator.FixPickOtherBSub" xml:space="preserve"><value>Başka bir Pal bu cinsiyetlerle yumurta verebilir.</value></data>
+  <data name="Calculator.FixOwnedSameSpecies" xml:space="preserve"><value>Pal'larında {0} tane {1} {2} var.</value></data>
+  <data name="Calculator.FixOwnedOtherSpecies" xml:space="preserve"><value>Pal'larında {0} {1} yok; {0} {2} var.</value></data>
+  <data name="Calculator.FixOwnedNone" xml:space="preserve"><value>Kapsamında {0} Pal yok.</value></data>
+  <data name="Calculator.TwoNamesAnd" xml:space="preserve"><value>{0} ve {1}</value></data>
+  <data name="Calculator.FixUseSpecies" xml:space="preserve"><value>Tür olarak hesapla</value></data>
+  <data name="Calculator.FixUseSpeciesSub" xml:space="preserve"><value>Cinsiyeti yok sayar; pasif olasılığı kapanır.</value></data>
+  <data name="Calculator.FixUseSpeciesButton" xml:space="preserve"><value>Tür yap</value></data>
+  <data name="Calculator.CakeNone" xml:space="preserve"><value>Yok</value></data>
+  <data name="Calculator.CakeNormal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Calculator.CakeSpecial" xml:space="preserve"><value>Özel</value></data>
+  <data name="Calculator.PersistNote" xml:space="preserve"><value>Girdiler sayfa değişince korunur.</value></data>
+  <data name="Common.MaleLower" xml:space="preserve"><value>erkek</value></data>
+  <data name="Common.FemaleLower" xml:space="preserve"><value>dişi</value></data>
+  <data name="Odds.BothParentsFromOwned" xml:space="preserve"><value>İki ebeveyn de Pal'larından seçildi</value></data>
+  <data name="Odds.DesiredHeader" xml:space="preserve"><value>İstenen pasifler · {0} / {1}</value></data>
+  <data name="Odds.FilledFromPositive" xml:space="preserve"><value>ebeveynlerin olumlu pasifleriyle dolduruldu</value></data>
+  <data name="Odds.MaxUnwantedShort" xml:space="preserve"><value>En fazla istenmeyen</value></data>
+  <data name="Odds.GenderRequirement" xml:space="preserve"><value>Cinsiyet şartı</value></data>
+  <data name="Odds.PerEggShort" xml:space="preserve"><value>Yumurta başına</value></data>
+  <data name="Odds.ExpectedShort" xml:space="preserve"><value>Beklenen</value></data>
+  <data name="Odds.Eggs100Caption" xml:space="preserve"><value>100 yumurtanın ~{0} tanesinde istenen {1} pasif gelir.</value></data>
+  <data name="Odds.Eggs100LessThanOne" xml:space="preserve"><value>100 yumurtanın 1'inden azında istenen {0} pasif gelir.</value></data>
+  <data name="Odds.Eggs100Impossible" xml:space="preserve"><value>Bu kurulumla istenen pasifler bu yumurtadan gelmez.</value></data>
+  <data name="Odds.Eggs100Aria" xml:space="preserve"><value>100 yumurtanın yaklaşık {0} tanesinde istenen {1} pasif gelir</value></data>
+  <data name="Odds.WhatIfAllowUnwanted" xml:space="preserve"><value>{0} istenmeyene izin verirsen</value></data>
+  <data name="Odds.WhatIfFemale" xml:space="preserve"><value>Dişi olması da gerekirse</value></data>
+  <data name="Odds.WhatIfMale" xml:space="preserve"><value>Erkek olması da gerekirse</value></data>
+  <data name="Odds.WhatIfGenderAny" xml:space="preserve"><value>Cinsiyet şartı kalkarsa</value></data>
+  <data name="Odds.StartInPlannerWithPair" xml:space="preserve"><value>Planlayıcı'da bu çiftle başla</value></data>
+  <data name="Common.Loading" xml:space="preserve"><value>Yükleniyor…</value></data>
+  <data name="Common.Actions" xml:space="preserve"><value>İşlemler</value></data>
+  <data name="Common.ResetFilters" xml:space="preserve"><value>Filtreyi sıfırla</value></data>
+  <data name="Odds.FillFromOwned" xml:space="preserve"><value>Pal'larımdan doldur</value></data>
+  <data name="Odds.ParentATitle" xml:space="preserve"><value>Ebeveyn A</value></data>
+  <data name="Odds.ParentBTitle" xml:space="preserve"><value>Ebeveyn B</value></data>
+  <data name="Odds.UnknownPassive" xml:space="preserve"><value>Bilinmeyen pasif</value></data>
+  <data name="Odds.DesiredShortTitle" xml:space="preserve"><value>İstenen pasifler</value></data>
+  <data name="Odds.UseParentsPositive" xml:space="preserve"><value>Ebeveynlerin olumlularını kullan</value></data>
+  <data name="Odds.SpecialCakeShort" xml:space="preserve"><value>Özel kek</value></data>
+  <data name="Odds.CakeNo" xml:space="preserve"><value>Yok</value></data>
+  <data name="Odds.CakeYes" xml:space="preserve"><value>Var</value></data>
+  <data name="Odds.WithSpecialCake" xml:space="preserve"><value>Özel kekle</value></data>
+  <data name="Odds.WithoutSpecialCake" xml:space="preserve"><value>Özel keksiz</value></data>
+  <data name="Odds.HowCalculated" xml:space="preserve"><value>Nasıl hesaplandı</value></data>
+  <data name="Odds.MoreInGuide" xml:space="preserve"><value>Rehberde ayrıntısı</value></data>
+  <data name="Odds.ChartInheritCaption" xml:space="preserve"><value>Yavru ebeveynlerden kaç pasif alır</value></data>
+  <data name="Odds.ChartRandomCaption" xml:space="preserve"><value>Kaç rastgele pasif eklenir</value></data>
+  <data name="Odds.FormulaInheritExact" xml:space="preserve"><value>yavru tam {0} pasif alır</value></data>
+  <data name="Odds.FormulaInheritPoolCap" xml:space="preserve"><value>havuzdaki {0} pasifin tümü gelir</value></data>
+  <data name="Odds.FormulaInheritCake" xml:space="preserve"><value>Özel kek {0} pasif alır</value></data>
+  <data name="Odds.FormulaPoolWantedOnly" xml:space="preserve"><value>{0} pasiflik havuzdan istenen {1} gelir</value></data>
+  <data name="Odds.FormulaPoolWithUnwanted" xml:space="preserve"><value>{0} pasiflik havuzdan {1} istenen + {2} istenmeyen</value></data>
+  <data name="Odds.FormulaRandomNone" xml:space="preserve"><value>rastgele pasif eklenmez</value></data>
+  <data name="Odds.FormulaRandomFull" xml:space="preserve"><value>boş yuva kalmaz</value></data>
+  <data name="Odds.FormulaRandomMax" xml:space="preserve"><value>en fazla {0} rastgele pasif eklenir</value></data>
+  <data name="Odds.FormulaResultPerEgg" xml:space="preserve"><value>yumurta başına</value></data>
+  <data name="Odds.FormulaResultDominant" xml:space="preserve"><value>baskın terim (toplam {0})</value></data>
+  <data name="Odds.PoolSummary" xml:space="preserve"><value>Havuzda {0} pasif var: {1} istenen, {2} istenmeyen.</value></data>
+  <data name="Odds.PoolSummaryUnknown" xml:space="preserve"><value>{0} bilinmeyen pasif dahil.</value></data>
+  <data name="Odds.EmptyHint" xml:space="preserve"><value>Pasifleri yukarıdan ekle ya da sahip olduğun bir Pal'dan doldur.</value></data>
+  <data name="Odds.CakeNeedsFour" xml:space="preserve"><value>Özel kek 4 pasifi zorunlu kılar.</value></data>
+  <data name="Target.Change" xml:space="preserve"><value>Değiştir</value></data>
+  <data name="Target.PickTarget" xml:space="preserve"><value>Hedef seç</value></data>
+  <data name="Target.FilterAll" xml:space="preserve"><value>Hepsi · {0}</value></data>
+  <data name="Target.FilterAnyOwned" xml:space="preserve"><value>Sende olan · {0}</value></data>
+  <data name="Target.FilterBothOwned" xml:space="preserve"><value>İkisi de sende · {0}</value></data>
+  <data name="Target.GroupBothOwned" xml:space="preserve"><value>İkisi de sende · {0}</value></data>
+  <data name="Target.GroupOneOwned" xml:space="preserve"><value>Biri sende · {0}</value></data>
+  <data name="Target.GroupNoneOwned" xml:space="preserve"><value>Sende olmayan · {0}</value></data>
+  <data name="Target.ColParent" xml:space="preserve"><value>Ebeveyn</value></data>
+  <data name="Target.ColOwned" xml:space="preserve"><value>Sende</value></data>
+  <data name="Target.PairToChildBtn" xml:space="preserve"><value>Çift → yavru</value></data>
+  <data name="Mutation.OutcomesTitle" xml:space="preserve"><value>Mutasyonla çıkabilecekler</value></data>
+  <data name="Mutation.PickPairHint" xml:space="preserve"><value>İki ebeveyn seç</value></data>
+  <data name="Mutation.CountTitle" xml:space="preserve"><value>{0} olası mutant</value></data>
+  <data name="Mutation.EmptyBoxTitle" xml:space="preserve"><value>Mutant yavrular</value></data>
+  <data name="Mutation.EmptyBoxSub" xml:space="preserve"><value>İki ebeveyn seçilince olası mutantlar sağdaki listede görünür.</value></data>
+  <data name="Mutation.InRightPanelNormal" xml:space="preserve"><value>Sağdaki listede. Normal yavru: {0}.</value></data>
+  <data name="Mutation.LeadNormal" xml:space="preserve"><value>Bir yumurtanın mutasyonlu olma ihtimali &lt;b&gt;{0}&lt;/b&gt; (Kek 4 ile {1}). Mutasyon olursa yavru şunlardan biri olur:</value></data>
+  <data name="Mutation.LeadCakeActive" xml:space="preserve"><value>Kek 4 ile bir yumurtanın mutasyonlu olma ihtimali &lt;b&gt;{0}&lt;/b&gt; (normalde {1}). Mutasyon olursa yavru şunlardan biri olur:</value></data>
+  <data name="Mutation.AlphaTag" xml:space="preserve"><value>Alfa</value></data>
+  <data name="Mutation.ColumnLegend" xml:space="preserve"><value>Soldaki yüzde mutasyon olduğunda, sağdaki her yumurta için.</value></data>
+  <data name="Mutation.ReversePlaceholder" xml:space="preserve"><value>Mutasyonla elde etmek istediğin Pal</value></data>
+  <data name="Mutation.ReverseHelp" xml:space="preserve"><value>Bir türü mutasyonla veren çiftleri listeler; "Yalnızca sahip olduklarım" ile daraltılır.</value></data>
+  <data name="Mutation.ReversePairBtn" xml:space="preserve"><value>Bu çifti tezgâha yükle</value></data>
+  <data name="Common.LevelShort" xml:space="preserve"><value>Sv {0}</value></data>
+  <data name="Empty.DefaultReason" xml:space="preserve"><value>Seçili filtrelerin tümünü birden karşılayan kayıt yok. Bir filtreyi kaldırırsan kaç sonuç kalacağı:</value></data>
+  <data name="Filters.Search" xml:space="preserve"><value>Ara</value></data>
+  <data name="Paldex.ChipActiveSkill" xml:space="preserve"><value>Yetenek</value></data>
+  <data name="Skills.TabPassivesCount" xml:space="preserve"><value>Pasifler · {0}</value></data>
+  <data name="Skills.TabActivesCount" xml:space="preserve"><value>Aktifler · {0}</value></data>
+  <data name="Skills.SearchPlaceholder" xml:space="preserve"><value>Ad ya da etki</value></data>
+  <data name="Skills.Rank5WorldTree" xml:space="preserve"><value>Rank 5 · Dünya Ağacı</value></data>
+  <data name="Skills.TagsAllGroup" xml:space="preserve"><value>Etiket · hepsi gerekir</value></data>
+  <data name="Skills.TagsAnyGroup" xml:space="preserve"><value>Etiket · biri yeter</value></data>
+  <data name="Skills.ObtainGroup" xml:space="preserve"><value>Elde etme</value></data>
+  <data name="Skills.FilterRandom" xml:space="preserve"><value>Rastgele çıkabilir</value></data>
+  <data name="Skills.FilterSurgery" xml:space="preserve"><value>Ameliyatla eklenir</value></data>
+  <data name="Skills.MutationOnlyShort" xml:space="preserve"><value>Yalnızca mutasyon</value></data>
+  <data name="Skills.FilterOwned" xml:space="preserve"><value>Sende var</value></data>
+  <data name="Skills.MinPowerAria" xml:space="preserve"><value>En az güç</value></data>
+  <data name="Skills.MaxPowerAria" xml:space="preserve"><value>En fazla güç</value></data>
+  <data name="Skills.PropertyGroup" xml:space="preserve"><value>Özellik</value></data>
+  <data name="Skills.HasFruitFilter" xml:space="preserve"><value>Yetenek meyvesi var</value></data>
+  <data name="Skills.ColOwned" xml:space="preserve"><value>Sende</value></data>
+  <data name="Skills.ColFruitShort" xml:space="preserve"><value>Meyvesi</value></data>
+  <data name="Skills.ColLearners" xml:space="preserve"><value>Öğrenen</value></data>
+  <data name="Skills.RandomHeaderTip" xml:space="preserve"><value>Vahşi Pal'da ya da yumurtada rastgele çıkma ağırlığı</value></data>
+  <data name="Skills.LearnersHeaderTip" xml:space="preserve"><value>Bu yeteneği seviye atlayarak öğrenen tür sayısı</value></data>
+  <data name="Skills.MoreEffects" xml:space="preserve"><value>+{0} etki</value></data>
+  <data name="Skills.CooldownSecShort" xml:space="preserve"><value>{0} sn</value></data>
+  <data name="Skills.EmptyTitle" xml:space="preserve"><value>Bu filtrelere uyan pasif yok</value></data>
+  <data name="Skills.EmptyAllTagsReason" xml:space="preserve"><value>Etiketlerin hepsi aranıyor; {0} etiketlerinin tümünü taşıyan pasif yok. Bir filtreyi kaldırırsan kaç pasif kalacağı:</value></data>
+  <data name="Skills.EmptyRemaining" xml:space="preserve"><value>{0} pasif kalır</value></data>
+  <data name="Skills.MatchAnyTag" xml:space="preserve"><value>Etiketlerden biri yetsin</value></data>
+  <data name="Skills.TagPrefix" xml:space="preserve"><value>Etiket</value></data>
+  <data name="Skills.EmptyActivesTitle" xml:space="preserve"><value>Bu filtrelere uyan aktif yetenek yok</value></data>
+  <data name="Skills.EmptyActivesRemaining" xml:space="preserve"><value>{0} yetenek kalır</value></data>
+  <data name="Skills.InspectorTitle" xml:space="preserve"><value>Pasif</value></data>
+  <data name="Skills.RandomAppearDetail" xml:space="preserve"><value>Vahşi Pal'da ve yumurtada çıkabilir</value></data>
+  <data name="Skills.WeightLabel" xml:space="preserve"><value>ağırlık</value></data>
+  <data name="Skills.WeightLowAmong" xml:space="preserve"><value>{0} pasifler arasında düşük</value></data>
+  <data name="Skills.WeightMidAmong" xml:space="preserve"><value>{0} pasifler arasında orta</value></data>
+  <data name="Skills.WeightHighAmong" xml:space="preserve"><value>{0} pasifler arasında yüksek</value></data>
+  <data name="Skills.SurgeryTableAvailable" xml:space="preserve"><value>Ameliyat masasında uygulanabilir</value></data>
+  <data name="Skills.SurgeryItemLower" xml:space="preserve"><value>gereken eşya</value></data>
+  <data name="Skills.GoldUnit" xml:space="preserve"><value>altın</value></data>
+  <data name="Skills.Inheritance" xml:space="preserve"><value>Kalıtım</value></data>
+  <data name="Skills.InheritedFromParent" xml:space="preserve"><value>Ebeveynden geçer.</value></data>
+  <data name="Skills.CalculateOdds" xml:space="preserve"><value>Olasılığı hesapla</value></data>
+  <data name="Skills.GuaranteedOnSpecies" xml:space="preserve"><value>Garantili olduğu türler</value></data>
+  <data name="Skills.GuaranteedNone" xml:space="preserve"><value>Hiçbir türde garantili değil.</value></data>
+  <data name="Skills.OwnedSectionTitle" xml:space="preserve"><value>Sende · {0}</value></data>
+  <data name="Skills.FilterInMyPals" xml:space="preserve"><value>Pal'larım'da filtrele</value></data>
+  <data name="Guide.Intro" xml:space="preserve"><value>Oyunun breeding kuralları, uygulamanın onları nasıl kullandığı ve her birini hemen deneyebileceğin araç.</value></data>
+  <data name="Guide.Search" xml:space="preserve"><value>Rehberlerde ara</value></data>
+  <data name="Guide.Lang" xml:space="preserve"><value>Dil:</value></data>
+  <data name="Guide.NoResults" xml:space="preserve"><value>“{0}” ile eşleşen rehber yok.</value></data>
+  <data name="Guide.Group.mekanik" xml:space="preserve"><value>Mekanikler</value></data>
+  <data name="Guide.Group.uygulama" xml:space="preserve"><value>Uygulamayı kullanmak</value></data>
+  <data name="Guide.Group.meta" xml:space="preserve"><value>Meta</value></data>
+  <data name="Guide.GroupDesc.mekanik" xml:space="preserve"><value>Oyunun kuralları; uygulamadaki hesaplar bunlara dayanır.</value></data>
+  <data name="Guide.GroupDesc.meta" xml:space="preserve"><value>Yamayla değişir; tarihi başlıkta.</value></data>
+  <data name="Guide.Minutes" xml:space="preserve"><value>~{0} dk</value></data>
+  <data name="Guide.OutlineTitle" xml:space="preserve"><value>Bu sayfada</value></data>
+  <data name="Guide.ExitReading" xml:space="preserve"><value>Okuma modundan çık</value></data>
+  <data name="Guide.Reading" xml:space="preserve"><value>Okuma modu</value></data>
+  <data name="Guide.Kick" xml:space="preserve"><value>{0} · ~{1} dk okuma</value></data>
+  <data name="Guide.NotInLanguage" xml:space="preserve"><value>Bu rehber {0} değil; İngilizcesi gösteriliyor.</value></data>
+  <data name="Guide.Related" xml:space="preserve"><value>İlgili</value></data>
+  <data name="Guide.TryTitle" xml:space="preserve"><value>Bu rehberi dene</value></data>
+  <data name="Guide.Next" xml:space="preserve"><value>Sırada</value></data>
+  <data name="Guide.PalsOnPage" xml:space="preserve"><value>Bu sayfadaki Pal'lar</value></data>
+  <data name="Guide.TryIn.calculator" xml:space="preserve"><value>Hesaplayıcı'da dene</value></data>
+  <data name="Guide.TryIn.planner" xml:space="preserve"><value>Planlayıcı'da dene</value></data>
+  <data name="Guide.TryIn.mypals" xml:space="preserve"><value>Pal'larım'da dene</value></data>
+  <data name="Guide.TryIn.settings" xml:space="preserve"><value>Ayarlar'da dene</value></data>
+  <data name="Guide.TryOpens" xml:space="preserve"><value>{0} ve {1} seçili olarak açılır.</value></data>
+  <data name="Guide.Fig.AverageWord" xml:space="preserve"><value>ortalama</value></data>
+  <data name="Guide.Fig.Average" xml:space="preserve"><value>ortalama {0}</value></data>
+  <data name="Guide.Fig.PowerAria" xml:space="preserve"><value>Güç ekseni: ortalama {0}; en yakın aday {1} ({2}).</value></data>
+  <data name="Guide.Fig.Gap" xml:space="preserve"><value>fark {0}</value></data>
+  <data name="Guide.Fig.NextLabel" xml:space="preserve"><value>{0} {1} · fark {2}</value></data>
+  <data name="Guide.Fig.LegendKid" xml:space="preserve"><value>yavru</value></data>
+  <data name="Guide.Fig.LegendCand" xml:space="preserve"><value>aday</value></data>
+  <data name="Guide.Fig.LegendRec" xml:space="preserve"><value>yalnızca tarifle çıkar, aday değil</value></data>
+  <data name="Guide.Fig.CaptionRecipe" xml:space="preserve"><value>Hedefte ({0}) bir tür var ama yalnızca tarifle çıkıyor; adaylar arasında en yakını &lt;b&gt;{1}&lt;/b&gt; ({2}). Sağdaki ilk aday {3} ({4}) daha uzakta.</value></data>
+  <data name="Guide.Fig.Caption" xml:space="preserve"><value>Adaylar arasında hedefe en yakın tür &lt;b&gt;{0}&lt;/b&gt; ({1}). Sağdaki ilk aday {2} ({3}) daha uzakta.</value></data>
+  <data name="Guide.Fig.ParentA" xml:space="preserve"><value>Ebeveyn A</value></data>
+  <data name="Guide.Fig.ParentB" xml:space="preserve"><value>Ebeveyn B</value></data>
+  <data name="Guide.Fig.Pool" xml:space="preserve"><value>Havuz · {0}</value></data>
+  <data name="Guide.Fig.PoolCaption" xml:space="preserve"><value>{0} istenmiyor; havuzda durduğu için diğerlerinin yerini kapabilir.</value></data>
+  <data name="Guide.Fig.DiceInherit" xml:space="preserve"><value>&lt;b&gt;Kaç pasif geçer.&lt;/b&gt; Havuz küçükse hepsi geçer.</value></data>
+  <data name="Guide.Fig.DiceAdd" xml:space="preserve"><value>&lt;b&gt;Kaç rastgele pasif eklenir,&lt;/b&gt; 4 yuva dolana kadar.</value></data>
+  <data name="Guide.Fig.Percent" xml:space="preserve"><value>%{0}</value></data>
+  <data name="Guide.Fig.Wanted" xml:space="preserve"><value>{0} istenen</value></data>
+  <data name="Guide.Fig.Eggs" xml:space="preserve"><value>~{0} yumurta</value></data>
+  <data name="Guide.Fig.ChanceCaption" xml:space="preserve"><value>Dördünü birden ummak yerine pasifleri küçük adımlarla birleştir; bu yüzden Planlayıcı çoğu zaman 2–3 adımlık plan önerir.</value></data>
+  <data name="Settings.NavLabel" xml:space="preserve"><value>Ayar bölümleri</value></data>
+  <data name="Settings.Sec.General" xml:space="preserve"><value>Genel</value></data>
+  <data name="Settings.Sec.Sources" xml:space="preserve"><value>Kaynaklar</value></data>
+  <data name="Settings.Sec.Planner" xml:space="preserve"><value>Planlayıcı</value></data>
+  <data name="Settings.Sec.Data" xml:space="preserve"><value>Veri paketi ve tanılama</value></data>
+  <data name="Settings.LanguageDesc" xml:space="preserve"><value>Arayüz ve oyun terimleri. Uygulama yeniden başlamaz.</value></data>
+  <data name="Settings.MeDesc" xml:space="preserve"><value>Save dosyasındaki oyunculardan hangisi sensin. "Sadece benimkiler" kapsamı buna göre çalışır.</value></data>
+  <data name="Settings.SourcesDesc" xml:space="preserve"><value>Pal'larının okunduğu yerler. Save dosyasına hiçbir zaman yazılmaz; değişince kendiliğinden yeniden okunur.</value></data>
+  <data name="Settings.ScopeDesc" xml:space="preserve"><value>Planlayıcı ve "sahip olduklarım" filtreleri hangi Pal'ları kullanabilir. Pal'larım ve Planlayıcı'daki kapsam seçimi de buradakiyle aynıdır.</value></data>
+  <data name="Settings.SelectedPlayers" xml:space="preserve"><value>Seçili oyuncular</value></data>
+  <data name="Settings.LocationsDesc" xml:space="preserve"><value>Sayılan yerler.</value></data>
+  <data name="Settings.SharedAreas" xml:space="preserve"><value>Ortak alanlar</value></data>
+  <data name="Settings.Shared.Count" xml:space="preserve"><value>Sayılsın</value></data>
+  <data name="Settings.Shared.ByOwner" xml:space="preserve"><value>Sahibine göre</value></data>
+  <data name="Settings.PlannerDesc" xml:space="preserve"><value>Yeni bir planın başlangıç değerleri; her plan kendi değerlerini Planlayıcı'nın alt şeridinde değiştirir.</value></data>
+  <data name="Settings.Improve" xml:space="preserve"><value>İyileştirme süresi</value></data>
+  <data name="Settings.Seconds" xml:space="preserve"><value>{0} sn</value></data>
+  <data name="Settings.Wild" xml:space="preserve"><value>Vahşi Pal</value></data>
+  <data name="Settings.Cake" xml:space="preserve"><value>Kek</value></data>
+  <data name="Settings.Cake.Special" xml:space="preserve"><value>Özel</value></data>
+  <data name="Settings.Licenses" xml:space="preserve"><value>Lisanslar ve kaynaklar</value></data>
+  <data name="Settings.LicensesFonts" xml:space="preserve"><value>Fontlar</value></data>
+  <data name="Common.Off" xml:space="preserve"><value>Kapalı</value></data>
+  <data name="Sources.Retry" xml:space="preserve"><value>Yeniden dene</value></data>
+  <data name="Sources.MoreActions" xml:space="preserve"><value>Diğer</value></data>
+  <data name="Sources.Disable" xml:space="preserve"><value>Devre dışı bırak</value></data>
+  <data name="Sources.Enable" xml:space="preserve"><value>Etkinleştir</value></data>
+  <data name="Sources.OpenFolder" xml:space="preserve"><value>Klasörü aç</value></data>
+  <data name="Sources.RemoveMenu" xml:space="preserve"><value>Kaldır…</value></data>
+  <data name="Sources.RemoveAsk" xml:space="preserve"><value>{0} kaynaklardan kaldırılsın mı? Dosyalar diskte kalır.</value></data>
+  <data name="Sources.RemoveYes" xml:space="preserve"><value>Kaldır</value></data>
+  <data name="Sources.StatusError" xml:space="preserve"><value>Okunamadı · son başarılı okuma {0} · {1} Pal</value></data>
+  <data name="Sources.ErrorNote" xml:space="preserve"><value>Düzelttikten sonra uygulamayı yeniden başlatman gerekmez; Yeniden dene yeterli. Bu arada son başarılı okumadaki {0} Pal kullanılmaya devam eder.</value></data>
+  <data name="NotFound.Title" xml:space="preserve"><value>Bu sayfa yok</value></data>
+  <data name="NotFound.Text" xml:space="preserve"><value>Adres yanlış olabilir.</value></data>
+  <data name="NotFound.Back" xml:space="preserve"><value>Planlayıcı'ya dön</value></data>
+  <data name="Transport.Title" xml:space="preserve"><value>Taşıma: kim en hızlı taşır</value></data>
+  <data name="Transport.Summary" xml:space="preserve"><value>Taşıma işi olan Pal'lar; taşıma seviyesi, taşırkenki hız ve koşu hızı.</value></data>
+  <data name="Transport.Note" xml:space="preserve"><value>Taşıma hızı Pal'ın yük taşırkenki yürüyüş hızıdır; seviye, aynı anda yapabildiği taşıma işinin derecesidir.</value></data>
+  <data name="Transport.Scope" xml:space="preserve"><value>{0} Pal · seviye 1–7</value></data>
+  <data name="Transport.SearchTool" xml:space="preserve"><value>Pal ara</value></data>
+  <data name="Transport.InHit" xml:space="preserve"><value>Taşıma: {0} · taşıma hızı {1}</value></data>
+  <data name="Transport.Search" xml:space="preserve"><value>Pal ara</value></data>
+  <data name="Transport.Pal" xml:space="preserve"><value>Pal</value></data>
+  <data name="Transport.Level" xml:space="preserve"><value>Seviye</value></data>
+  <data name="Transport.Speed" xml:space="preserve"><value>Taşıma hızı</value></data>
+  <data name="Transport.Run" xml:space="preserve"><value>Koşu hızı</value></data>
+  <data name="Transport.Owned" xml:space="preserve"><value>Sende</value></data>
+  <data name="Transport.MinLevel" xml:space="preserve"><value>En az seviye</value></data>
+  <data name="Transport.Count" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Transport.NoResults" xml:space="preserve"><value>Bu süzgeçlere uyan Pal yok.</value></data>
+  <data name="Transport.ClearFilters" xml:space="preserve"><value>Süzgeçleri temizle</value></data>
+  <data name="Transport.OwnedCell" xml:space="preserve"><value>Sende {0}</value></data>
+  <data name="Transport.Terraria" xml:space="preserve"><value>Terraria</value></data>
+  <data name="Paldex.Col.Capture" xml:space="preserve"><value>Yakalama</value></data>
+  <data name="Paldex.CaptureHeadTip" xml:space="preserve"><value>İlk 5 yakalama bonus deneyim verir; 5. yakalama 1 Mimog heykeli kazandırır.</value></data>
+  <data name="Paldex.CaptureTip" xml:space="preserve"><value>Bonus {0}/5 · toplam {1} yakalama</value></data>
+  <data name="Paldex.CaptureNone" xml:space="preserve"><value>Henüz yakalanmadı</value></data>
+  <data name="Paldex.CaptureNoData" xml:space="preserve"><value>Yakalama bilgisi kendi kaydından ya da moddan okunur</value></data>
+  <data name="Paldex.CaptureNoPlayer" xml:space="preserve"><value>Ayarlar'da "Ben buyum"u seç</value></data>
+  <data name="Sort.CaptureBonus" xml:space="preserve"><value>Yakalama bonusu</value></data>
+  <data name="Filter.Capture" xml:space="preserve"><value>Yakalama bonusu</value></data>
+  <data name="Filter.Capture.Any" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Filter.Capture.Open" xml:space="preserve"><value>Tamamlanmamış</value></data>
+  <data name="Filter.Capture.Started" xml:space="preserve"><value>Başlanmış, tamamlanmamış</value></data>
+  <data name="Filter.Capture.None" xml:space="preserve"><value>Hiç yakalanmamış</value></data>
+  <data name="Filter.Capture.Done" xml:space="preserve"><value>Tamamlanmış (5/5)</value></data>
+  <data name="Filter.Capture.Disabled" xml:space="preserve"><value>Kendi kaydın okununca açılır</value></data>
+  <data name="Paldex.ChipCapture" xml:space="preserve"><value>Yakalama bonusu: {0}</value></data>
+  <data name="Paldex.CaptureSummary" xml:space="preserve"><value>{0}/{1} tür 5/5</value></data>
+  <data name="Mounts.Title" xml:space="preserve"><value>Binekler: kim en hızlı</value></data>
+  <data name="Mounts.Summary" xml:space="preserve"><value>Binilebilen bütün Pal'lar; yürüme, koşu, sprint, yüzme hızları ve dayanıklılık; yıldız ve pasiflere göre.</value></data>
+  <data name="Mounts.Note" xml:space="preserve"><value>Binekte normal hız koşu hızıdır; sprint tuşuyla binek sprintine çıkar. Uçanlarda aynı değerler havada geçerlidir. Pasif ve yıldız yüzdeleri toplanır ve temel hıza uygulanır.</value></data>
+  <data name="Mounts.Scope" xml:space="preserve"><value>{0} binek</value></data>
+  <data name="Mounts.InHit" xml:space="preserve"><value>Binek: {0} · sprint {1}</value></data>
+  <data name="Mounts.Stars" xml:space="preserve"><value>Yıldız</value></data>
+  <data name="Mounts.Passives" xml:space="preserve"><value>Hız pasifleri</value></data>
+  <data name="Mounts.Reset" xml:space="preserve"><value>Sıfırla</value></data>
+  <data name="Mounts.MaxPassives" xml:space="preserve"><value>Bir Pal'da en fazla {0} pasif olur</value></data>
+  <data name="Mounts.Kind" xml:space="preserve"><value>Tür</value></data>
+  <data name="Mounts.Kind.Ground" xml:space="preserve"><value>Kara</value></data>
+  <data name="Mounts.Kind.Flying" xml:space="preserve"><value>Uçan</value></data>
+  <data name="Mounts.Kind.Water" xml:space="preserve"><value>Yüzen</value></data>
+  <data name="Mounts.Saddle" xml:space="preserve"><value>Eyer seviyesi</value></data>
+  <data name="Mounts.Walk" xml:space="preserve"><value>Yürüme</value></data>
+  <data name="Mounts.Run" xml:space="preserve"><value>Koşu</value></data>
+  <data name="Mounts.Sprint" xml:space="preserve"><value>Sprint</value></data>
+  <data name="Mounts.Swim" xml:space="preserve"><value>Yüzme</value></data>
+  <data name="Mounts.SwimSprint" xml:space="preserve"><value>Yüzme sprinti</value></data>
+  <data name="Mounts.Stamina" xml:space="preserve"><value>Dayanıklılık</value></data>
+  <data name="Mounts.Owned" xml:space="preserve"><value>Sende</value></data>
+  <data name="Mounts.CellTip" xml:space="preserve"><value>Temel {0} · +%{1}</value></data>
+  <data name="Mounts.StarTip" xml:space="preserve"><value>{0}★ +%{1}</value></data>
+  <data name="Mounts.ConditionalTip" xml:space="preserve"><value>{0}: yalnız bir koşulda geçerli, hesaba katılmaz ({1})</value></data>
+  <data name="Effigy.Title" xml:space="preserve"><value>Heykeller: Pal Effigy</value></data>
+  <data name="Effigy.Summary" xml:space="preserve"><value>13 heykel türü, ne işe yaradıkları, seviye maliyetleri ve senin ilerlemen.</value></data>
+  <data name="Effigy.Note" xml:space="preserve"><value>Heykeller Güç Heykeli'ne sunulunca yeteneklerin artar. Maliyetler ve etkiler oyun verisidir; çubuktaki çizgiler her seviyenin bittiği yeri, dolu kısım bulduğun heykelleri gösterir.</value></data>
+  <data name="Effigy.Scope" xml:space="preserve"><value>{0} heykel türü</value></data>
+  <data name="Effigy.Open" xml:space="preserve"><value>Tabloyu aç</value></data>
+  <data name="Effigy.Ranks" xml:space="preserve"><value>{0} seviye</value></data>
+  <data name="Effigy.Total" xml:space="preserve"><value>toplam {0} heykel</value></data>
+  <data name="Effigy.MaxEffect" xml:space="preserve"><value>En yüksek etki %{0}</value></data>
+  <data name="Effigy.NoEffect" xml:space="preserve"><value>Etki değeri oyun verisinde yok</value></data>
+  <data name="Effigy.BarAria" xml:space="preserve"><value>{0} seviye, toplam {1} heykel</value></data>
+  <data name="Effigy.Rank" xml:space="preserve"><value>Seviye {0} / {1} · etki {2} → sonraki {3}</value></data>
+  <data name="Effigy.RankNoNext" xml:space="preserve"><value>Seviye {0} / {1} · etki {2}</value></data>
+  <data name="Effigy.RankPlain" xml:space="preserve"><value>Seviye {0} / {1}</value></data>
+  <data name="Effigy.AtLeast" xml:space="preserve"><value>En az {0}</value></data>
+  <data name="Effigy.Have" xml:space="preserve"><value>Elde {0}</value></data>
+  <data name="Effigy.Collected" xml:space="preserve"><value>Toplanan {0}</value></data>
+  <data name="Effigy.NextNeed" xml:space="preserve"><value>Sonraki seviye için {0} daha</value></data>
+  <data name="Effigy.CanRankUp" xml:space="preserve"><value>Sonraki seviye için yeterli</value></data>
+  <data name="Effigy.MaxNeed" xml:space="preserve"><value>En yüksek seviye için {0} daha</value></data>
+  <data name="Effigy.Maxed" xml:space="preserve"><value>En yüksek seviye ✓</value></data>
+  <data name="Effigy.NoData" xml:space="preserve"><value>İlerlemen kendi kaydından ya da moddan okunur.</value></data>
+  <data name="Effigy.MimogNote" xml:space="preserve"><value>Her türden 5 Pal yakalayınca 1 heykel</value></data>
+  <data name="Effigy.MimogLink" xml:space="preserve"><value>Paldex'te yakalama durumu</value></data>
+  <data name="Nav.Technology" xml:space="preserve"><value>Teknoloji</value></data>
+  <data name="Tech.Title" xml:space="preserve"><value>Teknoloji ağacı</value></data>
+  <data name="Tech.Note" xml:space="preserve"><value>Her seviyede açılan teknolojiler ve puanları. Kadim teknolojiler kadim puanla açılır.</value></data>
+  <data name="Tech.Search" xml:space="preserve"><value>Teknoloji ara</value></data>
+  <data name="Tech.Filter.Ancient" xml:space="preserve"><value>Kadim teknoloji</value></data>
+  <data name="Tech.Filter.Prereq" xml:space="preserve"><value>Ön koşullu</value></data>
+  <data name="Tech.Points" xml:space="preserve"><value>{0} puan</value></data>
+  <data name="Tech.AncientPoints" xml:space="preserve"><value>{0} kadim</value></data>
+  <data name="Tech.AncientPointsLong" xml:space="preserve"><value>◆ {0} kadim puan</value></data>
+  <data name="Tech.AncientTip" xml:space="preserve"><value>Kadim teknoloji, {0} kadim puan</value></data>
+  <data name="Tech.Level" xml:space="preserve"><value>Seviye {0}</value></data>
+  <data name="Tech.Requires" xml:space="preserve"><value>Önce açılmalı: {0}</value></data>
+  <data name="Tech.RequiresLabel" xml:space="preserve"><value>Önce açılmalı:</value></data>
+  <data name="Tech.Boss" xml:space="preserve"><value>Kule patronu: {0}</value></data>
+  <data name="Tech.Research" xml:space="preserve"><value>Araştırma: {0}</value></data>
+  <data name="Tech.Prerequisites" xml:space="preserve"><value>Ön koşullar</value></data>
+  <data name="Tech.Unlocks" xml:space="preserve"><value>Açtıkları</value></data>
+  <data name="Tech.LeadsTo" xml:space="preserve"><value>Sonra açılır</value></data>
+  <data name="Tech.Jump" xml:space="preserve"><value>Seviyeye atla</value></data>
+  <data name="Tech.Empty" xml:space="preserve"><value>Eşleşen teknoloji yok.</value></data>
+  <data name="Tech.ClearFilters" xml:space="preserve"><value>Süzgeçleri temizle</value></data>
+  <data name="Tech.NoData" xml:space="preserve"><value>Teknoloji verisi bu veri paketinde yok. Uygulamayı güncelle.</value></data>
+  <data name="Sources.ModStateLegacy" xml:space="preserve"><value>Yardımcı modun eski sürümü kurulu. Değiştirmek için "Modu kur"a bas.</value></data>
+  <data name="Mod.OldRemoveFailed" xml:space="preserve"><value>Yeni mod kopyalandı ama eski mod kaldırılamadı. Oyunu kapatıp yeniden dene.</value></data>
+  <data name="Update.Badge" xml:space="preserve"><value>Güncelleme var · {0}</value></data>
+  <data name="Update.BadgeLabel" xml:space="preserve"><value>Güncelleme var</value></data>
+  <data name="Update.BadgeDownloading" xml:space="preserve"><value>İndiriliyor %{0}</value></data>
+  <data name="Update.Title" xml:space="preserve"><value>Paldium {0} hazır</value></data>
+  <data name="Update.Sub" xml:space="preserve"><value>Sendeki sürüm {0} · {1} yayımlandı · {2}</value></data>
+  <data name="Update.Install" xml:space="preserve"><value>Güncelle ve yeniden başlat</value></data>
+  <data name="Update.Later" xml:space="preserve"><value>Sonra</value></data>
+  <data name="Update.Skip" xml:space="preserve"><value>Bu sürümü atla</value></data>
+  <data name="Update.Cancel" xml:space="preserve"><value>Vazgeç</value></data>
+  <data name="Update.Retry" xml:space="preserve"><value>Tekrar dene</value></data>
+  <data name="Update.Downloading" xml:space="preserve"><value>İndiriliyor… {0}</value></data>
+  <data name="Update.Verifying" xml:space="preserve"><value>Doğrulanıyor…</value></data>
+  <data name="Update.Restarting" xml:space="preserve"><value>Yeniden başlatılıyor…</value></data>
+  <data name="Update.Done" xml:space="preserve"><value>Paldium {0}'a güncellendi.</value></data>
+  <data name="Update.UpdateMod" xml:space="preserve"><value>Modu da güncelle</value></data>
+  <data name="Update.Failed" xml:space="preserve"><value>Güncelleme yapılamadı, eski sürüm açıldı.</value></data>
+  <data name="Update.VerifyFailed" xml:space="preserve"><value>İndirilen dosya doğrulanamadı. Sürüm sayfasından elle indirebilirsin.</value></data>
+  <data name="Update.NotWritable" xml:space="preserve"><value>Bu klasöre yazılamıyor. Sürüm sayfasından indirip elle güncelleyebilirsin.</value></data>
+  <data name="Update.DownloadFailed" xml:space="preserve"><value>İndirme yarıda kesildi.</value></data>
+  <data name="Update.NoAsset" xml:space="preserve"><value>Bu sürümde indirilecek paket yok.</value></data>
+  <data name="Update.BadPackage" xml:space="preserve"><value>İndirilen paket eksik.</value></data>
+  <data name="Update.Offline" xml:space="preserve"><value>GitHub'a ulaşılamadı. İnternet bağlantını denetle.</value></data>
+  <data name="Update.RateLimited" xml:space="preserve"><value>GitHub şu an yanıt vermiyor; biraz sonra tekrar dene.</value></data>
+  <data name="Update.OpenRelease" xml:space="preserve"><value>Sürüm sayfasını aç</value></data>
+  <data name="Settings.Updates" xml:space="preserve"><value>Güncellemeler</value></data>
+  <data name="Settings.UpdVersion" xml:space="preserve"><value>Sürüm</value></data>
+  <data name="Settings.UpdLastCheck" xml:space="preserve"><value>Son denetim</value></data>
+  <data name="Settings.UpdNever" xml:space="preserve"><value>henüz denetlenmedi</value></data>
+  <data name="Settings.UpdCurrent" xml:space="preserve"><value>güncel</value></data>
+  <data name="Settings.UpdReady" xml:space="preserve"><value>{0} hazır</value></data>
+  <data name="Settings.UpdCheckNow" xml:space="preserve"><value>Şimdi denetle</value></data>
+  <data name="Settings.UpdAuto" xml:space="preserve"><value>Açılışta güncellemeleri denetle</value></data>
+  <data name="Settings.UpdOn" xml:space="preserve"><value>Açık</value></data>
+  <data name="Settings.UpdSkipped" xml:space="preserve"><value>{0} atlandı.</value></data>
+  <data name="Settings.UpdUndo" xml:space="preserve"><value>Geri al</value></data>
+</root>

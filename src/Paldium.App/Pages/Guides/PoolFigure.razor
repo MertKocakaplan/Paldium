@@ -1,0 +1,38 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* The passive pool (mockup .pool): the passives of both parents, the duplicate struck through, and the pool they make; an unwanted passive is marked. *@
+@{
+    var listA = Ids(A);
+    var listB = Ids(B);
+    var pool = listA.Concat(listB.Where(id => !listA.Contains(id))).ToList();
+    var bad = Ids(Bad);
+}
+<figure class="worked pool">
+    <div class="prow"><span class="who2">@L["Guide.Fig.ParentA"]</span>@foreach (var id in listA) { @Chip(id) }</div>
+    <div class="prow"><span class="who2">@L["Guide.Fig.ParentB"]</span>@foreach (var id in listB) { @Chip(id, listA.Contains(id)) }</div>
+    <div class="prow res2"><span class="who2">@L["Guide.Fig.Pool", pool.Count]</span>@foreach (var id in pool) { @Chip(id, false, bad.Contains(id)) }</div>
+    @if (bad.Count > 0 && Known(bad[0]))
+    {
+        <figcaption>@L["Guide.Fig.PoolCaption", Data.Passive(bad[0]).Names.Get(Lang)]</figcaption>
+    }
+</figure>
+
+@code {
+    [Parameter] public string A { get; set; } = "";
+    [Parameter] public string B { get; set; } = "";
+    [Parameter] public string Bad { get; set; } = "";
+
+    private static List<string> Ids(string csv) => csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private bool Known(string id) => Data.Passives.Any(p => p.Id == id);
+
+    private RenderFragment Chip(string id, bool duplicate = false, bool unwanted = false) => __builder =>
+    {
+        if (!Known(id)) return;
+        var passive = Data.Passive(id);
+        <span class="@("pc2" + (duplicate ? " dup" : "") + (unwanted ? " bad" : ""))">
+            <RankGlyph Rank="@passive.Rank" />@passive.Names.Get(Lang)
+        </span>
+    };
+}

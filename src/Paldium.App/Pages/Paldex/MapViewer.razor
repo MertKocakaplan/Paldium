@@ -1,0 +1,210 @@
+@implements IAsyncDisposable
+@inherits LocalizedComponentBase
+@using Microsoft.JSInterop
+@using Paldium.Core.Domain
+
+@* The full screen map viewer (T104, screens/paldex.md "Harita görüntüleyici"): a modal dialog over the whole window. The list is here; the
+   canvas (zoom, pan, points, radius, tooltip, Alpha chips, overview) is driven by js/mapview.js. *@
+<dialog @ref="_dialog" class="mview" aria-modal="true" aria-labelledby="mv-h" @onclose="OnDialogClosedAsync">
+    <div class="mhead">
+        <PalIcon Pal="@Pal" Size="28" />
+        <h2 id="mv-h"><b>@Pal.DisplayName(Lang)</b> <span class="m">· @L["Detail.WhereTitle"] · @L["Detail.MainMap"]</span></h2>
+        <span class="sp"></span>
+        <button type="button" class="btn2" @onclick="CloseAsync">
+            <Icon Name="x" Size="14" />
+            <span>@L["Detail.Map.Close"]</span>
+            <kbd>Esc</kbd>
+        </button>
+    </div>
+    <div class="mbody">
+        <aside class="mside">
+            <h3>@L["Detail.Map.Places"]</h3>
+            <ul class="wl3" role="listbox" aria-label="@L["Detail.Map.Places"].Value" @onkeydown="OnListKeyDownAsync">
+                @for (var i = 0; i < Places.Count; i++)
+                {
+                    var idx = i;
+                    var place = Places[idx];
+                    var selected = idx == _selected;
+                    <li id="@($"mv-opt-{idx}")"
+                        role="option"
+                        tabindex="@(selected || (_selected < 0 && idx == FirstEnabled()) ? 0 : -1)"
+                        aria-selected="@(selected ? "true" : "false")"
+                        aria-disabled="@(place.OnMain ? null : "true")"
+                        title="@place.Title"
+                        @onclick="() => SelectAsync(idx)">
+                        <span class="@(place.Kind == "alpha" ? "mk a" : place.OnMain ? "mk w" : "mk o")" aria-hidden="true"></span>
+                        <span class="k">@place.KindLabel</span>
+                        <span class="n">@place.Name@if (place.Night) { <img class="nm" src="gamedata/icons/misc/Night.png" alt="@L["Obtain.Night"].Value" title="@L["Obtain.Night"].Value" width="14" height="14" /> }</span>
+                        <span class="m">@place.Meta</span>
+                    </li>
+                }
+            </ul>
+            <div class="leg" aria-hidden="true">
+                <span><i></i> @L["Detail.Map.LegendArea"]</span>
+                <span><i class="a"></i> @L["Detail.Map.LegendAlpha"]</span>
+                <span><i class="nt"></i> @L["Detail.Map.LegendNight"]</span>
+                <span><i class="ar"></i> @L["Detail.Map.LegendRadius"]</span>
+            </div>
+            <p class="keys">@((MarkupString)L["Detail.Map.Keys"].Value)</p>
+        </aside>
+
+        <div class="mcan" data-role="canvas" tabindex="0" role="application" aria-label="@L["Detail.Map.CanvasAria"].Value">
+            <div class="world" data-role="world">
+                <img data-role="image" class="mimg" src="@(HasImage ? "gamedata/map/world-map.png" : null)" alt="" draggable="false" hidden="@(!HasImage)" />
+                <div class="pts" data-role="layer"></div>
+            </div>
+            <div class="chips" data-role="chips"></div>
+            <div class="mtip" data-role="tip" hidden></div>
+            <div class="mmap" data-role="mini" aria-hidden="true">
+                <img src="@(HasImage ? "gamedata/map/world-map.png" : null)" alt="" draggable="false" hidden="@(!HasImage)" />
+                <span class="vp" data-role="miniview"></span>
+            </div>
+            <div class="coord num" data-role="coord"></div>
+            <div class="zc" data-role="zoomctl">
+                <button type="button" data-act="in" aria-label="@L["Detail.Map.ZoomIn"].Value"><Icon Name="plus" Size="16" /></button>
+                <span class="zl num" data-role="zoomlabel">×1</span>
+                <button type="button" data-act="out" aria-label="@L["Detail.Map.ZoomOut"].Value"><Icon Name="minus" Size="16" /></button>
+                <button type="button" data-act="fit" aria-label="@L["Detail.Map.Fit"].Value"><Icon Name="refresh" Size="16" /></button>
+            </div>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    private ElementReference _dialog;
+    private IJSObjectReference? _view;
+    private DotNetObjectReference<MapViewer>? _self;
+    private int _selected = -1;
+
+    [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<MapPlace> Places { get; set; } = [];
+    [Parameter] public bool HasImage { get; set; }
+    [Parameter] public bool HasLargeImage { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("pbShowModal", _dialog);
+            _view = await JS.InvokeAsync<IJSObjectReference>("pbMapView.attach", _dialog, _self, Config());
+            // The focus starts on the first place of the list; when there is none, on the map.
+            var first = FirstEnabled();
+            await JS.InvokeVoidAsync("pbFocusId", first >= 0 ? $"mv-opt-{first}" : null);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private int FirstEnabled()
+    {
+        for (var i = 0; i < Places.Count; i++) if (Places[i].OnMain) return i;
+        return -1;
+    }
+
+    private object Config()
+    {
+        var culture = CultureInfo.GetCultureInfo(Lang);
+        var gridX = new List<double>();
+        var gridY = new List<double>();
+        // Lines every 500 in-game map units, aligned to multiples of 500.
+        for (var v = -2000; v <= 1500; v += 500)
+        {
+            var left = WorldMapProjection.LeftOfMapX(v);
+            if (left is > 0 and < 1) gridX.Add(Math.Round(left, 5));
+            var top = WorldMapProjection.TopOfMapY(v);
+            if (top is > 0 and < 1) gridY.Add(Math.Round(top, 5));
+        }
+
+        return new
+        {
+            lang = Lang,
+            hasImage = HasImage,
+            image = "gamedata/map/world-map.png",
+            large = HasLargeImage ? "gamedata/map/world-map-large.png" : null,
+            gridX,
+            gridY,
+            mapUnits = WorldMapProjection.MapUnitsAcross,
+            world = new { minX = WorldMapProjection.MinX, maxX = WorldMapProjection.MaxX, minY = WorldMapProjection.MinY, maxY = WorldMapProjection.MaxY },
+            matrix = WorldMapProjection.Matrix,
+            strings = new
+            {
+                area = L["Detail.Map.Area"].Value,
+                nightArea = L["Detail.Map.NightArea"].Value,
+                alpha = L["Detail.Map.Alpha"].Value,
+                offscreen = L["Detail.Map.Offscreen"].Value,
+                cursor = L["Detail.Map.Cursor"].Value,
+                coordHint = L["Detail.Map.CoordHint"].Value,
+            },
+            places = Places.Select(p => new
+            {
+                kind = p.Kind,
+                night = p.Night,
+                enabled = p.OnMain,
+                meta = p.Meta,
+                dots = p.Dots.Select(d => new object?[] { Math.Round(d.Left, 5), Math.Round(d.Top, 5), Math.Round(d.Radius, 5), d.Alpha ? 1 : 0, d.MapX, d.MapY, d.Night ? 1 : 0 }),
+            }),
+        };
+    }
+
+    [JSInvokable]
+    public async Task OnPlacePicked(int index)
+    {
+        await SelectAsync(index);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SelectAsync(int index)
+    {
+        if (index < 0 || index >= Places.Count || !Places[index].OnMain) return;
+        _selected = index;
+        if (_view != null)
+        {
+            try { await _view.InvokeVoidAsync("focusPlace", index); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private async Task OnListKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is not ("ArrowDown" or "ArrowUp")) return;
+        var step = e.Key == "ArrowDown" ? 1 : -1;
+        var i = _selected < 0 ? (step > 0 ? -1 : Places.Count) : _selected;
+        for (i += step; i >= 0 && i < Places.Count; i += step)
+        {
+            if (!Places[i].OnMain) continue;
+            await SelectAsync(i);
+            try { await JS.InvokeVoidAsync("pbFocusId", $"mv-opt-{i}"); }
+            catch (JSException) { }
+            return;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        try { await JS.InvokeVoidAsync("pbCloseModal", _dialog); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    // Esc and the close button both end in the dialog's close event: the preview gets the focus back.
+    private Task OnDialogClosedAsync() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_view != null)
+        {
+            try { await _view.InvokeVoidAsync("dispose"); await _view.DisposeAsync(); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+
+        _self?.Dispose();
+        Dispose();
+    }
+}

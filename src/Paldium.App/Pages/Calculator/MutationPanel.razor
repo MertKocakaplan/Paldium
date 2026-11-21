@@ -1,0 +1,289 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Breeding
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IMutationCalculator MutationCalc
+@inject OwnedScopeService Scope
+@inject CalculatorStateService CalcState
+
+@{
+    var hasPair = Pair.SpeciesA != null && Pair.SpeciesB != null;
+    // Two owned Pals of the same gender lay no egg: no mutation list, the same words as Pair -> Child.
+    var noEgg = hasPair && Pair.SameGender;
+    var baseRate = MutationCalc.MutationRate(null);
+    var cakeRate = MutationCalc.MutationRate("Cake04");
+    var activeRate = MutationCalc.MutationRate(CalcState.MutationCakeId);
+    var outcomes = hasPair && !noEgg
+        ? MutationCalc.MutationOutcomes(Pair.SpeciesA!.Id, Pair.SpeciesB!.Id)
+        : [];
+    var headerSub = hasPair
+        ? $"{Pair.SpeciesA!.DisplayName(Lang)} + {Pair.SpeciesB!.DisplayName(Lang)}"
+        : L["Mutation.PickPairHint"].Value;
+}
+
+<aside class="oddsp p" aria-labelledby="mu-h">
+    <div class="ih">
+        <h2 id="mu-h">@L["Mutation.OutcomesTitle"]</h2>
+        <span class="m">@headerSub</span>
+    </div>
+
+    <div class="body">
+        <div class="mut-fwd">
+            @if (noEgg)
+            {
+                <p class="lead"><b>@L["Calculator.ErrNoEggTitle"]</b> · @(Pair.ConflictingGender == Gender.Female ? L["Calculator.ErrBothFemale"].Value : L["Calculator.ErrBothMale"].Value)</p>
+                <p class="h">@((MarkupString)NoEggWhyHtml())</p>
+            }
+            else if (hasPair)
+            {
+                var lead = CalcState.Cake == CalculatorStateService.CakeNormal
+                    ? L["Mutation.LeadCakeActive", FormatRatePct(activeRate), FormatRatePct(baseRate)].Value
+                    : L["Mutation.LeadNormal", FormatRatePct(baseRate), FormatRatePct(cakeRate)].Value;
+
+                <p class="lead">@((MarkupString)lead)</p>
+
+                <ul class="mut">
+                    @foreach (var o in outcomes)
+                    {
+                        var sp = Data.Pal(o.SpeciesId);
+                        var sharePct = Math.Clamp(o.Probability * 100.0, 0, 100).ToString("0.#", CultureInfo.InvariantCulture);
+                        <li>
+                            <PalIcon Pal="sp" Size="40" />
+                            <span class="t">
+                                <a href="@($"paldex?pal={Uri.EscapeDataString(sp.Id)}")" class="pal-link"><b>@sp.DisplayName(Lang)</b></a>
+                                <span class="m">@MetaLine(sp, o.HasAlphaForm)</span>
+                            </span>
+                            <span class="bar" aria-hidden="true"><i style="@($"--pct:{sharePct}%")"></i></span>
+                            <span class="num">@FormatSharePct(o.Probability)</span>
+                            <span class="num all">@FormatEggPct(o.Probability * activeRate)</span>
+                        </li>
+                    }
+                </ul>
+
+                <p class="h">@L["Mutation.ColumnLegend"]</p>
+            }
+            else
+            {
+                <p class="lead">@L["Mutation.Hint"]</p>
+            }
+
+            <div class="info">
+                <Icon Name="info" Size="16" />
+                <span>@L["Mutation.Facts", Term("Alpha"), Data.Mechanics.Mutation.MinTalent]</span>
+            </div>
+        </div>
+
+        <section class="rev">
+            <h3>@L["Mutation.ReverseTitle"]</h3>
+            <PalPicker InlineSearch="true"
+                       Value="@_revTarget"
+                       ValueChanged="SetRevTargetAsync"
+                       Placeholder="@L["Mutation.ReversePlaceholder"].Value"
+                       AriaLabel="@L["Mutation.ReverseTitle"].Value" />
+
+            @if (_revTarget == null)
+            {
+                <p class="h">@L["Mutation.ReverseHelp"]</p>
+            }
+            else
+            {
+                <div class="rev-picked">
+                    <PalIcon Pal="_revTarget" Size="24" />
+                    <a href="@($"paldex?pal={Uri.EscapeDataString(_revTarget.Id)}")" class="pal-link"><b>@_revTarget.DisplayName(Lang)</b></a>
+                    <span class="m num">@($"#{_revTarget.DexLabel}")</span>
+                    <button type="button" class="ib2" title="@L["Common.Clear"].Value" aria-label="@L["Common.Clear"].Value" @onclick="ClearRevTargetAsync">
+                        <Icon Name="x" Size="14" />
+                    </button>
+                </div>
+
+                <CheckRow Label="@L["Target.OwnedOnly"].Value"
+                          Checked="@CalcState.MutationOwnedOnly"
+                          CheckedChanged="SetOwnedOnlyAsync" />
+
+                @if (_busy)
+                {
+                    <div class="m-busy"><span class="spin" aria-hidden="true"></span><span>@L["Common.Loading"]</span></div>
+                }
+                else if (_pairs.Count == 0)
+                {
+                    <p class="h">@L["Mutation.NoPairs"]</p>
+                }
+                else
+                {
+                    <ul class="rev-list">
+                        @foreach (var p in _pairs)
+                        {
+                            var pa = Data.Pal(p.A);
+                            var pb = Data.Pal(p.B);
+                            <li>
+                                <button type="button" class="rev-pair" @onclick="() => ApplyPairToBenchAsync(pa, pb)" title="@L["Mutation.ReversePairBtn"].Value">
+                                    <PalIcon Pal="pa" Size="24" />
+                                    <span class="rev-nm">@pa.DisplayName(Lang)</span>
+                                    <span class="plus">+</span>
+                                    <PalIcon Pal="pb" Size="24" />
+                                    <span class="rev-nm">@pb.DisplayName(Lang)</span>
+                                </button>
+                                <span class="num">@FormatSharePct(p.Probability)</span>
+                                <span class="num all">@FormatEggPct(p.Probability * activeRate)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+    </div>
+</aside>
+
+@code {
+    private const int MaxRevRows = 30;
+
+    [Parameter, EditorRequired] public PairResolution Pair { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string NoEggWhyHtml() => string.Format(
+        CultureInfo.GetCultureInfo(Lang),
+        L["Calculator.ErrSameGenderWhyHtml"].Value,
+        System.Net.WebUtility.HtmlEncode(Pair.FallbackChild?.DisplayName(Lang) ?? "—"));
+
+    private PalSpecies? _revTarget;
+    private string? _loadedTargetId;
+    private bool _loadedOwnedOnly;
+    private bool _busy;
+    private IReadOnlyList<MutationPair> _pairs = [];
+    private CancellationTokenSource? _loadCts;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Scope.Changed += OnScopeChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        if (!string.IsNullOrEmpty(CalcState.MutationReverseTargetId)
+            && Data.TryNormalizePalId(CalcState.MutationReverseTargetId, out var norm))
+        {
+            var pal = Data.Pal(norm);
+            if (_revTarget == null || !string.Equals(_revTarget.Id, pal.Id, StringComparison.OrdinalIgnoreCase))
+                _revTarget = pal;
+
+            if (!string.Equals(_loadedTargetId, pal.Id, StringComparison.OrdinalIgnoreCase)
+                || _loadedOwnedOnly != CalcState.MutationOwnedOnly)
+            {
+                await LoadPairsAsync();
+            }
+        }
+    }
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        _loadCts?.Cancel();
+        base.Dispose();
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e) =>
+        InvokeAsync(async () =>
+        {
+            if (CalcState.MutationOwnedOnly && _revTarget != null)
+                await LoadPairsAsync();
+        });
+
+    private async Task SetRevTargetAsync(PalSpecies? target)
+    {
+        _revTarget = target;
+        CalcState.MutationReverseTargetId = target?.Id;
+        await LoadPairsAsync();
+    }
+
+    private async Task ClearRevTargetAsync()
+    {
+        _revTarget = null;
+        CalcState.MutationReverseTargetId = null;
+        _loadedTargetId = null;
+        _pairs = [];
+        _busy = false;
+        _loadCts?.Cancel();
+        await Task.CompletedTask;
+    }
+
+    private async Task SetOwnedOnlyAsync(bool on)
+    {
+        CalcState.MutationOwnedOnly = on;
+        await LoadPairsAsync();
+    }
+
+    private async Task LoadPairsAsync()
+    {
+        _loadCts?.Cancel();
+        if (_revTarget == null)
+        {
+            _pairs = [];
+            _busy = false;
+            return;
+        }
+
+        var cts = _loadCts = new CancellationTokenSource();
+        var id = _revTarget.Id;
+        var ownedOnly = CalcState.MutationOwnedOnly;
+        var owned = Scope.ScopedPals;
+        _loadedTargetId = id;
+        _loadedOwnedOnly = ownedOnly;
+        _busy = true;
+        StateHasChanged();
+
+        try
+        {
+            var pairs = await Task.Run(() =>
+            {
+                var all = MutationCalc.PairsMutatingInto(id, int.MaxValue);
+                if (!ownedOnly) return (IReadOnlyList<MutationPair>)all.Take(MaxRevRows).ToList();
+                return all.Where(p => PairAvailability.CanForm(owned, new ParentPair(p.A, p.B, GenderReq.Any, GenderReq.Any)))
+                    .Take(MaxRevRows)
+                    .ToList();
+            }, cts.Token);
+
+            if (cts.IsCancellationRequested) return;
+            _pairs = pairs;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _busy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ApplyPairToBenchAsync(PalSpecies a, PalSpecies b)
+    {
+        CalcState.OwnedModeA = false;
+        CalcState.OwnedModeB = false;
+        CalcState.OwnedAKey = null;
+        CalcState.OwnedBKey = null;
+        CalcState.SpeciesAId = a.Id;
+        CalcState.SpeciesBId = b.Id;
+        await OnChanged.InvokeAsync();
+    }
+
+    private string MetaLine(PalSpecies sp, bool hasAlpha)
+    {
+        var els = string.Join(" / ", sp.Elements.Select(e =>
+            Data.Elements.FirstOrDefault(x => string.Equals(x.Id, e, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? e));
+        return hasAlpha
+            ? $"#{sp.DexLabel} · {els} · {L["Mutation.AlphaTag"].Value}"
+            : $"#{sp.DexLabel} · {els}";
+    }
+
+    private string FormatRatePct(double rate)
+    {
+        var pct = rate * 100.0;
+        var fmt = Math.Abs(pct - Math.Round(pct)) < 0.05 ? "P0" : "P1";
+        return rate.ToString(fmt, CultureInfo.GetCultureInfo(Lang));
+    }
+
+    private string FormatSharePct(double p) => p.ToString("P0", CultureInfo.GetCultureInfo(Lang));
+
+    private string FormatEggPct(double p) => p.ToString("P2", CultureInfo.GetCultureInfo(Lang));
+}

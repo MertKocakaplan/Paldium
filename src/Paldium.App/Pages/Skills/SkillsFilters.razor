@@ -1,0 +1,177 @@
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@if (IsActivesTab)
+{
+    var maxPower = MaxSkillPower();
+    <div class="fg">
+        <span class="l">@L["Filters.Search"]</span>
+        <SearchField Value="@(ActiveFilter.Text ?? string.Empty)"
+                     ValueChanged="SetActiveTextAsync"
+                     Placeholder="@L["Skills.SearchPlaceholder"].Value"
+                     AriaLabel="@L["Skills.SearchPlaceholder"].Value" />
+    </div>
+
+    <div class="fg">
+        <span class="l">@L["Paldex.FilterElements"]</span>
+        <ElementTiles Selected="@ActiveFilter.Elements"
+                      SelectedChanged="SetActiveElementsAsync"
+                      AriaLabel="@L["Paldex.FilterElements"].Value" />
+    </div>
+
+    <div class="fg">
+        <span class="l">@L["Skills.ColPower"]</span>
+        <div class="rng">
+            <input type="number"
+                   class="inp num"
+                   min="0"
+                   max="@maxPower"
+                   placeholder="0"
+                   aria-label="@L["Skills.MinPowerAria"].Value"
+                   value="@FormatNullableInt(ActiveFilter.MinPower)"
+                   @onchange="OnMinPowerChangedAsync" />
+            <span aria-hidden="true">–</span>
+            <input type="number"
+                   class="inp num"
+                   min="0"
+                   max="@maxPower"
+                   placeholder="@maxPower.ToString(CultureInfo.InvariantCulture)"
+                   aria-label="@L["Skills.MaxPowerAria"].Value"
+                   value="@FormatNullableInt(ActiveFilter.MaxPower)"
+                   @onchange="OnMaxPowerChangedAsync" />
+        </div>
+    </div>
+
+    <div class="fg">
+        <span class="l">@L["Skills.PropertyGroup"]</span>
+        <div class="chk" role="group" aria-label="@L["Skills.PropertyGroup"].Value">
+            <CheckRow Label="@L["Skills.ColInherit"].Value"
+                      Count="@_inheritableCount"
+                      Checked="@(ActiveFilter.Inheritable == true)"
+                      CheckedChanged="v => ActiveFilterChanged.InvokeAsync(ActiveFilter with { Inheritable = v ? true : null })" />
+            <CheckRow Label="@L["Skills.HasFruitFilter"].Value"
+                      Count="@_fruitCount"
+                      Checked="@(ActiveFilter.HasSkillFruit == true)"
+                      CheckedChanged="v => ActiveFilterChanged.InvokeAsync(ActiveFilter with { HasSkillFruit = v ? true : null })" />
+        </div>
+    </div>
+}
+else
+{
+    <div class="fg">
+        <span class="l">@L["Filters.Search"]</span>
+        <SearchField Value="@(PassiveFilter.Text ?? string.Empty)"
+                     ValueChanged="SetPassiveTextAsync"
+                     Placeholder="@L["Skills.SearchPlaceholder"].Value"
+                     AriaLabel="@L["Skills.SearchPlaceholder"].Value" />
+    </div>
+
+    <div class="fg">
+        <span class="l">@L["Skills.ColRank"]</span>
+        <RankTiles Selected="@PassiveFilter.Ranks"
+                   SelectedChanged="SetRanksAsync"
+                   AriaLabel="@L["Skills.ColRank"].Value" />
+    </div>
+
+    <div class="fg">
+        <span class="l">@(PassiveFilter.TagsMatchAll ? L["Skills.TagsAllGroup"] : L["Skills.TagsAnyGroup"])</span>
+        <div class="chk" role="group" aria-label="@L["Skills.Tags"].Value">
+            @foreach (var (tag, count) in _tagCounts)
+            {
+                var captured = tag;
+                var checkedNow = PassiveFilter.Tags.Contains(captured, StringComparer.OrdinalIgnoreCase);
+                <CheckRow Label="@SkillsText.TagLabel(captured, L, Terms)"
+                          Count="@count"
+                          Checked="@checkedNow"
+                          CheckedChanged="v => ToggleTagAsync(captured, v)" />
+            }
+        </div>
+    </div>
+
+    <div class="fg">
+        <span class="l">@L["Skills.ObtainGroup"]</span>
+        <div class="chk" role="group" aria-label="@L["Skills.ObtainGroup"].Value">
+            <CheckRow Label="@L["Skills.FilterRandom"].Value"
+                      Count="@_randomCount"
+                      Checked="@(PassiveFilter.CanAppearRandomly == true)"
+                      CheckedChanged="v => PassiveFilterChanged.InvokeAsync(PassiveFilter with { CanAppearRandomly = v ? true : null })" />
+            <CheckRow Label="@L["Skills.FilterSurgery"].Value"
+                      Count="@_surgeryCount"
+                      Checked="@(PassiveFilter.SurgerySupported == true)"
+                      CheckedChanged="v => PassiveFilterChanged.InvokeAsync(PassiveFilter with { SurgerySupported = v ? true : null })" />
+            <CheckRow Label="@L["Skills.MutationOnlyShort"].Value"
+                      Count="@_mutationCount"
+                      Checked="@(PassiveFilter.MutationOnly == true)"
+                      CheckedChanged="v => PassiveFilterChanged.InvokeAsync(PassiveFilter with { MutationOnly = v ? true : null })" />
+            <CheckRow Label="@L["Skills.FilterOwned"].Value"
+                      Count="@OwnedPassiveIds.Count"
+                      Checked="@OwnedOnly"
+                      CheckedChanged="v => OwnedOnlyChanged.InvokeAsync(v)" />
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<(string Tag, int Count)> _tagCounts = [];
+    private int _randomCount;
+    private int _surgeryCount;
+    private int _mutationCount;
+    private int _inheritableCount;
+    private int _fruitCount;
+
+    [Parameter] public bool IsActivesTab { get; set; }
+    [Parameter] public PassiveFilter PassiveFilter { get; set; } = new();
+    [Parameter] public EventCallback<PassiveFilter> PassiveFilterChanged { get; set; }
+    [Parameter] public bool OwnedOnly { get; set; }
+    [Parameter] public EventCallback<bool> OwnedOnlyChanged { get; set; }
+    [Parameter] public IReadOnlySet<string> OwnedPassiveIds { get; set; } = new HashSet<string>();
+
+    [Parameter] public ActiveFilter ActiveFilter { get; set; } = new();
+    [Parameter] public EventCallback<ActiveFilter> ActiveFilterChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _tagCounts = SkillsText.OrderedTags(Data);
+        _randomCount = Data.Passives.Count(p => p.CanAppearRandomly);
+        _surgeryCount = Data.Passives.Count(p => p.Surgery.Supported);
+        _mutationCount = Data.Passives.Count(p => p.MutationExclusive);
+        _inheritableCount = Data.Actives.Count(a => a.CanInherit);
+        _fruitCount = Data.Actives.Count(a => a.HasSkillFruit);
+    }
+
+    private int MaxSkillPower() => Data.Actives.Select(a => a.Power).DefaultIfEmpty(700).Max();
+
+    private Task SetPassiveTextAsync(string text) =>
+        PassiveFilterChanged.InvokeAsync(PassiveFilter with { Text = string.IsNullOrWhiteSpace(text) ? null : text });
+
+    private Task SetRanksAsync(IReadOnlyList<int> ranks) =>
+        PassiveFilterChanged.InvokeAsync(PassiveFilter with { Ranks = ranks });
+
+    private Task ToggleTagAsync(string tag, bool enabled)
+    {
+        var next = PassiveFilter.Tags.ToList();
+        next.RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase));
+        if (enabled) next.Add(tag);
+        return PassiveFilterChanged.InvokeAsync(PassiveFilter with { Tags = next });
+    }
+
+    private Task SetActiveTextAsync(string text) =>
+        ActiveFilterChanged.InvokeAsync(ActiveFilter with { Text = string.IsNullOrWhiteSpace(text) ? null : text });
+
+    private Task SetActiveElementsAsync(IReadOnlyList<string> elements) =>
+        ActiveFilterChanged.InvokeAsync(ActiveFilter with { Elements = elements });
+
+    private Task OnMinPowerChangedAsync(ChangeEventArgs e) =>
+        ActiveFilterChanged.InvokeAsync(ActiveFilter with { MinPower = ParseNullableInt(e.Value?.ToString()) });
+
+    private Task OnMaxPowerChangedAsync(ChangeEventArgs e) =>
+        ActiveFilterChanged.InvokeAsync(ActiveFilter with { MaxPower = ParseNullableInt(e.Value?.ToString()) });
+
+    private static int? ParseNullableInt(string? raw) =>
+        int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : null;
+
+    private static string FormatNullableInt(int? n) =>
+        n?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+}

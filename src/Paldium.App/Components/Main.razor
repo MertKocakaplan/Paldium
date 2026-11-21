@@ -1,0 +1,53 @@
+@implements IDisposable
+@inject AppState State
+@inject NavigationManager Navigation
+
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@if (!State.IsReady)
+{
+    <LayoutView Layout="typeof(MainLayout)">
+        <ErrorPage />
+    </LayoutView>
+}
+else
+{
+    <Router AppAssembly="typeof(Main).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="typeof(MainLayout)">
+                <NotFoundPage />
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private bool _wasReady;
+
+    protected override void OnInitialized()
+    {
+        _wasReady = State.IsReady;
+        State.Changed += OnStateChanged;
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e)
+    {
+        InvokeAsync(() =>
+        {
+            var recovered = !_wasReady && State.IsReady;
+            _wasReady = State.IsReady;
+            StateHasChanged();
+            if (recovered) Navigation.NavigateTo("planner");
+        });
+    }
+
+    public void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+    }
+}

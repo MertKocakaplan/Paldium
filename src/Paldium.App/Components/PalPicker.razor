@@ -1,0 +1,384 @@
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+
+@if (InlineSearch)
+{
+    <div class="@($"picker-inline-wrap{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+        <SearchField Value="@_query"
+                     ValueChanged="OnInlineQueryChangedAsync"
+                     Placeholder="@(Placeholder ?? (Mode == PickerMode.Owned ? L["Picker.OwnedPlaceholder"].Value : L["Plan.TargetSearchPlaceholder"].Value))"
+                     AriaLabel="@(AriaLabel ?? Placeholder ?? (Mode == PickerMode.Owned ? L["Picker.OwnedPlaceholder"].Value : L["Plan.TargetSearchPlaceholder"].Value))"
+                     Class="@FieldClass"
+                     Large="true"
+                     AutoFocus="@AutoFocus"
+                     OnFocus="OnInlineFocusAsync"
+                     OnBlur="OnInlineBlurAsync"
+                     OnSubmit="SubmitTopInlineAsync"
+                     OnEscape="CloseInlineAsync" />
+        @if (_inlineOpen)
+        {
+            <div class="picker-inline-drop" @onmousedown:preventDefault="true">
+                @if (Mode == PickerMode.Species)
+                {
+                    var matches = MatchingSpecies();
+                    @if (matches.Count == 0)
+                    {
+                        <div class="picks-empty">@L["Picker.NoResults"]</div>
+                    }
+                    else
+                    {
+                        <div class="picks" role="listbox" aria-label="@(AriaLabel ?? L["Plan.Target"].Value)">
+                            @foreach (var pal in matches)
+                            {
+                                var captured = pal;
+                                var count = SpeciesOwnedCount(captured.Id);
+                                <button type="button" class="pk" role="option" @onclick="() => PickSpeciesAsync(captured)">
+                                    <PalIcon Pal="captured" Size="28" />
+                                    <span class="t">@captured.DisplayName(Lang)</span>
+                                    <span class="sub num">@($"#{captured.DexNo}")</span>
+                                    @if (count > 0)
+                                    {
+                                        <span class="m num">@L["Plan.SpeciesOwnedCount", count]</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    var ownedMatches = MatchingOwned();
+                    @if (ownedMatches.Count == 0)
+                    {
+                        <div class="picks-empty">@L["Picker.NoOwned"]</div>
+                    }
+                    else
+                    {
+                        <div class="picks" role="listbox" aria-label="@(AriaLabel ?? L["Plan.StartTitle"].Value)">
+                            @foreach (var owned in ownedMatches)
+                            {
+                                var captured = owned;
+                                <button type="button" class="pk" role="option" @onclick="() => PickOwnedAsync(captured)">
+                                    <PalIcon PalId="@captured.SpeciesId" Size="28" />
+                                    <span class="t">@OwnedName(captured)</span>
+                                    <GenderIcon Gender="@captured.Gender" Size="12" />
+                                    <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
+                                    <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+}
+else if (ChildContent != null)
+{
+    <span class="@($"dd-wrap{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+        @ChildContent(ToggleAsync)
+        @RenderPopover()
+    </span>
+    <MudOverlay Visible="_open" VisibleChanged="SetOpenAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+}
+else
+{
+    <div class="@Class">
+        @if (!string.IsNullOrEmpty(Label))
+        {
+            <span class="picker-legacy-lbl">@Label</span>
+        }
+        <div class="picker-legacy">
+            <span class="dd-wrap">
+                <button type="button" class="dd" aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")" @onclick="ToggleAsync">
+                    @if (Mode == PickerMode.Species && Value != null)
+                    {
+                        <PalIcon Pal="Value" Size="20" />
+                        <span class="dd-txt">@Value.DisplayName(Lang)</span>
+                    }
+                    else if (Mode == PickerMode.Owned && OwnedValue != null)
+                    {
+                        <PalIcon PalId="@OwnedValue.SpeciesId" Size="20" />
+                        <span class="dd-txt">@OwnedText(OwnedValue)</span>
+                    }
+                    else
+                    {
+                        <span class="dd-txt">@(Placeholder ?? (Mode == PickerMode.Owned ? L["Picker.OwnedPlaceholder"].Value : L["Picker.Placeholder"].Value))</span>
+                    }
+                    <Icon Name="chevron-down" Size="14" />
+                </button>
+                @RenderPopover()
+            </span>
+            @if (AllowClear && ((Mode == PickerMode.Species && Value != null) || (Mode == PickerMode.Owned && OwnedValue != null)))
+            {
+                <button type="button" class="ib2" aria-label="@L["Common.Clear"].Value" title="@L["Common.Clear"].Value" @onclick="ClearAsync">
+                    <Icon Name="x" Size="14" />
+                </button>
+            }
+        </div>
+        <MudOverlay Visible="_open" VisibleChanged="SetOpenAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+    </div>
+}
+
+@code {
+    public enum PickerMode
+    {
+        Species,
+        Owned,
+    }
+
+    private bool _open;
+    private bool _inlineOpen;
+    private string _query = string.Empty;
+    private Dictionary<string, int>? _speciesCounts;
+
+    [Parameter] public PalSpecies? Value { get; set; }
+    [Parameter] public EventCallback<PalSpecies?> ValueChanged { get; set; }
+    [Parameter] public OwnedPal? OwnedValue { get; set; }
+    [Parameter] public EventCallback<OwnedPal?> OwnedValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public PickerMode Mode { get; set; } = PickerMode.Species;
+    [Parameter] public bool InlineSearch { get; set; }
+    [Parameter] public bool AutoFocus { get; set; }
+    [Parameter] public bool AllowClear { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? FieldClass { get; set; }
+    [Parameter] public EventCallback<bool> OnOpenChanged { get; set; }
+    [Parameter] public RenderFragment<Func<Task>>? ChildContent { get; set; }
+
+    private RenderFragment RenderPopover() => __builder =>
+    {
+        <MudPopover Open="_open" Elevation="0" Fixed="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipOnOpen">
+            <div class="picker-pop" @onkeydown="OnPopKeyDownAsync" tabindex="-1">
+                <SearchField Value="@_query"
+                             ValueChanged="q => _query = q"
+                             Placeholder="@(Placeholder ?? (Mode == PickerMode.Owned ? L["Picker.OwnedPlaceholder"].Value : L["Picker.Placeholder"].Value))"
+                             AutoFocus="true"
+                             OnSubmit="SubmitTopPopoverAsync"
+                             OnEscape="CloseAsync" />
+
+                @if (AllowClear && ((Mode == PickerMode.Species && Value != null) || (Mode == PickerMode.Owned && OwnedValue != null)))
+                {
+                    <div class="cpop flat">
+                        <button type="button" class="mi" @onclick="ClearAsync">
+                            <Icon Name="x" Size="14" />
+                            <span>@L["Common.Clear"]</span>
+                        </button>
+                        <hr />
+                    </div>
+                }
+
+                @if (Mode == PickerMode.Species)
+                {
+                    var matches = MatchingSpecies();
+                    @if (matches.Count == 0)
+                    {
+                        <div class="picks-empty">@L["Picker.NoResults"]</div>
+                    }
+                    else
+                    {
+                        <div class="picks" role="listbox" aria-label="@(Label ?? L["Plan.Target"].Value)">
+                            @foreach (var pal in matches)
+                            {
+                                var captured = pal;
+                                var count = SpeciesOwnedCount(captured.Id);
+                                <button type="button" class="pk" role="option" @onclick="() => PickSpeciesAsync(captured)">
+                                    <PalIcon Pal="captured" Size="28" />
+                                    <span class="t">@captured.DisplayName(Lang)</span>
+                                    <span class="sub num">@($"#{captured.DexNo}")</span>
+                                    @if (count > 0)
+                                    {
+                                        <span class="m num">@L["Plan.SpeciesOwnedCount", count]</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    var ownedMatches = MatchingOwned();
+                    @if (ownedMatches.Count == 0)
+                    {
+                        <div class="picks-empty">@L["Picker.NoOwned"]</div>
+                    }
+                    else
+                    {
+                        <div class="picks" role="listbox" aria-label="@(Label ?? L["Plan.StartTitle"].Value)">
+                            @foreach (var owned in ownedMatches)
+                            {
+                                var captured = owned;
+                                <button type="button" class="pk" role="option" @onclick="() => PickOwnedAsync(captured)">
+                                    <PalIcon PalId="@captured.SpeciesId" Size="28" />
+                                    <span class="t">@OwnedName(captured)</span>
+                                    <GenderIcon Gender="@captured.Gender" Size="12" />
+                                    <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
+                                    <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </MudPopover>
+    };
+
+    private List<PalSpecies> MatchingSpecies() =>
+        Data.Pals
+            .Where(p => PalTextSearch.Matches(p, _query))
+            .OrderBy(p => p.DexNo)
+            .ThenBy(p => p.IsVariant)
+            .ThenBy(p => p.Id, StringComparer.Ordinal)
+            .Take(60)
+            .ToList();
+
+    private List<OwnedPal> MatchingOwned() =>
+        Scope.ScopedPals
+            .Where(p => OwnedPalSearch.Matches(Data, p, _query))
+            .OrderBy(p => Data.Pal(p.SpeciesId).DexNo)
+            .ThenBy(p => Data.Pal(p.SpeciesId).IsVariant)
+            .ThenByDescending(p => p.Level)
+            .ThenBy(p => p.Uid, StringComparer.Ordinal)
+            .Take(80)
+            .ToList();
+
+    private int SpeciesOwnedCount(string speciesId)
+    {
+        if (_speciesCounts == null)
+        {
+            _speciesCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in Scope.ScopedPals)
+                _speciesCounts[p.SpeciesId] = _speciesCounts.GetValueOrDefault(p.SpeciesId) + 1;
+        }
+        return _speciesCounts.GetValueOrDefault(speciesId);
+    }
+
+    private string OwnedName(OwnedPal pal) => pal.Nickname ?? Data.Pal(pal.SpeciesId).DisplayName(Lang);
+
+    private string OwnedText(OwnedPal pal)
+    {
+        var suffix = pal.Gender switch { Gender.Male => " ♂", Gender.Female => " ♀", _ => string.Empty };
+        return $"{OwnedName(pal)}{suffix} ({L["MyPals.ColLevel"]} {pal.Level})";
+    }
+
+    private async Task OnInlineQueryChangedAsync(string text)
+    {
+        _query = text;
+        _speciesCounts = null;
+        await SetInlineOpenAsync(true);
+    }
+
+    private async Task OnInlineFocusAsync()
+    {
+        _speciesCounts = null;
+        await SetInlineOpenAsync(true);
+    }
+
+    private async Task OnInlineBlurAsync() => await SetInlineOpenAsync(false);
+
+    private Task CloseInlineAsync() => SetInlineOpenAsync(false);
+
+    private async Task SetInlineOpenAsync(bool open)
+    {
+        if (_inlineOpen == open) return;
+        _inlineOpen = open;
+        await OnOpenChanged.InvokeAsync(open);
+    }
+
+    private async Task SubmitTopInlineAsync()
+    {
+        if (Mode == PickerMode.Species)
+        {
+            var first = MatchingSpecies().FirstOrDefault();
+            if (first != null) await PickSpeciesAsync(first);
+        }
+        else
+        {
+            var first = MatchingOwned().FirstOrDefault();
+            if (first != null) await PickOwnedAsync(first);
+        }
+    }
+
+    private async Task SubmitTopPopoverAsync()
+    {
+        if (Mode == PickerMode.Species)
+        {
+            var first = MatchingSpecies().FirstOrDefault();
+            if (first != null) await PickSpeciesAsync(first);
+        }
+        else
+        {
+            var first = MatchingOwned().FirstOrDefault();
+            if (first != null) await PickOwnedAsync(first);
+        }
+    }
+
+    private Task ToggleAsync() => SetOpenAsync(!_open);
+
+    private async Task SetOpenAsync(bool open)
+    {
+        if (open)
+        {
+            _query = string.Empty;
+            _speciesCounts = null;
+        }
+        _open = open;
+        await OnOpenChanged.InvokeAsync(open);
+    }
+
+    private Task CloseAsync() => SetOpenAsync(false);
+
+    private Task OnPopKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task PickSpeciesAsync(PalSpecies pal)
+    {
+        Value = pal;
+        _query = string.Empty;
+        // Close first and tell the page, then report the pick: the pick may remove this picker from the page (a new view), and a flag left open blocks the auto recompute.
+        await SetInlineOpenAsync(false);
+        await SetOpenAsync(false);
+        await ValueChanged.InvokeAsync(pal);
+    }
+
+    private async Task PickOwnedAsync(OwnedPal pal)
+    {
+        OwnedValue = pal;
+        _query = string.Empty;
+        await SetInlineOpenAsync(false);
+        await SetOpenAsync(false);
+        await OwnedValueChanged.InvokeAsync(pal);
+    }
+
+    public override void Dispose()
+    {
+        // A picker that disappears while open (the page swaps the view) must not leave the page believing it is open.
+        if (_open || _inlineOpen)
+        {
+            _open = false;
+            _inlineOpen = false;
+            _ = OnOpenChanged.InvokeAsync(false);
+        }
+        base.Dispose();
+    }
+
+    private async Task ClearAsync()
+    {
+        if (Mode == PickerMode.Species)
+        {
+            Value = null;
+            await ValueChanged.InvokeAsync(null);
+        }
+        else
+        {
+            OwnedValue = null;
+            await OwnedValueChanged.InvokeAsync(null);
+        }
+        await SetOpenAsync(false);
+    }
+}

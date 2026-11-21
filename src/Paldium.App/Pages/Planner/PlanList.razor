@@ -1,0 +1,595 @@
+@using Paldium.Core.Owned
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject UserDataStore UserData
+
+<div class="@(Plans.Count > 0 ? "plantabs pt7" : "plantabs")" role="@(Plans.Count > 0 ? "tablist" : null)" aria-label="@(Plans.Count > 0 ? L["Plan.PlanTabsAria"].Value : null)">
+    <button type="button" class="ghostb vt shelf-toggle" @onclick="OnToggleShelf">
+        <Icon Name="shelf" Size="16" />
+        <span>@L["Plan.ShelfButton"]</span>
+    </button>
+
+    @if (Computing && Plans.Count == 0)
+    {
+        <div class="pt" aria-selected="true">
+            <b>@L["Plan.SearchingTab"]</b>
+            <span>@L["Plan.SearchingStage1Sub"]</span>
+        </div>
+
+        <span class="sp"></span>
+
+        <span class="run" role="status" aria-live="polite">
+            <span class="spin" aria-hidden="true"></span>
+            <b>@L["Plan.SearchingRun"]</b>
+            <span class="num">@ElapsedText(ElapsedSeconds)</span>
+        </span>
+    }
+    else if (Plans.Count > 0)
+    {
+        var visible = VisibleIndices();
+        foreach (var idx in visible)
+        {
+            var capturedIdx = idx;
+            var plan = Plans[idx];
+            var label = idx < Labels.Count ? Labels[idx] : null;
+            var active = idx == Selected;
+            var pathIds = PathIds(plan);
+            var wildIds = WildIds(plan);
+            <button type="button"
+                    role="tab"
+                    class="pt rt"
+                    disabled="@Computing"
+                    aria-selected="@(active ? "true" : "false")"
+                    aria-label="@L["Plan.Tab.PathAria", idx + 1, EggsText(plan.ExpectedEggsTotal), StepWildText(plan), PathNames(plan)].Value"
+                    title="@PathNames(plan)"
+                    tabindex="@(active ? 0 : -1)"
+                    @onclick="() => SelectTabAsync(capturedIdx)"
+                    @onkeydown="e => OnTabKeyDownAsync(e, capturedIdx, visible)">
+                <span class="l1">
+                    <b class="num">@("~" + EggsText(plan.ExpectedEggsTotal))</b>
+                    <span class="pt-sub">@(label ?? StepWildText(plan))</span>
+                </span>
+                <span class="ch" aria-hidden="true">
+                    @for (var k = 0; k < pathIds.Count; k++)
+                    {
+                        if (k > 0) { <span class="sep">›</span> }
+                        <PalIcon PalId="@pathIds[k]" Size="20" Class="ci" />
+                    }
+                    @if (wildIds.Count > 0)
+                    {
+                        @if (pathIds.Count > 0) { <span class="plus">+</span> }
+                        @foreach (var w in wildIds) { <PalIcon PalId="@w" Size="20" Class="ci wl" /> }
+                    }
+                </span>
+            </button>
+        }
+
+        <span class="sp"></span>
+
+        @if (Computing)
+        {
+            <span class="run" role="status" aria-live="polite">
+                <span class="spin" aria-hidden="true"></span>
+                <b>@L["Plan.SearchingRun"]</b>
+                <span class="num">@ElapsedText(ElapsedSeconds)</span>
+            </span>
+        }
+        else if (Improving)
+        {
+            <span class="run" role="status" aria-live="polite">
+                <span class="spin" aria-hidden="true"></span>
+                <b>@L["Plan.ImprovingRun"]</b>
+                @if (!Query.Exhaustive && ImproveLimitSeconds > 0)
+                {
+                    var pct = Math.Clamp((int)Math.Round(ImproveElapsedSeconds * 100.0 / ImproveLimitSeconds), 0, 100);
+                    var secs = Math.Min((int)Math.Floor(ImproveElapsedSeconds), ImproveLimitSeconds);
+                    <span class="meter"><i style="@($"--w:{pct}%")"></i></span>
+                    <span class="num">@L["Plan.ImprovingProgressSec", secs, ImproveLimitSeconds]</span>
+                }
+                else
+                {
+                    <span class="num">@ElapsedText(ImproveElapsedSeconds)</span>
+                }
+                <button type="button" class="ghostb" @onclick="OnCancel">
+                    <Icon Name="stop" Size="14" />
+                    <span>@L["Plan.Stop"]</span>
+                </button>
+            </span>
+        }
+        else
+        {
+            @if (CanContinue)
+            {
+                <span class="note-k vt">@L["Plan.TimedOutShort"]</span>
+                <button type="button" class="ghostb vt" @onclick="OnContinue">
+                    <Icon Name="refresh" Size="16" />
+                    <span>@L["Plan.ContinueSearch"]</span>
+                </button>
+            }
+
+            @ExclusionButton()
+
+            @if (!Compact && Notes.Count > 0)
+            {
+                <span class="dd-wrap vt">
+                    <button type="button"
+                            class="ghostb"
+                            aria-haspopup="dialog"
+                            aria-expanded="@(_notesOpen ? "true" : "false")"
+                            @onclick="ToggleNotesAsync">
+                        <Icon Name="info" Size="16" />
+                        <span>@(Notes.Count == 1 ? L["Plan.NotesOne"].Value : L["Plan.NotesCountButton", Notes.Count].Value)</span>
+                    </button>
+
+                    <MudPopover Open="_notesOpen"
+                                Elevation="0"
+                                Fixed="true"
+                                AnchorOrigin="Origin.BottomRight"
+                                TransformOrigin="Origin.TopRight"
+                                OverflowBehavior="OverflowBehavior.FlipOnOpen">
+                        <div class="notes-pop" @onkeydown="OnNotesKeyDownAsync" tabindex="-1">
+                            <NotesPanel Notes="@Notes"
+                                        InPopover="true"
+                                        HeadingId="nt-pop-h"
+                                        OnSelectPlan="OnExtraSelectedAsync"
+                                        OnClose="CloseAllAsync" />
+                        </div>
+                    </MudPopover>
+                </span>
+            }
+
+            @if (EditingInputs)
+            {
+                @SetsMenus()
+            }
+
+            <button type="button"
+                    class="@($"ghostb vt{(EditingInputs ? " on" : "")}")"
+                    @onclick="OnToggleEditInputs">
+                <Icon Name="@(EditingInputs ? "check" : "edit")" Size="16" />
+                <span>@(EditingInputs ? L["Plan.BackToResult"] : L["Plan.EditTarget"])</span>
+            </button>
+        }
+    }
+    else if (EmptyResult)
+    {
+        <div class="pt" aria-selected="true">
+            <b>@L["Plan.NoPlanTab"]</b>
+            <span>@L["Plan.NoPlanReasonsCount", DiagnosticCount]</span>
+        </div>
+        <span class="sp"></span>
+        @ExclusionButton()
+    }
+    else
+    {
+        <div class="pt" aria-selected="true">
+            <b>@L["Plan.NewPlan"]</b>
+            <span>@SubtitleText()</span>
+        </div>
+
+        <span class="sp"></span>
+
+        @SetsMenus()
+    }
+</div>
+<MudOverlay Visible="@(_savedOpen || _rolesOpen || _notesOpen || _excludeOpen)" VisibleChanged="OnOverlayChangedAsync" DarkBackground="false" AutoClose="true" ZIndex="1100" />
+
+@code {
+    private bool _savedOpen;
+    private bool _rolesOpen;
+    private bool _notesOpen;
+    private bool _excludeOpen;
+    private string _presetName = string.Empty;
+    private List<UserDataStore.SavedPreset> _saved = [];
+
+    [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
+    [Parameter] public PalSpecies? Target { get; set; }
+    [Parameter] public bool Computing { get; set; }
+    [Parameter] public double ElapsedSeconds { get; set; }
+    [Parameter] public bool Improving { get; set; }
+    [Parameter] public double ImproveElapsedSeconds { get; set; }
+    [Parameter] public int ImproveLimitSeconds { get; set; } = 30;
+    [Parameter] public EventCallback OnCancel { get; set; }
+    /// <summary>The improving stage ran out of time for this query: "keep searching" is offered (T100).</summary>
+    [Parameter] public bool CanContinue { get; set; }
+    [Parameter] public EventCallback OnContinue { get; set; }
+    /// <summary>A calculation finished and found no plan (a real empty result; a reset or a cancelled run does not count).</summary>
+    [Parameter] public bool EmptyResult { get; set; }
+    [Parameter] public int DiagnosticCount { get; set; }
+    [Parameter] public IReadOnlyList<BreedingPlan> Plans { get; set; } = [];
+    [Parameter] public IReadOnlyList<string?> Labels { get; set; } = [];
+    [Parameter] public int Selected { get; set; }
+    [Parameter] public EventCallback<int> OnSelectPlanIndex { get; set; }
+    [Parameter] public IReadOnlyList<PlanText.PlanNoteEntry> Notes { get; set; } = [];
+    [Parameter] public EventCallback<ExtraPlan> OnSelectExtraPlan { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool EditingInputs { get; set; }
+    [Parameter] public EventCallback OnToggleEditInputs { get; set; }
+    [Parameter] public EventCallback OnToggleShelf { get; set; }
+    [Parameter] public EventCallback<bool> OnMenuOpenChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _saved = UserData.LoadPresets();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A menu whose button is gone (a run started, the view changed) closes and tells the page, which otherwise keeps "a picker is open" forever.
+        var idle = !Computing && !Improving;
+        var setsShown = Plans.Count == 0 ? !Computing && !EmptyResult : idle && EditingInputs;
+        var notesShown = Plans.Count > 0 && idle && !Compact && Notes.Count > 0;
+        if (_excludeOpen && ExclusionOps.Count(Query) == 0) { _excludeOpen = false; await OnMenuOpenChanged.InvokeAsync(false); }
+        var closeSets = !setsShown && (_savedOpen || _rolesOpen);
+        var closeNotes = !notesShown && _notesOpen;
+        if (!closeSets && !closeNotes) return;
+        if (closeSets) { _savedOpen = false; _rolesOpen = false; }
+        if (closeNotes) _notesOpen = false;
+        await OnMenuOpenChanged.InvokeAsync(false);
+    }
+
+    /// <summary>"Saved sets" and "Ready sets": shown before the first calculation and while the target is being edited.</summary>
+    private RenderFragment SetsMenus() => @<text>
+    <span class="dd-wrap vt">
+        <button type="button"
+                class="ghostb"
+                aria-haspopup="dialog"
+                aria-expanded="@(_savedOpen ? "true" : "false")"
+                @onclick="ToggleSavedAsync">
+            <Icon Name="pin" Size="16" />
+            <span>@L["Plan.SavedSets"]</span>
+        </button>
+
+        <MudPopover Open="_savedOpen"
+                    Elevation="0"
+                    Fixed="true"
+                    AnchorOrigin="Origin.BottomRight"
+                    TransformOrigin="Origin.TopRight"
+                    OverflowBehavior="OverflowBehavior.FlipOnOpen">
+            <div class="preset-pop" @onkeydown="OnSavedKeyDownAsync" tabindex="-1">
+                <div class="pop-panel-head">
+                    <span>@L["Plan.SavedSets"]</span>
+                    <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="CloseAllAsync">
+                        <Icon Name="x" Size="14" />
+                    </button>
+                </div>
+
+                @if (_saved.Count == 0)
+                {
+                    <div class="pop-row-help">@L["Plan.SavedSetsEmpty"]</div>
+                }
+                else
+                {
+                    <div class="cpop flat preset-saved-list">
+                        @foreach (var preset in _saved)
+                        {
+                            var captured = preset;
+                            var active = MatchesCurrent(captured.PassiveIds);
+                            <div class="preset-saved-row">
+                                <button type="button"
+                                        class="mi"
+                                        aria-selected="@(active ? "true" : "false")"
+                                        @onclick="() => ApplySavedAsync(captured)">
+                                    <span>@captured.Name</span>
+                                    <span class="m">@string.Join(", ", captured.PassiveIds.Select(PassiveName))</span>
+                                </button>
+                                <button type="button"
+                                        class="ib2"
+                                        aria-label="@L["Plan.DeleteSavedSetAria", captured.Name].Value"
+                                        title="@L["Common.Remove"].Value"
+                                        @onclick="() => DeleteSaved(captured)">
+                                    <Icon Name="x" Size="14" />
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Query.DesiredPassives.Count > 0)
+                {
+                    <div class="preset-save">
+                        <div class="field">
+                            <input type="text"
+                                   value="@_presetName"
+                                   placeholder="@L["Plan.PresetName"].Value"
+                                   aria-label="@L["Plan.PresetName"].Value"
+                                   @oninput="e => _presetName = e.Value?.ToString() ?? string.Empty"
+                                   @onkeydown="OnPresetInputKeyDownAsync" />
+                        </div>
+                        <button type="button"
+                                class="btn2"
+                                disabled="@string.IsNullOrWhiteSpace(_presetName)"
+                                @onclick="SavePresetAsync">
+                            @L["Common.Save"]
+                        </button>
+                    </div>
+                }
+            </div>
+        </MudPopover>
+    </span>
+
+    <span class="dd-wrap vt">
+        <button type="button"
+                class="ghostb"
+                aria-haspopup="dialog"
+                aria-expanded="@(_rolesOpen ? "true" : "false")"
+                @onclick="ToggleRolesAsync">
+            <span>@L["Plan.Presets"]</span>
+            <Icon Name="@(_rolesOpen ? "chevron-up" : "chevron-down")" Size="14" />
+        </button>
+
+        <MudPopover Open="_rolesOpen"
+                    Elevation="0"
+                    Fixed="true"
+                    AnchorOrigin="Origin.BottomRight"
+                    TransformOrigin="Origin.TopRight"
+                    OverflowBehavior="OverflowBehavior.FlipOnOpen">
+            <div class="preset-pop" @onkeydown="OnRolesKeyDownAsync" tabindex="-1">
+                <div class="pop-panel-head">
+                    <span>@L["Plan.Presets"]</span>
+                    <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="CloseAllAsync">
+                        <Icon Name="x" Size="14" />
+                    </button>
+                </div>
+
+                @foreach (var role in RolePresets.Roles)
+                {
+                    <div class="preset-role">
+                        <span class="preset-role-nm">@L["Plan.Role." + role]</span>
+                        <div class="preset-vars">
+                            @foreach (var variant in new[] { PresetVariant.Best, PresetVariant.Easy })
+                            {
+                                var preset = RolePresets.Build(Data, role, variant, Target);
+                                if (preset == null)
+                                {
+                                    <button type="button"
+                                            class="btn2"
+                                            disabled="true"
+                                            title="@L["Plan.RoleNeedsTarget"].Value">
+                                        @L["Plan.Variant." + variant]
+                                    </button>
+                                }
+                                else
+                                {
+                                    var captured = preset;
+                                    var active = MatchesCurrent(captured.PassiveIds);
+                                    <button type="button"
+                                            class="@($"btn2{(active ? " acc" : "")}")"
+                                            title="@string.Join(", ", captured.PassiveIds.Select(PassiveName))"
+                                            @onclick="() => ApplyRoleAsync(captured)">
+                                        @L["Plan.Variant." + variant]
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </MudPopover>
+    </span>
+    </text>;
+
+    // "Excluded N" (T107): opens the list of what the plans may not use; shown while there is something excluded.
+    private RenderFragment ExclusionButton() => @<text>
+    @if (ExclusionOps.Count(Query) > 0 && !Computing)
+    {
+        <span class="dd-wrap vt">
+            <button type="button"
+                    class="@($"ghostb xb{(_excludeOpen ? " on" : "")}")"
+                    aria-haspopup="dialog"
+                    aria-expanded="@(_excludeOpen ? "true" : "false")"
+                    @onclick="ToggleExcludeAsync">
+                <Icon Name="ban" Size="16" />
+                <span>@L["Plan.Exclude.ListTitle"]</span>
+                <span class="cnt num">@ExclusionOps.Count(Query)</span>
+            </button>
+
+            <MudPopover Open="_excludeOpen"
+                        Elevation="0"
+                        Fixed="true"
+                        AnchorOrigin="Origin.BottomRight"
+                        TransformOrigin="Origin.TopRight"
+                        OverflowBehavior="OverflowBehavior.FlipOnOpen">
+                <div class="xpop-host" tabindex="-1">
+                    <ExclusionList Query="@Query" QueryChanged="QueryChanged" OnClose="CloseAllAsync" />
+                </div>
+            </MudPopover>
+        </span>
+    }
+    </text>;
+
+    public static IReadOnlyList<string> PathIds(BreedingPlan plan)
+    {
+        var list = new List<string>();
+        void Walk(PlanNode n, bool isRoot)
+        {
+            if (n is not BreedStep s) return;
+            Walk(s.ParentA, false);
+            Walk(s.ParentB, false);
+            if (!isRoot) list.Add(s.ChildSpeciesId);
+        }
+
+        Walk(plan.Root, true);
+        if (list.Count == 0 && plan.Root is BreedStep root)
+        {
+            if (root.ParentA is not WildLeaf) list.Add(root.ParentA.SpeciesId);
+            if (root.ParentB is not WildLeaf) list.Add(root.ParentB.SpeciesId);
+        }
+
+        return list;
+    }
+
+    private IReadOnlyList<string> WildIds(BreedingPlan plan) =>
+        PlanTreeValidator.Leaves(plan.Root).OfType<WildLeaf>().Select(w => w.SpeciesId).Distinct(StringComparer.Ordinal).ToList();
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    // The whole path for the accessible name: the intermediate species, the target and the wild partners.
+    private string PathNames(BreedingPlan plan)
+    {
+        var names = PathIds(plan).Select(SpeciesName).Append(SpeciesName(plan.Root.SpeciesId));
+        var text = string.Join(", ", names);
+        var wild = WildIds(plan).Select(SpeciesName).ToList();
+        return wild.Count > 0 ? text + "; " + string.Join(", ", wild) : text;
+    }
+
+    private Task ToggleExcludeAsync()
+    {
+        _savedOpen = false;
+        _rolesOpen = false;
+        _notesOpen = false;
+        _excludeOpen = !_excludeOpen;
+        return OnMenuOpenChanged.InvokeAsync(_excludeOpen);
+    }
+
+    private IReadOnlyList<int> VisibleIndices()
+    {
+        var maxTabs = Math.Min(4, Plans.Count);
+        var indices = new List<int>(maxTabs);
+        if (Selected < 4 || Plans.Count <= 4)
+        {
+            for (var i = 0; i < maxTabs; i++) indices.Add(i);
+        }
+        else
+        {
+            for (var i = 0; i < 3; i++) indices.Add(i);
+            indices.Add(Selected);
+        }
+        return indices;
+    }
+
+    private string SubtitleText() => Target == null ? L["Plan.NoTarget"].Value : L["Plan.NotSolvedYet"].Value;
+
+    private string ElapsedText(double seconds) => L["Plan.ElapsedSeconds", seconds.ToString("0.0", CultureInfo.GetCultureInfo(Lang))].Value;
+
+    private string EggsText(double eggs) => eggs.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+
+    private string StepWildText(BreedingPlan plan)
+    {
+        var wild = plan.WildCount == 0
+            ? L["Plan.NoWild"].Value
+            : L["Plan.WildCount", plan.WildCount].Value;
+        return L[plan.Steps == 1 ? "Plan.StepAndWild" : "Plan.StepsAndWild", plan.Steps, wild].Value;
+    }
+
+    private Task SelectTabAsync(int index) => OnSelectPlanIndex.InvokeAsync(index);
+
+    private Task OnTabKeyDownAsync(KeyboardEventArgs e, int currentIdx, IReadOnlyList<int> visible)
+    {
+        if (e.Key != "ArrowLeft" && e.Key != "ArrowRight") return Task.CompletedTask;
+        var pos = -1;
+        for (var i = 0; i < visible.Count; i++)
+        {
+            if (visible[i] == currentIdx) { pos = i; break; }
+        }
+        if (pos < 0 || visible.Count <= 1) return Task.CompletedTask;
+        var nextPos = e.Key == "ArrowRight" ? (pos + 1) % visible.Count : (pos - 1 + visible.Count) % visible.Count;
+        return OnSelectPlanIndex.InvokeAsync(visible[nextPos]);
+    }
+
+    private Task ToggleSavedAsync()
+    {
+        if (!_savedOpen) _saved = UserData.LoadPresets();
+        _rolesOpen = false;
+        _notesOpen = false;
+        _savedOpen = !_savedOpen;
+        return OnMenuOpenChanged.InvokeAsync(_savedOpen);
+    }
+
+    private Task ToggleRolesAsync()
+    {
+        _savedOpen = false;
+        _notesOpen = false;
+        _rolesOpen = !_rolesOpen;
+        return OnMenuOpenChanged.InvokeAsync(_rolesOpen);
+    }
+
+    private Task ToggleNotesAsync()
+    {
+        _savedOpen = false;
+        _rolesOpen = false;
+        _notesOpen = !_notesOpen;
+        return OnMenuOpenChanged.InvokeAsync(_notesOpen);
+    }
+
+    private async Task OnExtraSelectedAsync(ExtraPlan extra)
+    {
+        await CloseAllAsync();
+        await OnSelectExtraPlan.InvokeAsync(extra);
+    }
+
+    private Task CloseAllAsync()
+    {
+        _excludeOpen = false;
+        _savedOpen = false;
+        _rolesOpen = false;
+        _notesOpen = false;
+        return OnMenuOpenChanged.InvokeAsync(false);
+    }
+
+    private Task OnOverlayChangedAsync(bool visible) =>
+        visible ? Task.CompletedTask : CloseAllAsync();
+
+    private Task OnSavedKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseAllAsync() : Task.CompletedTask;
+
+    private Task OnRolesKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseAllAsync() : Task.CompletedTask;
+
+    private Task OnNotesKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Escape" ? CloseAllAsync() : Task.CompletedTask;
+
+    private async Task OnPresetInputKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_presetName))
+            await SavePresetAsync();
+        else if (e.Key == "Escape")
+            await CloseAllAsync();
+    }
+
+    private Task SavePresetAsync()
+    {
+        var name = _presetName.Trim();
+        if (string.IsNullOrEmpty(name)) return Task.CompletedTask;
+        _saved.RemoveAll(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        _saved.Add(new UserDataStore.SavedPreset(name, Query.DesiredPassives.ToList()));
+        UserData.SavePresets(_saved);
+        _presetName = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private void DeleteSaved(UserDataStore.SavedPreset preset)
+    {
+        _saved.Remove(preset);
+        UserData.SavePresets(_saved);
+    }
+
+    private async Task ApplySavedAsync(UserDataStore.SavedPreset preset)
+    {
+        await QueryChanged.InvokeAsync(Query with { DesiredPassives = preset.PassiveIds.Take(4).ToList() });
+        await CloseAllAsync();
+    }
+
+    private async Task ApplyRoleAsync(RolePreset preset)
+    {
+        await QueryChanged.InvokeAsync(Query with { DesiredPassives = preset.PassiveIds.Take(4).ToList() });
+        await CloseAllAsync();
+    }
+
+    private bool MatchesCurrent(IReadOnlyList<string> ids) =>
+        ids.Count == Query.DesiredPassives.Count
+        && ids.All(id => Query.DesiredPassives.Contains(id, StringComparer.OrdinalIgnoreCase));
+
+    private string PassiveName(string id)
+    {
+        try { return Data.Passive(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+}

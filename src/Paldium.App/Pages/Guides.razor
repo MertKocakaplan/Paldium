@@ -1,0 +1,93 @@
+@page "/guides"
+@page "/guides/{Slug}"
+@using Paldium.App.Pages.GuidesParts
+@inherits LocalizedComponentBase
+@inject GuideService GuideSvc
+@inject GuideStateService State
+@inject NavigationManager Nav
+
+@* Library and reader of the guides (screens/guides.md). /guides is the library; /guides/{slug} reads one guide; ?read=1 opens it in reading mode. *@
+<div class="b r">
+    @if (Slug == "agil")
+    {
+        <RanchReference PalId="@Pal" ItemId="@Item" Level="@Rank" />
+    }
+    else if (Slug == "tasima")
+    {
+        <TransportReference PalId="@Pal" />
+    }
+    else if (Slug == "binekler")
+    {
+        <MountReference PalId="@Pal" />
+    }
+    else if (Slug == "heykeller")
+    {
+        <EffigyReference />
+    }
+    else if (_doc != null)
+    {
+        <GuideReader Doc="_doc" Next="_next" GuideLang="@_lang" Reading="State.Reading" OnLang="SetLang" OnReading="SetReading" />
+    }
+    else
+    {
+        <GuideLibrary Guides="_guides" Query="@State.Query" OnQuery="SetQuery" GuideLang="@_lang" OnLang="SetLang" />
+    }
+</div>
+
+@code {
+    private IReadOnlyList<GuideInfo> _guides = [];
+    private GuideDoc? _doc;
+    private GuideInfo? _next;
+    private string _lang = "en";
+
+    [Parameter] public string? Slug { get; set; }
+
+    [SupplyParameterFromQuery(Name = "read")]
+    public string? Read { get; set; }
+
+    // The Ranch table (T109): /guides/agil?pal=<id>&item=<id>&rank=<level>; the Transporting table (T120): /guides/tasima?pal=<id>; the Mounts table (T124): /guides/binekler?pal=<id>; the Effigy table (T126): /guides/heykeller
+    [SupplyParameterFromQuery(Name = "pal")]
+    public string? Pal { get; set; }
+
+    [SupplyParameterFromQuery(Name = "item")]
+    public string? Item { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rank")]
+    public int? Rank { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _lang = State.EffectiveLang(Lang);
+        if (Read == "1") State.Reading = true;
+        Refresh();
+    }
+
+    protected override void OnUiLanguageChanged() => Refresh();
+
+    private void Refresh()
+    {
+        _lang = State.EffectiveLang(Lang);
+        _doc = Slug == null || Slug == "agil" || Slug == "tasima" || Slug == "binekler" || Slug == "heykeller" ? null : GuideSvc.Load(Slug, _lang);
+        _guides = GuideSvc.Search(_lang, State.Query);
+        if (_doc != null)
+        {
+            var all = GuideSvc.List(_lang);
+            var i = all.ToList().FindIndex(g => g.Slug == _doc.Info.Slug);
+            _next = i >= 0 && i + 1 < all.Count ? all[i + 1] : null;
+        }
+    }
+
+    private void SetQuery(string value)
+    {
+        State.Query = value;
+        Refresh();
+    }
+
+    private void SetLang(string lang)
+    {
+        State.GuideLang = lang;
+        Refresh();
+    }
+
+    private void SetReading(bool reading) => State.Reading = reading;
+}

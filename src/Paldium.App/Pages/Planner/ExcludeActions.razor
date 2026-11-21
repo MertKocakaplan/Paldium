@@ -1,0 +1,105 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject Paldium.Core.Breeding.IBreedingCalculator Breeding
+
+@* "Don't use in these plans" (T107, planner.md): one or two button rows by node kind. A choice adds the exclusion; the page solves again. *@
+@if (Options.Count > 0)
+{
+    <section class="dsec">
+        <h3>@L["Plan.Exclude.Section"]</h3>
+        <div class="xrows">
+            @foreach (var option in Options)
+            {
+                var captured = option;
+                <button type="button" class="xrow" @onclick="() => OnExclude.InvokeAsync(captured.Exclusion)">
+                    <Icon Name="ban" Size="16" />
+                    <span class="tx">
+                        <b>@captured.Label @if (captured.Count is { } n) { <span class="cnt">@L["Plan.Exclude.GroupCount", n]</span> }</b>
+                        <span class="m">@captured.Sentence</span>
+                    </span>
+                </button>
+            }
+        </div>
+        <p class="h">@L["Plan.Exclude.Footer"]</p>
+    </section>
+
+    @if (SameStep is { Count: > 0 } same && Node is WildLeaf wildNode)
+    {
+        <section class="dsec">
+            <h3>@L["Plan.Exclude.InsteadOfPartner"]</h3>
+            <p class="h">@L["Plan.Exclude.InsteadLead", PartnerName, SpeciesName(StepChild), same.Count]</p>
+            <ul class="alts ic">
+                @foreach (var id in same)
+                {
+                    <li title="@SpeciesName(id)"><PalIcon PalId="@id" Size="24" /><span class="sr">@SpeciesName(id)</span></li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    private sealed record Option(PlanExclusion Exclusion, string Label, string Sentence, int? Count);
+
+    [Parameter] public PlanNode? Node { get; set; }
+    [Parameter] public BreedingPlan? Plan { get; set; }
+    [Parameter] public PlannerSettings Query { get; set; } = new();
+    [Parameter] public EventCallback<PlanExclusion> OnExclude { get; set; }
+
+    private string SpeciesName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private string GroupName(string group) =>
+        L[$"Plan.Exclude.GroupName.{group}"] is { ResourceNotFound: false } t ? t.Value : group;
+
+    private static IEnumerable<PlanNode> Walk(PlanNode n) => NodeAlternatives.Walk(n);
+
+    private IReadOnlyList<Option> Options
+    {
+        get
+        {
+            var list = new List<Option>();
+            if (Node == null || Plan == null) return list;
+            if (ReferenceEquals(Node, Plan.Root)) return list;          // the target
+            var species = Node.SpeciesId;
+            var name = SpeciesName(species);
+            if (Node is OwnedLeaf owned)
+            {
+                if (owned.Pal.Uid == Query.StartOwnedUid || owned.Pal.SelectionKey == Query.StartOwnedUid) return list;    // the start Pal is never excluded
+                var uses = Walk(Plan.Root).Count(x => x is BreedStep s && (IsPal(s.ParentA, owned.Pal.Uid) || IsPal(s.ParentB, owned.Pal.Uid)));
+                var place = Paldium.App.Components.LocationText.ShortPlace(owned.Pal, Terms, L);
+                list.Add(new Option(new PlanExclusion(PlanExclusion.UidKind, owned.Pal.Uid), L["Plan.Exclude.ThisPal"].Value,
+                    uses > 1 ? L["Plan.Exclude.PalSentenceMany", place, uses].Value : L["Plan.Exclude.PalSentence", place].Value, null));
+                list.Add(new Option(new PlanExclusion(PlanExclusion.SpeciesKind, species), L["Plan.Exclude.Species", name].Value,
+                    L["Plan.Exclude.SpeciesSentence", name].Value, null));
+                return list;
+            }
+
+            if (Node is WildLeaf && species == Query.StartSpeciesId) return list;
+            list.Add(new Option(new PlanExclusion(PlanExclusion.SpeciesKind, species), L["Plan.Exclude.Species", name].Value,
+                Node is WildLeaf ? L["Plan.Exclude.WildSentence", name].Value : L["Plan.Exclude.StepSentence", name].Value, null));
+            var group = Data.Pal(species).Group;
+            if (Node is WildLeaf && group != null)
+            {
+                var count = Data.Pals.Count(p => string.Equals(p.Group, group, StringComparison.OrdinalIgnoreCase));
+                list.Add(new Option(new PlanExclusion(PlanExclusion.GroupKind, group), L["Plan.Exclude.Group", GroupName(group)].Value,
+                    L["Plan.Exclude.GroupSentence", GroupName(group), count].Value, count));
+            }
+
+            return list;
+        }
+    }
+
+    private string PartnerName => NodeAlternatives.StepOf(Plan!, Node!) is { } s ? SpeciesName((ReferenceEquals(s.ParentA, Node) ? s.ParentB : s.ParentA).SpeciesId) : string.Empty;
+    private string StepChild => NodeAlternatives.StepOf(Plan!, Node!)?.ChildSpeciesId ?? string.Empty;
+
+    /// <summary>Other wild-catchable species that make the same step with the same partner (T114): the same eggs.</summary>
+    public IReadOnlyList<string> SameStep => Node is WildLeaf wild && Plan != null ? NodeAlternatives.SameStepSpecies(Data, Breeding, Query, Plan, wild) : [];
+
+    private static bool IsPal(PlanNode n, string uid) => n is OwnedLeaf o && o.Pal.Uid == uid;
+}

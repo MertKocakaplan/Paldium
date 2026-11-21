@@ -1,0 +1,37 @@
+@inherits LocalizedComponentBase
+
+<span class="@($"box{(Large ? " l" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+      style="@CellStyle()"
+      role="img"
+      aria-label="@ResolvedLabel()">
+    @for (var i = 0; i < 30; i++)
+    {
+        <i class="@(i == Slot ? "on" : null)"></i>
+    }
+</span>
+
+@code {
+    [Parameter] public int? Slot { get; set; }
+    [Parameter] public int? Cell { get; set; }
+    [Parameter] public int? Gap { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string? CellStyle()
+    {
+        if (Cell == null && Gap == null) return null;
+        var parts = new List<string>(2);
+        if (Cell is { } c) parts.Add($"--c:{c.ToString(CultureInfo.InvariantCulture)}px");
+        if (Gap is { } g) parts.Add($"--gap:{g.ToString(CultureInfo.InvariantCulture)}px");
+        return string.Join(';', parts);
+    }
+
+    private string ResolvedLabel()
+    {
+        if (!string.IsNullOrEmpty(AriaLabel)) return AriaLabel;
+        if (Slot is { } s and >= 0 and < 30)
+            return L["Location.RowCol", s / 6 + 1, s % 6 + 1].Value;
+        return L["Common.Unknown"].Value;
+    }
+}

@@ -1,0 +1,145 @@
+@page "/technology"
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using Paldium.App.Pages.TechnologyParts
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject TechnologyStateService State
+@inject IJSRuntime JS
+
+@* The technology tree (screens/technology.md, T128): what each level unlocks, from the game data only; nothing here is about the player. *@
+<div class="b r tch" @onkeydown="OnKeyDown">
+    <div class="tchh">
+        <div class="tcht">
+            <h1>@L["Tech.Title"]</h1>
+            <p>@L["Tech.Note"]</p>
+        </div>
+        <div class="tchf">
+            <SearchField Value="@State.Query" ValueChanged="SetQuery" Placeholder="@L["Tech.Search"].Value" />
+            <button type="button" class="tcpill" role="checkbox" aria-checked="@(State.AncientOnly ? "true" : "false")" @onclick="ToggleAncient">@L["Tech.Filter.Ancient"]</button>
+            <button type="button" class="tcpill" role="checkbox" aria-checked="@(State.PrerequisiteOnly ? "true" : "false")" @onclick="TogglePrerequisite">@L["Tech.Filter.Prereq"]</button>
+        </div>
+    </div>
+
+    @if (_all.Count == 0)
+    {
+        <p class="tcmsg">@L["Tech.NoData"]</p>
+    }
+    else
+    {
+        var levels = Levels();
+        <div class="tcw">
+            <div class="tcl" @ref="_list">
+                @if (levels.Count == 0)
+                {
+                    <div class="tcmsg">
+                        <span>@L["Tech.Empty"]</span>
+                        <button type="button" class="lnk" @onclick="ClearFilters">@L["Tech.ClearFilters"]</button>
+                    </div>
+                }
+                @foreach (var row in levels)
+                {
+                    <TechLevelRow @key="row.Level" Row="@row" SelectedId="@_selectedId" ById="@_byId" OnSelect="Select" />
+                }
+            </div>
+            <nav class="tcj" aria-label="@L["Tech.Jump"].Value">
+                @foreach (var level in TechnologyModel.JumpLevels)
+                {
+                    var target = level;
+                    <button type="button" class="num" @onclick="() => JumpAsync(target)">@level</button>
+                }
+            </nav>
+        </div>
+    }
+
+    <TechDetail Tech="@Selected" All="@_all" ById="@_byId" OnSelect="Select" OnClose="CloseDetail" />
+</div>
+
+@code {
+    private ElementReference _list;
+    private IReadOnlyList<TechnologyInfo> _all = [];
+    private IReadOnlyDictionary<string, TechnologyInfo> _byId = new Dictionary<string, TechnologyInfo>();
+    private string? _selectedId;
+    private bool _restored;
+    private (TechFilter Filter, string Lang)? _levelsKey;
+    private IReadOnlyList<TechLevel> _levels = [];
+
+    /// <summary>A search typed in the address (technology?q=...) fills the search box.</summary>
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private TechnologyInfo? Selected => _selectedId != null && _byId.TryGetValue(_selectedId, out var t) ? t : null;
+
+    private TechFilter Filter => new(State.Query, State.AncientOnly, State.PrerequisiteOnly);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _all = Data.Technologies;
+        _byId = _all.ToDictionary(t => t.Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Q != null && Q != State.Query) State.Query = Q;
+    }
+
+    private IReadOnlyList<TechLevel> Levels()
+    {
+        var key = (Filter, Lang);
+        if (_levelsKey != key)
+        {
+            _levels = TechnologyModel.Levels(_all, Filter, Lang);
+            _levelsKey = key;
+        }
+
+        return _levels;
+    }
+
+    private void SetQuery(string value) => State.Query = value;
+
+    private void ToggleAncient() => State.AncientOnly = !State.AncientOnly;
+
+    private void TogglePrerequisite() => State.PrerequisiteOnly = !State.PrerequisiteOnly;
+
+    private void ClearFilters()
+    {
+        State.Query = "";
+        State.AncientOnly = false;
+        State.PrerequisiteOnly = false;
+    }
+
+    private void Select(string id) => _selectedId = id;
+
+    private void CloseDetail() => _selectedId = null;
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _selectedId != null) _selectedId = null;
+    }
+
+    private async Task JumpAsync(int level)
+    {
+        if (TechnologyModel.JumpTarget(Levels(), level) is not { } target) return;
+        try { await JS.InvokeVoidAsync("pbScrollToLevel", _list, "tech-level-" + target); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_restored || _all.Count == 0) return;
+        _restored = true;
+        try { await JS.InvokeVoidAsync("pbSetScrollTop", _list, State.ScrollTop); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // The scroll position is kept for the next visit (not written to disk).
+        try { State.ScrollTop = await JS.InvokeAsync<double>("pbGetScrollTop", _list); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or ObjectDisposedException) { }
+        Dispose();
+    }
+}

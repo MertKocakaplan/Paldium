@@ -1,0 +1,95 @@
+@namespace Paldium.App.Pages.TechnologyParts
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+
+@* The detail drawer of a technology (screens/technology.md): level and points, the game description, prerequisites, what it unlocks and what it leads to. *@
+<SidePanel Open="@(Tech != null)" Drawer="true" Width="440" Class="tchd" Title="@(Tech != null ? L["Tech.Level", Tech.Level].Value : "")" OnClose="OnClose">
+    <ChildContent>
+        @if (Tech is { } t)
+        {
+            var requirement = t.Requires;
+            var leads = TechnologyModel.LeadsTo(All, t);
+            <div class="who">
+                @if (TechnologyModel.IconOf(t) is { } icon) { <img class="tcdi" src="@("gamedata/" + icon)" width="48" height="48" alt="" /> }
+                <div class="who-txt">
+                    <div class="t"><span class="nm">@t.Names.Get(Lang)</span></div>
+                    <div class="m num">@(t.Ancient ? L["Tech.AncientPointsLong", t.Cost].Value : L["Tech.Points", t.Cost].Value)</div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(t.Descriptions.Get(Lang)))
+            {
+                <p class="tcdd">@t.Descriptions.Get(Lang)</p>
+            }
+
+            @if (TechnologyModel.HasPrerequisite(t))
+            {
+                <div class="tcds">
+                    <h3>@L["Tech.Prerequisites"]</h3>
+                    <ul class="tcdl">
+                        @if (requirement!.TechnologyId != null)
+                        {
+                            var before = ById.GetValueOrDefault(requirement.TechnologyId);
+                            <li>
+                                @if (before != null)
+                                {
+                                    <span>@L["Tech.RequiresLabel"]</span>
+                                    <button type="button" class="lnk" @onclick="() => OnSelect.InvokeAsync(before.Id)">@before.Names.Get(Lang)</button>
+                                }
+                                else
+                                {
+                                    <span>@L["Tech.Requires", requirement.TechnologyId]</span>
+                                }
+                            </li>
+                        }
+                        @if (requirement.TowerBossType != null)
+                        {
+                            <li>@L["Tech.Boss", requirement.TowerBossName?.Get(Lang) ?? requirement.TowerBossType]</li>
+                        }
+                        @if (requirement.ResearchId != null)
+                        {
+                            <li>@L["Tech.Research", requirement.ResearchName?.Get(Lang) ?? requirement.ResearchId]</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (t.Unlocks.Count > 0)
+            {
+                <div class="tcds">
+                    <h3>@L["Tech.Unlocks"] <span class="m num">@t.Unlocks.Count</span></h3>
+                    <ul class="tcdu">
+                        @foreach (var unlock in t.Unlocks)
+                        {
+                            <li>
+                                @if (unlock.IconPath != null) { <img src="@("gamedata/" + unlock.IconPath)" width="28" height="28" alt="" loading="lazy" /> } else { <span class="none"></span> }
+                                <span>@unlock.Name.Get(Lang)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (leads.Count > 0)
+            {
+                <div class="tcds">
+                    <h3>@L["Tech.LeadsTo"]</h3>
+                    <ul class="tcdl">
+                        @foreach (var next in leads)
+                        {
+                            <li><button type="button" class="lnk" @onclick="() => OnSelect.InvokeAsync(next.Id)">@next.Names.Get(Lang)</button> <span class="m num">@L["Tech.Level", next.Level]</span></li>
+                        }
+                    </ul>
+                </div>
+            }
+        }
+    </ChildContent>
+</SidePanel>
+
+@code {
+    [Parameter] public TechnologyInfo? Tech { get; set; }
+    [Parameter] public IReadOnlyList<TechnologyInfo> All { get; set; } = [];
+    [Parameter] public IReadOnlyDictionary<string, TechnologyInfo> ById { get; set; } = new Dictionary<string, TechnologyInfo>();
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

@@ -1,0 +1,309 @@
+@namespace Paldium.App.Pages.CalculatorTabs
+@using Paldium.Core.Breeding
+@using Paldium.Core.Planning
+@using Paldium.Core.Probability
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IBreedingCalculator Breeding
+@inject IPassiveOddsCalculator Odds
+@inject CalculatorStateService CalcState
+@inject SettingsStore Store
+@inject PlannerStateService PlannerState
+@inject NavigationManager Navigation
+
+@if (Child != null && OwnedA != null && OwnedB != null)
+{
+    var aPassives = OwnedA.Passives;
+    var bPassives = OwnedB.Passives;
+    var maxPassives = Data.Mechanics.MaxPassives;
+    var current = ComputeEffective(CalcState.PairDesiredPassives, CalcState.PairMaxUnwanted, CalcState.PairTargetGender, CalcState.SpecialCakeId);
+    var altUnwantedCount = CalcState.PairMaxUnwanted < 3 ? CalcState.PairMaxUnwanted + 1 : 0;
+    var altUnwanted = ComputeEffective(CalcState.PairDesiredPassives, altUnwantedCount, CalcState.PairTargetGender, CalcState.SpecialCakeId);
+    var flipGender = CalcState.PairTargetGender == GenderReq.Any
+        ? (Child.MaleProbability < 1.0 ? GenderReq.Female : GenderReq.Male)
+        : GenderReq.Any;
+    var altGender = ComputeEffective(CalcState.PairDesiredPassives, CalcState.PairMaxUnwanted, flipGender, CalcState.SpecialCakeId);
+
+    <aside class="oddsp p" aria-labelledby="od-h">
+        <div class="ih">
+            <h2 id="od-h">@L["Calculator.Tab.PassiveOdds"]</h2>
+            <span class="m">@L["Odds.BothParentsFromOwned"]</span>
+        </div>
+        <div class="body">
+            <div class="fld">
+                <span class="l">
+                    @L["Odds.DesiredHeader", CalcState.PairDesiredPassives.Count, maxPassives]
+                    <span class="m">@L["Odds.FilledFromPositive"]</span>
+                </span>
+                <div class="sock">
+                    @for (var i = 0; i < CalcState.PairDesiredPassives.Count; i++)
+                    {
+                        var idx = i;
+                        var pid = CalcState.PairDesiredPassives[idx];
+                        var passive = TryPassive(pid);
+                        var name = passive?.Names.Get(Lang) ?? pid;
+                        var rank = passive?.Rank ?? 1;
+                        var src = SourceTag(pid, aPassives, bPassives);
+                        var missing = src == "—";
+                        var negClass = rank < 0 ? " neg" : "";
+                        var zeroClass = missing ? " zero" : "";
+                        var exclude = CalcState.PairDesiredPassives.Where((_, j) => j != idx).ToList();
+
+                        <div class="@($"srow{negClass}{zeroClass}")">
+                            <PassivePicker Exclude="@exclude" OnPick="id => ReplaceDesiredAsync(idx, id)" Class="sock-picker-wrap">
+                                <button type="button"
+                                        class="sock-main"
+                                        aria-label="@($"{name}, {src}")"
+                                        @onclick="context">
+                                    <RankGlyph Rank="@rank" Size="16" />
+                                    <span class="n">@name</span>
+                                    <span class="c">@src</span>
+                                </button>
+                            </PassivePicker>
+                            <button type="button"
+                                    class="x"
+                                    title="@L["Common.Remove"].Value"
+                                    aria-label="@($"{L["Common.Remove"].Value}: {name}")"
+                                    @onclick="() => RemoveDesiredAsync(idx)">
+                                <Icon Name="x" Size="14" />
+                            </button>
+                        </div>
+                    }
+
+                    @if (CalcState.PairDesiredPassives.Count < maxPassives)
+                    {
+                        <PassivePicker Exclude="@CalcState.PairDesiredPassives" OnPick="AddDesiredAsync">
+                            <button type="button" class="add" @onclick="context">
+                                <Icon Name="plus" Size="14" />
+                                <span class="n">@L["PassivePicker.Add"]</span>
+                            </button>
+                        </PassivePicker>
+                    }
+                </div>
+            </div>
+
+            <div class="ctlrow">
+                <div class="ctl">
+                    <span class="l">@L["Odds.MaxUnwantedShort"]</span>
+                    <Segmented TValue="int"
+                               Items="@MaxUnwantedItems()"
+                               Value="@CalcState.PairMaxUnwanted"
+                               ValueChanged="SetMaxUnwantedAsync"
+                               Numeric="true"
+                               AriaLabel="@L["Odds.MaxUnwanted"].Value" />
+                </div>
+
+                <div class="ctl">
+                    <span class="l">@L["Odds.GenderRequirement"]</span>
+                    <div class="seg" role="radiogroup" aria-label="@L["Odds.GenderRequirement"].Value">
+                        <button type="button"
+                                role="radio"
+                                class="w"
+                                aria-checked="@(CalcState.PairTargetGender == GenderReq.Any ? "true" : "false")"
+                                aria-selected="@(CalcState.PairTargetGender == GenderReq.Any ? "true" : null)"
+                                @onclick="() => SetGenderAsync(GenderReq.Any)">
+                            @L["Pair.GenderAny"]
+                        </button>
+                        <button type="button"
+                                role="radio"
+                                class="w"
+                                aria-label="@L["Common.MaleLower"].Value"
+                                aria-checked="@(CalcState.PairTargetGender == GenderReq.Male ? "true" : "false")"
+                                aria-selected="@(CalcState.PairTargetGender == GenderReq.Male ? "true" : null)"
+                                @onclick="() => SetGenderAsync(GenderReq.Male)">
+                            <GenderIcon Gender="Gender.Male" Size="13" />
+                        </button>
+                        <button type="button"
+                                role="radio"
+                                class="w"
+                                aria-label="@L["Common.FemaleLower"].Value"
+                                aria-checked="@(CalcState.PairTargetGender == GenderReq.Female ? "true" : "false")"
+                                aria-selected="@(CalcState.PairTargetGender == GenderReq.Female ? "true" : null)"
+                                @onclick="() => SetGenderAsync(GenderReq.Female)">
+                            <GenderIcon Gender="Gender.Female" Size="13" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="res">
+                <div>
+                    <span class="k">@L["Odds.PerEggShort"]</span>
+                    <b class="big num">@Percent1(current.Probability)</b>
+                </div>
+                <div>
+                    <span class="k">@L["Odds.ExpectedShort"]</span>
+                    <b class="big num">@Expected(current.ExpectedEggs)</b>
+                    @if (!double.IsPositiveInfinity(current.ExpectedEggs))
+                    {
+                        <span class="k">@L["Plan.EggsWord"]</span>
+                    }
+                </div>
+            </div>
+
+            <EggsHundred Probability="@current.Probability" DesiredCount="@CalcState.PairDesiredPassives.Count" />
+
+            @if (current.Result.Warnings.Contains(PassiveOddsWarnings.DesiredMissing))
+            {
+                <div class="info">
+                    <Icon Name="info" Size="16" />
+                    <span>@L[PassiveOddsWarnings.DesiredMissing]</span>
+                </div>
+            }
+
+            <ul class="what">
+                <li>
+                    <span>@L["Odds.WhatIfAllowUnwanted", altUnwantedCount]</span>
+                    <b class="num">@WhatIfSummary(altUnwanted)</b>
+                </li>
+                <li>
+                    <span>@FlipGenderLabel(flipGender)</span>
+                    <b class="num">@WhatIfSummary(altGender)</b>
+                </li>
+            </ul>
+
+            <button type="button" class="btn2 acc" @onclick="StartInPlannerAsync">
+                @L["Odds.StartInPlannerWithPair"]
+            </button>
+        </div>
+    </aside>
+}
+
+@code {
+    private sealed record EffectiveOdds(PassiveOddsResult Result, double Probability, double ExpectedEggs);
+
+    [Parameter] public PalSpecies? Child { get; set; }
+    [Parameter] public OwnedPal? OwnedA { get; set; }
+    [Parameter] public OwnedPal? OwnedB { get; set; }
+    [Parameter] public EventCallback OnDesiredChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (Child != null && OwnedA != null && OwnedB != null)
+            CalcState.SyncPairDesiredFromParents(OwnedA, OwnedB, Data);
+    }
+
+    private EffectiveOdds ComputeEffective(IReadOnlyList<string> desired, int maxUnwanted, GenderReq gender, string? cakeId)
+    {
+        var result = Odds.Compute(new PassiveOddsQuery(OwnedA!.Passives, OwnedB!.Passives, desired, maxUnwanted, cakeId));
+        var gMult = gender switch
+        {
+            GenderReq.Male => Breeding.ChildGenderProbability(Child!.Id, Gender.Male),
+            GenderReq.Female => Breeding.ChildGenderProbability(Child!.Id, Gender.Female),
+            _ => 1.0,
+        };
+        var p = result.ProbabilityPerEgg * gMult;
+        var exp = p > 0 ? 1.0 / p : double.PositiveInfinity;
+        return new EffectiveOdds(result, p, exp);
+    }
+
+    private async Task AddDesiredAsync(string id)
+    {
+        if (CalcState.PairDesiredPassives.Count >= Data.Mechanics.MaxPassives) return;
+        if (CalcState.PairDesiredPassives.Contains(id, StringComparer.OrdinalIgnoreCase)) return;
+        CalcState.PairDesiredPassives.Add(id);
+        await OnDesiredChanged.InvokeAsync();
+    }
+
+    private async Task ReplaceDesiredAsync(int index, string id)
+    {
+        if (index < 0 || index >= CalcState.PairDesiredPassives.Count) return;
+        if (CalcState.PairDesiredPassives.Where((_, i) => i != index).Contains(id, StringComparer.OrdinalIgnoreCase)) return;
+        CalcState.PairDesiredPassives[index] = id;
+        await OnDesiredChanged.InvokeAsync();
+    }
+
+    private async Task RemoveDesiredAsync(int index)
+    {
+        if (index < 0 || index >= CalcState.PairDesiredPassives.Count) return;
+        CalcState.PairDesiredPassives.RemoveAt(index);
+        await OnDesiredChanged.InvokeAsync();
+    }
+
+    private Task SetMaxUnwantedAsync(int v)
+    {
+        CalcState.PairMaxUnwanted = Math.Clamp(v, 0, 3);
+        return Task.CompletedTask;
+    }
+
+    private Task SetGenderAsync(GenderReq g)
+    {
+        CalcState.PairTargetGender = g;
+        return Task.CompletedTask;
+    }
+
+    private void StartInPlannerAsync()
+    {
+        if (Child == null || OwnedA == null) return;
+        var genderStr = CalcState.PairTargetGender switch
+        {
+            GenderReq.Male => "male",
+            GenderReq.Female => "female",
+            _ => "any",
+        };
+        Store.Update(s => s with
+        {
+            Planner = s.Planner with
+            {
+                TargetId = Child.Id,
+                StartMode = "owned",
+                StartOwnedUid = OwnedA.SelectionKey,
+                StartSpeciesId = null,
+                // Parent A starts the plan; parent B is the preferred Pal (the plan uses it when it can).
+                PreferredUids = OwnedB == null || s.Planner.PreferredUids.Contains(OwnedB.SelectionKey)
+                    ? s.Planner.PreferredUids
+                    : [.. s.Planner.PreferredUids, OwnedB.SelectionKey],
+                DesiredPassives = CalcState.PairDesiredPassives.ToList(),
+                MaxUnwanted = CalcState.PairMaxUnwanted,
+                TargetGender = genderStr,
+                AllowSpecialCake = CalcState.Cake == CalculatorStateService.CakeSpecial,
+            }
+        });
+        PlannerState.Reset();
+        Navigation.NavigateTo("planner");
+    }
+
+    private IReadOnlyList<SegmentedItem<int>> MaxUnwantedItems() =>
+    [
+        new(0, "0"),
+        new(1, "1"),
+        new(2, "2"),
+        new(3, "3"),
+    ];
+
+    private string SourceTag(string id, IReadOnlyList<string> a, IReadOnlyList<string> b)
+    {
+        var inA = a.Contains(id, StringComparer.OrdinalIgnoreCase);
+        var inB = b.Contains(id, StringComparer.OrdinalIgnoreCase);
+        return (inA, inB) switch
+        {
+            (true, true) => "A·B",
+            (true, false) => "A",
+            (false, true) => "B",
+            _ => "—",
+        };
+    }
+
+    private PassiveSkill? TryPassive(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+
+    private string WhatIfSummary(EffectiveOdds odds) => double.IsPositiveInfinity(odds.ExpectedEggs)
+        ? L["Odds.Impossible"].Value
+        : $"{Percent1(odds.Probability)} · {Expected(odds.ExpectedEggs)}";
+
+    private string FlipGenderLabel(GenderReq g) => g switch
+    {
+        GenderReq.Female => L["Odds.WhatIfFemale"].Value,
+        GenderReq.Male => L["Odds.WhatIfMale"].Value,
+        _ => L["Odds.WhatIfGenderAny"].Value,
+    };
+
+    private string Percent1(double v) => v.ToString("P1", CultureInfo.GetCultureInfo(Lang));
+
+    private string Expected(double v) =>
+        double.IsPositiveInfinity(v) ? L["Odds.Impossible"].Value : "~" + v.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+}

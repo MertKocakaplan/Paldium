@@ -1,0 +1,737 @@
+@page "/paldex"
+@using Microsoft.JSInterop
+@using Paldium.App.Pages.PaldexParts
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject SettingsStore Settings
+@inject OwnedScopeService Scope
+@inject CaptureProgressStore Captures
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@{
+    var normalizedView = NormalizeView(_state.View);
+    var isDetail = _selected != null;
+    var isWorkers = !isDetail && _mode == "workers";
+    var isGallery = !isWorkers && !isDetail && (normalizedView is "cards" or "dense");
+    var workClass = (CompactNav || isWorkers || isDetail) ? "work noRail" : "work";
+    var rootClass = isGallery ? "b p x gallery-mode" : "b p x";
+    var activeClauses = (!isWorkers && !isDetail) ? BuildActiveClauses(_state.Filter) : [];
+    var prevNext = (isDetail && _selected != null && _mode == "list")
+        ? PrevNextFor(_selected)
+        : (Prev: (PalSpecies?)null, Next: (PalSpecies?)null);
+}
+
+<div class="@rootClass">
+    <div class="@workClass">
+        @if (!isWorkers && !isDetail)
+        {
+            <FilterRail Drawer="@CompactNav"
+                        PanelKey="paldex"
+                        Open="@_filtersOpen"
+                        OpenChanged="v => _filtersOpen = v"
+                        AnyActive="@(!_state.Filter.IsEmpty)"
+                        OnClear="ClearFilters">
+                <PaldexFilters Filter="_state.Filter"
+                               FilterChanged="SetFilter"
+                               HasElements="_hasElements"
+                               Owned="_owned"
+                               Capture="_capture"
+                               CaptureState="_captureState" />
+            </FilterRail>
+        }
+
+        <div class="@(isDetail ? "main dx" : "main")">
+            @if (isDetail && _selected != null)
+            {
+                <PalDetail Pal="_selected"
+                           PrevPal="prevNext.Prev"
+                           NextPal="prevNext.Next"
+                           OnClose="CloseDetail"
+                           OnSelectPal="SelectFromDetail"
+                           OnShowBestWorkers="ShowBestWorkersFromDetail" />
+            }
+            else if (isWorkers)
+            {
+                <ListHead Title="@L["Nav.Paldex"].Value"
+                          Class="pdx-head">
+                    <Summary>
+                        <Segmented TValue="string"
+                                   Class="modes"
+                                   Items="@ModeItems()"
+                                   Value="@_mode"
+                                   ValueChanged="SetMode"
+                                   AriaLabel="@L["Nav.Paldex"].Value" />
+                        <span class="sum">@L["Workers.Summary", Data.WorkTypes.Count, WorkerRanking.PerColumn]</span>
+                    </Summary>
+                    <ChildContent>
+                        <button type="button"
+                                class="tglrow"
+                                role="checkbox"
+                                aria-checked="@(_workersOwnedOnly ? "true" : "false")"
+                                @onclick="() => _workersOwnedOnly = !_workersOwnedOnly">
+                            <span class="use" aria-pressed="@(_workersOwnedOnly ? "true" : "false")">
+                                @if (_workersOwnedOnly)
+                                {
+                                    <Icon Name="check" Size="14" />
+                                }
+                            </span>
+                            <span>@L["Workers.OwnedOnly"]</span>
+                        </button>
+                    </ChildContent>
+                </ListHead>
+                <BestWorkers OwnedOnly="@_workersOwnedOnly" OnSelect="Select" />
+            }
+            else
+            {
+                <ListHead Title="@L["Nav.Paldex"].Value"
+                          ShowFilterButton="@CompactNav"
+                          FilterOpen="@_filtersOpen"
+                          ActiveFilterCount="@activeClauses.Count"
+                          OnToggleFilters="() => _filtersOpen = !_filtersOpen"
+                          Class="pdx-head">
+                    <Summary>
+                        <Segmented TValue="string"
+                                   Class="modes"
+                                   Items="@ModeItems()"
+                                   Value="@_mode"
+                                   ValueChanged="SetMode"
+                                   AriaLabel="@L["Nav.Paldex"].Value" />
+                        <span class="sum">
+                            @RenderSummary(Data.Pals.Count, Results.Count, OwnedSpeciesCount)
+                            @RenderCaptureSummary()
+                        </span>
+                    </Summary>
+                    <ChildContent>
+                        <SortDropdown Options="@SortOptions()"
+                                      Value="@SortCode(_state.Sort)"
+                                      Descending="@_state.Sort.Descending"
+                                      OnSortChanged="OnSortDropdownChanged" />
+                        <ViewSwitch AllowCards="true"
+                                    Value="@normalizedView"
+                                    ValueChanged="SetView" />
+                    </ChildContent>
+                </ListHead>
+
+                <ActiveFilterBar Items="@activeClauses.Select(c => new ActiveFilterItem(c.Key, c.Label)).ToList()"
+                                 OnRemove="k => RemoveFilterClause(k)"
+                                 OnClearAll="ClearFilters" />
+
+                @if (Results.Count == 0)
+                {
+                    <div class="gw">
+                        <EmptyResult Title="@L["Paldex.EmptyTitle"].Value"
+                                     Reason="@L["Paldex.EmptyReason"].Value"
+                                     Removals="@BuildEmptyRemovals(activeClauses)"
+                                     OnRemove="k => RemoveFilterClause(k)"
+                                     OnClearAll="ClearFilters" />
+                    </div>
+                }
+                else if (isGallery)
+                {
+                    var isDense = normalizedView == "dense";
+                    <CardGrid TItem="PalSpecies"
+                              Items="Results"
+                              Dense="@isDense"
+                              CardMin="@(isDense ? 136 : 200)"
+                              CardHeight="@(isDense ? 194 : 324)"
+                              CardGap="@(isDense ? 10 : 14)"
+                              KeySelector="p => p.Id"
+                              SelectedKey="@_selected?.Id"
+                              AriaLabel="@L["Paldex.CardsListAria"].Value">
+                        <ItemTemplate Context="pal">
+                            <SpeciesCard Pal="pal"
+                                         Dense="@isDense"
+                                         OwnedStats="@StatsOf(pal)"
+                                         Selected="@(_selected?.Id == pal.Id)"
+                                         OnOpen="Select" />
+                        </ItemTemplate>
+                    </CardGrid>
+                }
+                else
+                {
+                    <DataTable TItem="PalSpecies"
+                               Items="Results"
+                               Columns="@TableColumns()"
+                               RowHeight="56"
+                               KeySelector="p => p.Id"
+                               SelectedKey="@_selected?.Id"
+                               SortBy="@TableSortBy()"
+                               SortDescending="@_state.Sort.Descending"
+                               OnSort="OnTableSort"
+                               OnRowActivate="Select"
+                               Class="pdx-tbl">
+                        <RowTemplate Context="pal">
+                            @{
+                                var elements = ResolveElements(pal);
+                            }
+                            <td class="num">#@pal.DexLabel</td>
+                            <td>
+                                <div class="pdx-pal">
+                                    <img class="pal" src="@("gamedata/" + pal.IconPath)" width="40" height="40" alt="" />
+                                    <div class="pdx-pal-tx">
+                                        <span class="nm">@pal.Names.Get(Lang)</span>
+                                        @if (elements.Count > 0)
+                                        {
+                                            <span class="els">
+                                                @foreach (var el in elements)
+                                                {
+                                                    <img src="@("gamedata/" + el.IconPath)" width="16" height="16" alt="@el.Names.Get(Lang)" title="@el.Names.Get(Lang)" />
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td><OwnedCountBadge Stats="@StatsOf(pal)" /></td>
+                            <td class="cap">@CaptureCell(pal)</td>
+                            <td class="num">@pal.BreedingPower.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num">@pal.Rarity.ToString(CultureInfo.InvariantCulture)</td>
+                            <td><WorkLine Pal="pal" CompactInline="true" /></td>
+                            <td class="num">@pal.Stats.Hp.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num">@pal.Stats.Attack.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num">@pal.Stats.Defense.ToString(CultureInfo.InvariantCulture)</td>
+                        </RowTemplate>
+                    </DataTable>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
+
+    /// <summary>Optional <c>?pal=SpeciesId</c>: opens the detail of that species.</summary>
+    [SupplyParameterFromQuery(Name = "pal")]
+    public string? PalParameter { get; set; }
+
+    /// <summary>Optional <c>?active=ActiveSkillId</c>: filters the species list to Pals that learn that active skill.</summary>
+    [SupplyParameterFromQuery(Name = "active")]
+    public string? ActiveSkillParameter { get; set; }
+
+    private PaldexSettings _state = new();
+    private string _mode = "list";
+    private bool _workersOwnedOnly;
+    private bool _hasElements;
+    private bool _filtersOpen;
+    private PalSpecies? _selected;
+
+    private IReadOnlyList<PalSpecies>? _results;
+    private (PalFilter, PalSort, string, int)? _resultsKey;
+
+    private IReadOnlyDictionary<string, OwnedSpeciesStats> _owned = new Dictionary<string, OwnedSpeciesStats>();
+    private CaptureRecord? _capture;
+    private CaptureAvailability _captureState = CaptureAvailability.NoData;
+    private int _ownedVersion;
+    private readonly OnceParameter _palParameter = new();
+    private readonly OnceParameter _activeParameter = new();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _state = Settings.Current.Paldex;
+        _owned = OwnedSpeciesStats.Compute(Scope.ScopedPals);
+        ResolveCapture();
+        Scope.Changed += OnOwnedChanged;
+        Captures.Changed += OnOwnedChanged;
+        _hasElements = PalQuery.HasElementData(Data);
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (_activeParameter.IsNew(ActiveSkillParameter) && !string.IsNullOrEmpty(ActiveSkillParameter))
+        {
+            var matched = Data.Actives.FirstOrDefault(a =>
+                string.Equals(a.Id, ActiveSkillParameter, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                _selected = null;
+                _mode = "list";
+                SetFilter(new PalFilter { ActiveSkill = matched.Id });
+            }
+        }
+
+        if (!_palParameter.IsNew(PalParameter) || string.IsNullOrEmpty(PalParameter)) return;
+        if (Data.TryNormalizePalId(PalParameter, out var id))
+        {
+            _selected = Data.Pal(id);
+            _mode = "list";
+        }
+    }
+
+    private void OnOwnedChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        _owned = OwnedSpeciesStats.Compute(Scope.ScopedPals);
+        ResolveCapture();
+        _ownedVersion++;
+        StateHasChanged();
+    });
+
+    // The capture record of the "I am" player (T121): the save file of the world or the mod's file, whichever was read later.
+    private void ResolveCapture() => (_captureState, _capture) = Captures.Resolve(Settings.Current.Scope.MyPlayerId);
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnOwnedChanged;
+        Captures.Changed -= OnOwnedChanged;
+        base.Dispose();
+    }
+
+    private IReadOnlyList<PalSpecies> Results
+    {
+        get
+        {
+            var key = (_state.Filter, _state.Sort, Lang, _ownedVersion);
+            if (_results == null || _resultsKey != key)
+            {
+                _results = PalQuery.Run(Data, _state.Filter, _state.Sort, Lang, _owned, _capture).ToList();
+                _resultsKey = key;
+            }
+            return _results;
+        }
+    }
+
+    private int OwnedSpeciesCount => Data.Pals.Count(p => _owned.TryGetValue(p.Id, out var st) && st.Total > 0);
+    private OwnedSpeciesStats? StatsOf(PalSpecies pal) => _owned.GetValueOrDefault(pal.Id);
+
+    private static string NormalizeView(string? view) => view switch
+    {
+        "table" => "table",
+        "dense" => "dense",
+        _ => "cards",
+    };
+
+    private IReadOnlyList<SegmentedItem<string>> ModeItems() =>
+    [
+        new("list", L["Paldex.ModeSpecies"].Value, IsWord: true),
+        new("workers", L["Paldex.ModeWorkers"].Value, IsWord: true),
+    ];
+
+    private void SetMode(string mode)
+    {
+        _mode = mode;
+        _filtersOpen = false;
+    }
+
+    private void Save() => Settings.Update(s => s with { Paldex = _state });
+
+    private void SetFilter(PalFilter filter)
+    {
+        _state = _state with { Filter = filter };
+        Save();
+    }
+
+    private void ClearFilters()
+    {
+        _state = _state with { Filter = new PalFilter() };
+        Save();
+    }
+
+    private void SetView(string view)
+    {
+        _state = _state with { View = NormalizeView(view) };
+        Save();
+    }
+
+    private void OnSortDropdownChanged((string Key, bool Descending) sort)
+    {
+        _state = _state with { Sort = ParseSort(sort.Key, sort.Descending) };
+        Save();
+    }
+
+    private void OnTableSort(string keyName)
+    {
+        if (!Enum.TryParse<PalSortKey>(keyName, out var key)) return;
+        var current = _state.Sort;
+        _state = _state with
+        {
+            Sort = current.Key == key
+                ? current with { Descending = !current.Descending }
+                : new PalSort { Key = key, Descending = key != PalSortKey.DexNo && key != PalSortKey.Name && key != PalSortKey.BreedingPower && key != PalSortKey.CaptureBonus },
+        };
+        Save();
+    }
+
+    private string? TableSortBy() => _state.Sort.Key == PalSortKey.Work ? null : _state.Sort.Key.ToString();
+
+    private async Task Select(PalSpecies pal)
+    {
+        try { await JS.InvokeVoidAsync("pbPaldex.saveScroll"); }
+        catch (JSDisconnectedException) { }
+        _selected = pal;
+        _filtersOpen = false;
+    }
+
+    private void SelectFromDetail(PalSpecies pal)
+    {
+        _selected = pal;
+        _filtersOpen = false;
+    }
+
+    private void ShowBestWorkersFromDetail()
+    {
+        _selected = null;
+        _mode = "workers";
+        _filtersOpen = false;
+        if (!string.IsNullOrEmpty(PalParameter)) Navigation.NavigateTo("paldex", replace: true);
+    }
+
+    private void CloseDetail()
+    {
+        _selected = null;
+        _restoreListScroll = true;
+        if (!string.IsNullOrEmpty(PalParameter)) Navigation.NavigateTo("paldex", replace: true);
+    }
+
+    private bool _restoreListScroll;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_restoreListScroll || _selected != null || _mode != "list") return;
+        _restoreListScroll = false;
+        try { await JS.InvokeVoidAsync("pbPaldex.restoreScroll"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private (PalSpecies? Prev, PalSpecies? Next) PrevNextFor(PalSpecies current)
+    {
+        var list = Results;
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (string.Equals(list[i].Id, current.Id, StringComparison.OrdinalIgnoreCase))
+                return (i > 0 ? list[i - 1] : null, i + 1 < list.Count ? list[i + 1] : null);
+        }
+        return (null, null);
+    }
+
+    private List<SortOption> SortOptions()
+    {
+        var list = new List<SortOption>
+        {
+            new(nameof(PalSortKey.DexNo), L["Sort.PalNo"].Value, DefaultDescending: false),
+            new(nameof(PalSortKey.Name), L["Sort.Name"].Value, DefaultDescending: false),
+            new(nameof(PalSortKey.BreedingPower), Term("BreedingPower"), DefaultDescending: false),
+            new(nameof(PalSortKey.Rarity), L["Sort.Rarity"].Value, DefaultDescending: true),
+            new(nameof(PalSortKey.OwnedCount), L["Sort.OwnedCount"].Value, DefaultDescending: true),
+            new(nameof(PalSortKey.CaptureBonus), L["Sort.CaptureBonus"].Value, DefaultDescending: false),
+        };
+
+        PalSortKey[] statKeys =
+        [
+            PalSortKey.Hp, PalSortKey.Attack, PalSortKey.Defense,
+            PalSortKey.WalkSpeed, PalSortKey.RunSpeed, PalSortKey.RideSprintSpeed,
+            PalSortKey.TransportSpeed, PalSortKey.Stamina, PalSortKey.MaxFullStomach,
+            PalSortKey.FoodAmount, PalSortKey.CraftSpeed, PalSortKey.Price,
+        ];
+        foreach (var k in statKeys)
+            list.Add(new(k.ToString(), L["Sort." + k].Value, DefaultDescending: true));
+
+        foreach (var w in Data.WorkTypes)
+            list.Add(new("Work:" + w.Id, L["Sort.Work", w.Names.Get(Lang)].Value, DefaultDescending: true));
+
+        return list;
+    }
+
+    private static string SortCode(PalSort sort) =>
+        sort.Key == PalSortKey.Work ? "Work:" + sort.WorkType : sort.Key.ToString();
+
+    private static PalSort ParseSort(string code, bool descending) =>
+        code.StartsWith("Work:", StringComparison.Ordinal)
+            ? new PalSort { Key = PalSortKey.Work, WorkType = code["Work:".Length..], Descending = descending }
+            : new PalSort { Key = Enum.Parse<PalSortKey>(code), Descending = descending };
+
+    private const string MimogIcon = "gamedata/icons/items/Relic_12.png";
+
+    private IReadOnlyList<DataTableColumn> TableColumns() =>
+    [
+        new(L["Paldex.ColNo"].Value, "col-spno", nameof(PalSortKey.DexNo), Align: "n"),
+        new(L["Paldex.ColPalHeader"].Value, "col-sppal", nameof(PalSortKey.Name)),
+        new(L["Paldex.ColOwnedHeader"].Value, "col-shown", nameof(PalSortKey.OwnedCount)),
+        new(L["Paldex.Col.Capture"].Value, "col-capt", nameof(PalSortKey.CaptureBonus), IconSrc: MimogIcon, Tip: L["Paldex.CaptureHeadTip"].Value),
+        new(L["Paldex.ColPowerHeader"].Value, "col-pwr", nameof(PalSortKey.BreedingPower), Align: "n"),
+        new(L["Paldex.Rarity"].Value, "col-rar", nameof(PalSortKey.Rarity), Align: "n"),
+        new(L["Paldex.ColWorksHeader"].Value, "col-works"),
+        new(L["Paldex.StatHpShort"].Value, "col-stat", nameof(PalSortKey.Hp), Align: "n"),
+        new(L["Paldex.StatAtkShort"].Value, "col-stat", nameof(PalSortKey.Attack), Align: "n"),
+        new(L["Paldex.StatDefShort"].Value, "col-stat", nameof(PalSortKey.Defense), Align: "n"),
+    ];
+
+    private List<ElementInfo> ResolveElements(PalSpecies pal)
+    {
+        var list = new List<ElementInfo>(pal.Elements.Count);
+        foreach (var elId in pal.Elements)
+        {
+            var found = Data.Elements.FirstOrDefault(e => string.Equals(e.Id, elId, StringComparison.OrdinalIgnoreCase));
+            if (found != null) list.Add(found);
+        }
+        return list;
+    }
+
+    private sealed record PalClauseSpec(
+        string Key,
+        string Label,
+        Func<PalSpecies, bool> Predicate,
+        Func<PalFilter, PalFilter> Remove);
+
+    private List<PalClauseSpec> BuildActiveClauses(PalFilter f)
+    {
+        var list = new List<PalClauseSpec>();
+
+        if (!string.IsNullOrWhiteSpace(f.Text))
+        {
+            var q = f.Text.Trim();
+            list.Add(new(
+                "text",
+                $"{L["Paldex.FilterSpecies"].Value}: {q}",
+                p => PalTextSearch.Matches(p, q),
+                x => x with { Text = null }));
+        }
+
+        if (f.Elements.Count > 0)
+        {
+            var elNames = string.Join(", ", f.Elements.Select(id =>
+                Data.Elements.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase))?.Names.Get(Lang) ?? id));
+            list.Add(new(
+                "elements",
+                L["Paldex.ChipElement", elNames].Value,
+                p => p.Elements.Any(e => f.Elements.Contains(e, StringComparer.OrdinalIgnoreCase)),
+                x => x with { Elements = [] }));
+        }
+
+        foreach (var workType in Data.WorkTypes)
+        {
+            if (!f.MinWork.TryGetValue(workType.Id, out var minLv)) continue;
+            var id = workType.Id;
+            list.Add(new(
+                "work:" + id,
+                L["Paldex.ChipWork", workType.Names.Get(Lang), minLv].Value,
+                p => p.Work.TryGetValue(id, out var lv) && lv >= minLv,
+                x => RemoveWorkKey(x, id)));
+        }
+
+        if (f.Ownership != PalOwnership.Any)
+        {
+            var own = f.Ownership;
+            var label = own switch
+            {
+                PalOwnership.Pair => L["Paldex.OwnPair"].Value,
+                _ => L["Ownership." + own].Value,
+            };
+            list.Add(new(
+                "ownership",
+                L["Paldex.ChipOwnership", label].Value,
+                p => MatchesOwnership(p, own),
+                x => x with { Ownership = PalOwnership.Any }));
+        }
+
+        if (f.Capture != PalCaptureFilter.Any && _capture != null)
+        {
+            var capture = f.Capture;
+            var record = _capture;
+            list.Add(new(
+                "capture",
+                L["Paldex.ChipCapture", L["Filter.Capture." + capture].Value].Value,
+                p => PalQuery.MatchesCapture(p, capture, record),
+                x => x with { Capture = PalCaptureFilter.Any }));
+        }
+
+        if (f.ObtainMethods.Count > 0)
+        {
+            var methodNames = string.Join(", ", f.ObtainMethods.Select(Terms.ObtainMethod));
+            var selected = f.ObtainMethods;
+            list.Add(new(
+                "obtain",
+                L["Paldex.ChipObtain", methodNames].Value,
+                p => p.Obtain != null && p.Obtain.Methods.Any(m => selected.Contains(m, StringComparer.OrdinalIgnoreCase)),
+                x => x with { ObtainMethods = [], ObtainOnly = false }));
+        }
+
+        if (f.MinRarity != null || f.MaxRarity != null)
+        {
+            var minAll = Data.Pals.Select(p => p.Rarity).DefaultIfEmpty(1).Min();
+            var maxAll = Data.Pals.Select(p => p.Rarity).DefaultIfEmpty(20).Max();
+            var lo = f.MinRarity ?? minAll;
+            var hi = f.MaxRarity ?? maxAll;
+            list.Add(new(
+                "rarity",
+                L["Paldex.ChipRarity", lo, hi].Value,
+                p => (f.MinRarity is null || p.Rarity >= f.MinRarity) && (f.MaxRarity is null || p.Rarity <= f.MaxRarity),
+                x => x with { MinRarity = null, MaxRarity = null }));
+        }
+
+        if (f.Nocturnal is { } nocturnal)
+        {
+            list.Add(new(
+                "nocturnal",
+                $"{L["Paldex.FilterNocturnal"].Value}: {(nocturnal ? L["Common.Yes"].Value : L["Common.No"].Value)}",
+                p => p.Nocturnal == nocturnal,
+                x => x with { Nocturnal = null }));
+        }
+
+        if (f.Variant is { } variant)
+        {
+            list.Add(new(
+                "variant",
+                $"{L["Paldex.FilterVariant"].Value}: {(variant ? L["Common.Yes"].Value : L["Common.No"].Value)}",
+                p => p.IsVariant == variant,
+                x => x with { Variant = null }));
+        }
+
+        if (f.SameSpeciesOnly is { } same)
+        {
+            list.Add(new(
+                "sameSpecies",
+                $"{L["Paldex.FilterSameSpecies"].Value}: {(same ? L["Common.Yes"].Value : L["Common.No"].Value)}",
+                p => p.BreedingFlags.SameSpeciesOnly == same,
+                x => x with { SameSpeciesOnly = null }));
+        }
+
+        if (f.WildCatchable is { } wild)
+        {
+            list.Add(new(
+                "wildCatchable",
+                $"{L["Paldex.FilterWildCatchable"].Value}: {(wild ? L["Common.Yes"].Value : L["Common.No"].Value)}",
+                p => Data.IsWildCatchable(p.Id) == wild,
+                x => x with { WildCatchable = null }));
+        }
+
+        if (!string.IsNullOrWhiteSpace(f.ActiveSkill))
+        {
+            var skillId = f.ActiveSkill;
+            var skillName = FindSkillName(skillId);
+            list.Add(new(
+                "activeSkill",
+                $"{L["Paldex.ChipActiveSkill"].Value}: {skillName}",
+                p => p.AttackLearnset.Any(e => string.Equals(e.SkillId, skillId, StringComparison.OrdinalIgnoreCase)),
+                x => x with { ActiveSkill = null }));
+        }
+
+        return list;
+    }
+
+    private string FindSkillName(string id)
+    {
+        try { return Data.Active(id).Names.Get(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private bool MatchesOwnership(PalSpecies pal, PalOwnership ownership)
+    {
+        var stats = _owned.GetValueOrDefault(pal.Id) ?? OwnedSpeciesStats.None;
+        return ownership switch
+        {
+            PalOwnership.Owned => stats.Total > 0,
+            PalOwnership.NotOwned => stats.Total == 0,
+            PalOwnership.MissingGender => stats.IsMissingGender(pal.MaleProbability),
+            PalOwnership.Pair => stats.HasPair,
+            _ => true,
+        };
+    }
+
+    private static PalFilter RemoveWorkKey(PalFilter f, string workId)
+    {
+        var next = new Dictionary<string, int>(f.MinWork);
+        next.Remove(workId);
+        return f with { MinWork = next };
+    }
+
+    private void RemoveFilterClause(string key)
+    {
+        var clauses = BuildActiveClauses(_state.Filter);
+        var found = clauses.FirstOrDefault(c => c.Key == key);
+        if (found != null)
+            SetFilter(found.Remove(_state.Filter));
+    }
+
+    private IReadOnlyList<EmptyRemovalItem> BuildEmptyRemovals(List<PalClauseSpec> clauses)
+    {
+        if (clauses.Count == 0) return [];
+        var coreClauses = clauses.Select(c => new FilterClause<PalSpecies>(c.Key, c.Predicate)).ToList();
+        var results = FilterRemovalHelper.ComputeRemovals(Data.Pals, coreClauses);
+        var byKey = clauses.ToDictionary(c => c.Key);
+        return results.Select(r =>
+        {
+            var label = byKey[r.Key].Label;
+            return new EmptyRemovalItem(
+                r.Key,
+                label,
+                L["Paldex.RemainCount", r.RemainingCount].Value,
+                r.RemainingCount);
+        }).ToList();
+    }
+
+    private RenderFragment RenderSummary(int totalSpecies, int shownSpecies, int ownedSpecies) => __builder =>
+    {
+        var shownPattern = L["Paldex.SummaryShown", "\x01", "\x02"].Value;
+        @RenderBoldTokenized(shownPattern, totalSpecies.ToString(CultureInfo.InvariantCulture), shownSpecies.ToString(CultureInfo.InvariantCulture))
+        <span class="tx">
+            <text> </text>
+            @{
+                var ownedPattern = L["Paldex.SummaryOwned", "\x01"].Value;
+            }
+            @RenderBoldTokenized(ownedPattern, ownedSpecies.ToString(CultureInfo.InvariantCulture), string.Empty)
+        </span>
+    };
+
+    // "· 2/299 species 5/5": the species that are finished out of the ones that can be caught (nothing when no record is known).
+    private RenderFragment RenderCaptureSummary() => __builder =>
+    {
+        if (_capture == null) return;
+        var (done, capturable) = CaptureBarModel.Summary(_capture, Data.Pals);
+        var pattern = L["Paldex.CaptureSummary", "\x01", capturable.ToString(CultureInfo.InvariantCulture)].Value;
+        <span class="tx">
+            <text> · </text>
+            <img class="mimg" src="@MimogIcon" width="14" height="14" alt="" />
+            @RenderBoldTokenized(pattern, done.ToString(CultureInfo.InvariantCulture), string.Empty)
+        </span>
+    };
+
+    // The "Capture" cell: five little segments and "3/5" ("✓ 5/5" when finished); "-" for species that cannot be caught and when no record is known.
+    private RenderFragment CaptureCell(PalSpecies pal) => __builder =>
+    {
+        if (_capture == null || !PalQuery.CountsForCapture(pal))
+        {
+            var hint = _capture == null ? (_captureState == CaptureAvailability.NoPlayer ? L["Paldex.CaptureNoPlayer"].Value : L["Paldex.CaptureNoData"].Value) : null;
+            <span class="m" title="@hint">—</span>
+            return;
+        }
+
+        var bar = CaptureBarModel.Of(_capture, pal.Id);
+        var (bonus, done) = (bar.Bonus, bar.Done);
+        var tip = bar.None ? L["Paldex.CaptureNone"].Value : L["Paldex.CaptureTip", bar.Bonus, bar.Total].Value;
+        <span class="capw" title="@tip">
+            <span class="@(done ? "cbar done" : "cbar")" aria-hidden="true">
+                @for (var i = 0; i < CaptureRecord.MaxBonus; i++)
+                {
+                    <i class="@(i < bonus ? "on" : null)"></i>
+                }
+            </span>
+            <span class="@(done ? "cnum done" : "cnum")">@if (done) { <img class="mimg" src="@MimogIcon" width="14" height="14" alt="" /> }@bonus.ToString(CultureInfo.InvariantCulture)/@CaptureRecord.MaxBonus.ToString(CultureInfo.InvariantCulture)</span>
+        </span>
+    };
+
+    private static RenderFragment RenderBoldTokenized(string pattern, string arg0, string arg1) => __builder =>
+    {
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] == '\x01')
+            {
+                <b>@arg0</b>
+            }
+            else if (pattern[i] == '\x02')
+            {
+                <b>@arg1</b>
+            }
+            else
+            {
+                var start = i;
+                while (i + 1 < pattern.Length && pattern[i + 1] != '\x01' && pattern[i + 1] != '\x02') i++;
+                @pattern.Substring(start, i - start + 1)
+            }
+        }
+    };
+}

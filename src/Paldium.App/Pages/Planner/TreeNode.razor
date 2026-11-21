@@ -1,0 +1,229 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using Paldium.Core.Domain
+@using Paldium.Core.Planning
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+<div class="@($"node{(Current ? " now" : "")}{(Gone ? " gone" : "")}{(Selected ? " sel" : "")}{(SamePal ? " same" : "")}")"
+     style="@($"--x:{X}px;--y:{Y}px")"
+     role="button"
+     tabindex="0"
+     aria-pressed="@(Selected ? "true" : "false")"
+     aria-label="@AriaText()"
+     @onclick="SelectAsync"
+     @onkeydown="OnKeyAsync">
+    <div class="top">
+        <PalIcon PalId="@Node.SpeciesId" Size="40" />
+        <div class="top-tx">
+            <div class="t">
+                <span class="t-nm">@DisplayTitle()</span>
+                @if (IsFlexible)
+                {
+                    <span class="flexg" role="img" aria-label="@L["Plan.EitherGender"].Value" title="@L["Plan.EitherGender"].Value">⚥</span>
+                }
+                else
+                {
+                    <GenderIcon Gender="@NodeGender()" Size="16" />
+                }
+            </div>
+            <div class="m">@RoleSubtitle()</div>
+        </div>
+    </div>
+
+    @if (Node is OwnedLeaf owned)
+    {
+        var (locTitle, locSub) = LocationText.TwoLine(owned.Pal, Terms, L);
+        <span class="loc">
+            @if (Paldium.Core.Domain.PalLocation.IsPaged(owned.Pal.Location.Kind) && owned.Pal.Location.SlotIndex is { } slot and >= 0)
+            {
+                <BoxMap Slot="@slot" Cell="5" Gap="1" />
+            }
+            else
+            {
+                <LocationTile Kind="@owned.Pal.Location.Kind" />
+            }
+            <span>
+                <b>@locTitle</b>
+                @locSub
+            </span>
+        </span>
+        @if (owned.Pal.Passives.Count > 0)
+        {
+            <div class="pas">
+                @foreach (var pid in owned.Pal.Passives)
+                {
+                    <PassiveLine PassiveId="@pid" Want="@WantedPassives.Contains(pid)" />
+                }
+            </div>
+        }
+    }
+    else if (Node is BreedStep step)
+    {
+        <span class="loc">
+            <span>
+                <b>@L["Plan.WillHatch"]</b>
+                @KeepHint(step)
+            </span>
+        </span>
+        @if (step.TargetPassives.Count > 0)
+        {
+            <div class="pas">
+                @foreach (var pid in step.TargetPassives)
+                {
+                    <PassiveLine PassiveId="@pid" Want="@WantedPassives.Contains(pid)" />
+                }
+            </div>
+        }
+    }
+    else if (Node is WildLeaf wild)
+    {
+        <span class="loc">
+            <LocationTile Kind="LocationKind.Unknown" />
+            <span>
+                <b>@PlanText.ObtainLabel(wild.ObtainMethod, L)</b>
+                @WildLevelText(wild)
+                @if (AltSpeciesCount > 0)
+                {
+                    <span class="alt">@L["Plan.Node.OrMoreSpecies", AltSpeciesCount]</span>
+                }
+            </span>
+        </span>
+    }
+
+    @if (Gone)
+    {
+        <div class="gonetag">
+            <Icon Name="warn" Size="14" />
+            <span>@L["Plan.OutOfScopeTag"]</span>
+        </div>
+    }
+
+    @if (Flex != null)
+    {
+        var altName = AltName(Flex.Alt);
+        <div class="alt" title="@($"{FlexLead()} {altName}")">
+            <span class="lead">@FlexLead()</span>
+            <PalIcon PalId="@Flex.Alt.SpeciesId" Size="20" />
+            <b>@altName</b>
+            <GenderIcon Gender="@AltGender()" Size="14" />
+            <span class="where">@AltWhere()</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlanNode Node { get; set; } = default!;
+    [Parameter] public int StepNumber { get; set; }
+    [Parameter, EditorRequired] public IReadOnlySet<string> WantedPassives { get; set; } = default!;
+    [Parameter] public int X { get; set; }
+    [Parameter] public int Y { get; set; }
+    [Parameter] public bool Current { get; set; }
+    [Parameter] public bool Gone { get; set; }
+
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public PlanTreeLayout.FlexNote? Flex { get; set; }
+    [Parameter] public EventCallback<PlanNode> OnSelect { get; set; }
+
+    /// <summary>The same owned Pal serves several steps (T107, ARCHITECTURE 7.3): the number of steps (1 when it serves one).</summary>
+    [Parameter] public int UseCount { get; set; } = 1;
+
+    /// <summary>Another node of the same owned Pal is the selected one: this node gets the dashed outline.</summary>
+    [Parameter] public bool SamePal { get; set; }
+
+    /// <summary>A wild node: how many other species make the same step ("or N more species").</summary>
+    [Parameter] public int AltSpeciesCount { get; set; }
+
+    /// <summary>An intermediate child whose gender does not matter (T105): shows ⚥ instead of a gender.</summary>
+    private bool IsFlexible => Node is BreedStep { ChildGender: GenderReq.Any };
+
+    private Task SelectAsync() => OnSelect.InvokeAsync(Node);
+
+    private Task OnKeyAsync(KeyboardEventArgs e) =>
+        e.Key is "Enter" or " " ? SelectAsync() : Task.CompletedTask;
+
+    private string AltName(PlanNode alt) => alt is OwnedLeaf { Pal.Nickname: { } nick } ? nick : TryName(alt.SpeciesId);
+
+    private string TryName(string id)
+    {
+        try { return Data.Pal(id).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return id; }
+    }
+
+    private Gender? AltGender() => Flex!.Alt switch
+    {
+        OwnedLeaf o => o.Pal.Gender,
+        { Gender: GenderReq.Male } => Gender.Male,
+        { Gender: GenderReq.Female } => Gender.Female,
+        _ => null,
+    };
+
+    // The gender the flexible Pal has when this backup is used: the opposite of the backup's own.
+    private string FlexLead()
+    {
+        var opposite = AltGender() == Gender.Male ? L["Common.FemaleLower"].Value : L["Common.MaleLower"].Value;
+        var flexibleName = Flex!.Flexible is OwnedLeaf { Pal.Nickname: { } nick } ? nick : TryName(Flex.Flexible.SpeciesId);
+        return L["Plan.AltLead", flexibleName, opposite].Value;
+    }
+
+    private string AltWhere() => Flex!.Alt switch
+    {
+        WildLeaf => L["Plan.AltCatch"].Value,
+        OwnedLeaf o => LocationText.ShortPlace(o.Pal, Terms, L),
+        _ => string.Empty,
+    };
+
+    private string SpeciesName()
+    {
+        try { return Data.Pal(Node.SpeciesId).DisplayName(Lang); }
+        catch (KeyNotFoundException) { return Node.SpeciesId; }
+    }
+
+    private string DisplayTitle() => Node is OwnedLeaf { Pal.Nickname: { } nick }
+        ? nick
+        : SpeciesName();
+
+    private Gender? NodeGender() => Node switch
+    {
+        OwnedLeaf o => o.Pal.Gender,
+        _ => Node.Gender switch
+        {
+            GenderReq.Male => Gender.Male,
+            GenderReq.Female => Gender.Female,
+            _ => null,
+        },
+    };
+
+    private string RoleSubtitle() => Node switch
+    {
+        OwnedLeaf => UseCount > 1 ? L["Plan.NodeOwnedSteps", UseCount].Value : L["Plan.NodeOwned"].Value,
+        BreedStep => L["Plan.NodeStepChild", StepNumber].Value,
+        WildLeaf => L["Plan.NodeWild"].Value,
+        _ => string.Empty,
+    };
+
+    private string KeepHint(BreedStep step)
+    {
+        var gText = step.ChildGender switch
+        {
+            GenderReq.Male => L["Plan.KeepMale"].Value,
+            GenderReq.Female => L["Plan.KeepFemale"].Value,
+            _ => L["Plan.KeepAny"].Value,
+        };
+        return step.TargetPassives.Count > 0
+            ? L["Plan.KeepWithPassives", gText, step.TargetPassives.Count].Value
+            : L["Plan.KeepOnly", gText].Value;
+    }
+
+    private string WildLevelText(WildLeaf wild)
+    {
+        try
+        {
+            if (Data.Pal(wild.SpeciesId).WildLevel is { } wl)
+                return L["Plan.WildLevelRange", wl.Min, wl.Max].Value;
+        }
+        catch (KeyNotFoundException) { }
+        return L["Plan.WildObtainHint"].Value;
+    }
+
+    private string AriaText() => L["Plan.NodeAria", DisplayTitle(), RoleSubtitle()].Value;
+}

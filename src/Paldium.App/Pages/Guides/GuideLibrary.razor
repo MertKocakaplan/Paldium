@@ -1,0 +1,193 @@
+@inherits LocalizedComponentBase
+
+@* The library (screens/guides.md, mockup r-liste): grouped cards with a diagram, a one-sentence summary, the reading time and the related tool. *@
+<div class="rlib">
+    <div class="rhead">
+        <h1>@L["Nav.Guides"]</h1>
+        <p>@L["Guide.Intro"]</p>
+        <div class="rs">
+            <SearchField Value="@Query" ValueChanged="OnQueryChanged" Placeholder="@L["Guide.Search"].Value" />
+        </div>
+        <span class="lang2">
+            @L["Guide.Lang"]<text>&nbsp;</text>
+            @if (GuideLang == "tr") { <text>Türkçe</text> } else { <button type="button" class="lnk" @onclick='() => OnLang.InvokeAsync("tr")'>Türkçe</button> }
+            ·
+            @if (GuideLang == "en") { <text>English</text> } else { <button type="button" class="lnk" @onclick='() => OnLang.InvokeAsync("en")'>English</button> }
+        </span>
+    </div>
+
+    @if (Guides.Count == 0)
+    {
+        <p class="lang2">@L["Guide.NoResults", Query]</p>
+    }
+
+    @foreach (var group in new[] { "mekanik", "reference", "uygulama", "meta" })
+    {
+        if (group == "reference")
+        {
+            @ReferenceGroup()
+            continue;
+        }
+
+        var inGroup = Guides.Where(g => g.Group == group).ToList();
+        if (inGroup.Count == 0) continue;
+        <section class="gsec" aria-labelledby="@("g-" + group)">
+            <div class="gh">
+                <h2 id="@("g-" + group)">@L["Guide.Group." + group]</h2>
+                @if (L["Guide.GroupDesc." + group] is { ResourceNotFound: false } desc)
+                {
+                    <p>@desc.Value</p>
+                }
+            </div>
+            <div class="ggrid">
+                @foreach (var guide in inGroup)
+                {
+                    <a class="gcard2" href="@("guides/" + guide.Slug)">
+                        <GuideArt Art="@guide.Art" />
+                        <span class="tt">@guide.Title</span>
+                        <span class="ss">@guide.Summary</span>
+                        <span class="ft">
+                            <span class="num">@L["Guide.Minutes", guide.Minutes]</span>
+                            @if (guide.Tools.Count > 0)
+                            {
+                                <span class="tool"><Icon Name="arrow-right" Size="14" />@guide.Tools[0].Label</span>
+                            }
+                        </span>
+                    </a>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Inject] private IGameData Data { get; set; } = default!;
+
+    // The reference group (T109): tables built from the game data, not guides; it has no content files. It shows when the search is empty or
+    // matches the Ranch table (an item or Pal name, or "ranch").
+    private RenderFragment ReferenceGroup() => __builder =>
+    {
+        var pals = RanchModel.Pals(Data.Pals);
+        var items = RanchModel.Items(pals, GuideLang);
+        var transport = TransportModel.Rows(Data.Pals);
+        var mounts = MountModel.Rows(Data.Pals);
+        var effigies = EffigyModel.Rows(Data.Relics);
+        if (pals.Count == 0 && transport.Count == 0 && mounts.Count == 0 && effigies.Count == 0) return;
+        var q = Paldium.Core.Queries.TextFold.Fold(Query).Trim();
+        var itemHits = q.Length == 0 ? [] : RanchModel.SearchItems(items, Query, GuideLang);
+        var palHits = q.Length == 0 ? [] : TransportModel.Filter(transport, Query, GuideLang, 1, false, _ => 0);
+        var showRanch = pals.Count > 0 && (q.Length == 0 || itemHits.Count > 0 || RanchModel.SearchPals(pals, Query, GuideLang).Count > 0 ||
+                                           Paldium.Core.Queries.TextFold.Fold(L["Ranch.Title"].Value + " " + L["Ranch.Summary"].Value).Contains(q, StringComparison.Ordinal));
+        var showTransport = transport.Count > 0 && (q.Length == 0 || palHits.Count > 0 ||
+                                                    Paldium.Core.Queries.TextFold.Fold(L["Transport.Title"].Value + " " + L["Transport.Summary"].Value).Contains(q, StringComparison.Ordinal));
+        var mountHits = q.Length == 0 ? [] : MountModel.Filter(mounts, Query, GuideLang, [], false, _ => 0);
+        var showMounts = mounts.Count > 0 && (q.Length == 0 || mountHits.Count > 0 ||
+                                              Paldium.Core.Queries.TextFold.Fold(L["Mounts.Title"].Value + " " + L["Mounts.Summary"].Value).Contains(q, StringComparison.Ordinal));
+        var showEffigies = effigies.Count > 0 && (q.Length == 0 ||
+                                                  Paldium.Core.Queries.TextFold.Fold(L["Effigy.Title"].Value + " " + L["Effigy.Summary"].Value + " " + string.Join(" ", effigies.Select(r => r.Names.Get(GuideLang) + " " + r.ItemNames.Get(GuideLang)))).Contains(q, StringComparison.Ordinal));
+        if (!showRanch && !showTransport && !showMounts && !showEffigies) return;
+        var art = new[] { "Wool", "Egg", "Milk", "Money", "PalSphere_Mega" };
+        <section class="gsec" aria-labelledby="g-reference">
+            <div class="gh">
+                <h2 id="g-reference">@L["Guide.Group.reference"]</h2>
+                <p>@L["Guide.GroupDesc.reference"]</p>
+            </div>
+            <div class="ggrid">
+                @if (showRanch)
+                {
+                    <a class="gcard2" href="guides/agil">
+                        <span class="art2 items" aria-hidden="true">
+                            @foreach (var id in art)
+                            {
+                                <img class="ai" src="@("gamedata/icons/items/" + id + ".png")" alt="" />
+                            }
+                        </span>
+                        <span class="tt">@L["Ranch.Title"]</span>
+                        <span class="ss">@L["Ranch.Summary"]</span>
+                        <span class="ft">
+                            <span class="num">@L["Ranch.Scope", pals.Count, items.Count]</span>
+                            <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Ranch.SearchTool"]</span>
+                        </span>
+                    </a>
+                    @foreach (var hit in itemHits.Take(3))
+                    {
+                        <a class="gcard2 hit9" href="@("guides/agil?item=" + Uri.EscapeDataString(hit.ItemId))">
+                            <span class="tt">@L["Ranch.InRanchHit", hit.Names.Get(GuideLang), hit.Pals.Count]</span>
+                        </a>
+                    }
+                }
+                @if (showTransport)
+                {
+                    <a class="gcard2" href="guides/tasima">
+                        <span class="art2 items" aria-hidden="true">
+                            @foreach (var row in TransportModel.Sort(transport, TransportModel.SortSpeed, true, GuideLang, _ => 0).Take(5))
+                            {
+                                <img class="ai" src="@("gamedata/" + row.Pal.IconPath)" alt="" />
+                            }
+                        </span>
+                        <span class="tt">@L["Transport.Title"]</span>
+                        <span class="ss">@L["Transport.Summary"]</span>
+                        <span class="ft">
+                            <span class="num">@L["Transport.Scope", transport.Count]</span>
+                            <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Transport.SearchTool"]</span>
+                        </span>
+                    </a>
+                    @foreach (var hit in palHits.Take(3))
+                    {
+                        <a class="gcard2 hit9" href="@("guides/tasima?pal=" + Uri.EscapeDataString(hit.Pal.Id))">
+                            <span class="tt">@L["Transport.InHit", hit.Pal.Names.Get(GuideLang), hit.TransportSpeed]</span>
+                        </a>
+                    }
+                }
+                @if (showMounts)
+                {
+                    <a class="gcard2" href="guides/binekler">
+                        <span class="art2 items" aria-hidden="true">
+                            @foreach (var row in MountModel.Sort(mounts, MountModel.SortSprint, true, GuideLang, _ => 0, MountSelection.None, []).Take(5))
+                            {
+                                <img class="ai" src="@("gamedata/" + row.Pal.IconPath)" alt="" />
+                            }
+                        </span>
+                        <span class="tt">@L["Mounts.Title"]</span>
+                        <span class="ss">@L["Mounts.Summary"]</span>
+                        <span class="ft">
+                            <span class="num">@L["Mounts.Scope", mounts.Count]</span>
+                            <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Transport.SearchTool"]</span>
+                        </span>
+                    </a>
+                    @foreach (var hit in mountHits.Take(3))
+                    {
+                        <a class="gcard2 hit9" href="@("guides/binekler?pal=" + Uri.EscapeDataString(hit.Pal.Id))">
+                            <span class="tt">@L["Mounts.InHit", hit.Pal.Names.Get(GuideLang), hit.Pal.Stats.RideSprintSpeed]</span>
+                        </a>
+                    }
+                }
+                @if (showEffigies)
+                {
+                    <a class="gcard2" href="guides/heykeller">
+                        <span class="art2 items" aria-hidden="true">
+                            @foreach (var relic in effigies.Where(r => r.IconPath != null).Take(5))
+                            {
+                                <img class="ai" src="@("gamedata/" + relic.IconPath)" alt="" />
+                            }
+                        </span>
+                        <span class="tt">@L["Effigy.Title"]</span>
+                        <span class="ss">@L["Effigy.Summary"]</span>
+                        <span class="ft">
+                            <span class="num">@L["Effigy.Scope", effigies.Count]</span>
+                            <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Effigy.Open"]</span>
+                        </span>
+                    </a>
+                }
+            </div>
+        </section>
+    };
+
+    [Parameter] public IReadOnlyList<GuideInfo> Guides { get; set; } = [];
+    [Parameter] public string Query { get; set; } = "";
+    [Parameter] public EventCallback<string> OnQuery { get; set; }
+    [Parameter] public string GuideLang { get; set; } = "en";
+    [Parameter] public EventCallback<string> OnLang { get; set; }
+
+    private Task OnQueryChanged(string value) => OnQuery.InvokeAsync(value);
+}

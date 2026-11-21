@@ -1,0 +1,23 @@
+{
+  "ModName": "Paldium Bridge (prototype)",
+  "PackageName": "PaldiumBridge",
+  "Version": "0.1.0",
+  "DebugMode": false,
+  "MinRevision": 82182,
+  "Author": "Paldium",
+  "Dependencies": [
+    "UE4SSExperimentalPW"
+  ],
+  "Tags": [
+    "UE4SS",
+    "Utilities"
+  ],
+  "InstallRule": [
+    {
+      "Type": "Lua",
+      "Targets": [
+        "./Scripts"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+@inherits LocalizedComponentBase
+@using System.Reflection
+@using Microsoft.JSInterop
+@inject AppState State
+@inject IJSRuntime JS
+
+<div class="fatal" role="alert" aria-labelledby="ft-h">
+    <div class="fbox">
+        <h1 id="ft-h" tabindex="-1"><Icon Name="warn" Size="20" />@L["Error.DataTitle"]</h1>
+        <p>@L["Error.DataBodyBefore"]<code>data/gamedata.json</code>@L["Error.DataBodyAfter"]</p>
+        <ol class="todo">
+            <li><b>@L["Error.StepReinstallTitle"]</b> @L["Error.StepReinstallBody"]</li>
+            <li><b>@L["Error.StepAntivirusTitle"]</b> @L["Error.StepAntivirusBody"]</li>
+        </ol>
+        <div class="acts">
+            <button type="button" class="save" disabled="@_retrying" @onclick="Retry">@L["Error.Retry"]</button>
+            <button type="button" class="btn2" @onclick="OpenLogs">@L["Settings.OpenLogs"]</button>
+            <button type="button" class="ghostb" @onclick="CopyDetails">@(_copied ? L["Error.Copied"] : L["Error.CopyDetails"])</button>
+        </div>
+        <details open>
+            <summary>@L["Error.DataDetails"]</summary>
+            <pre>@DetailText()</pre>
+        </details>
+    </div>
+</div>
+
+@code {
+    private bool _retrying;
+    private bool _copied;
+
+    private void Retry()
+    {
+        _retrying = true;
+        _copied = false;
+        try
+        {
+            State.Reload();
+        }
+        finally
+        {
+            _retrying = false;
+        }
+    }
+
+    private static void OpenLogs()
+    {
+        System.IO.Directory.CreateDirectory(AppServices.LogFolder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = AppServices.LogFolder,
+            UseShellExecute = true,
+        });
+    }
+
+    private async Task CopyDetails()
+    {
+        if (await JS.InvokeAsync<bool>("pbCopyText", DetailText()))
+            _copied = true;
+    }
+
+    private string DetailText()
+    {
+        var head = State.ErrorDetail ?? State.Error ?? "";
+        var ver = typeof(AppState).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+        var stamp = State.CheckedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+        return $"{head}\n{L["Error.DetailMeta", State.ExpectedSchemaVersion, ver, stamp].Value}";
+    }
+}

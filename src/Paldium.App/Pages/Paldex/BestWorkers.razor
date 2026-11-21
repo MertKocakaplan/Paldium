@@ -1,0 +1,161 @@
+@using System.Globalization
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject OwnedScopeService Scope
+
+@{
+    var columns = OwnedOnly ? ComputeOwnedColumns() : _allColumns;
+}
+
+<div class="wtab">
+    <table>
+        <thead>
+            <tr>
+                <th>@L["Workers.ColWork"]</th>
+                <th>@L["Workers.StageEarly"] <span class="m">@L["Workers.StageEarlySub", WorkerRanking.EarlyMaxLevel]</span></th>
+                <th>@L["Workers.StageMid"] <span class="m">@L["Workers.StageMidSub", WorkerRanking.MidMaxLevel]</span></th>
+                <th>@L["Workers.StageLate"] <span class="m">@L["Workers.StageLateSub"]</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var column in columns)
+            {
+                var type = Data.WorkTypes.FirstOrDefault(t => string.Equals(t.Id, column.WorkType, StringComparison.OrdinalIgnoreCase));
+                <tr>
+                    <th scope="row">
+                        @if (type != null)
+                        {
+                            <img class="wi" src="@("gamedata/" + type.IconPath)" width="20" height="20" alt="" />
+                        }
+                        <span>@(type?.Names.Get(Lang) ?? column.WorkType)</span>
+                    </th>
+                    @foreach (var stage in Stages)
+                    {
+                        var entries = column.Of(stage);
+                        <td>
+                            @if (entries.Count == 0)
+                            {
+                                <span class="wk-empty" aria-hidden="true">—</span>
+                            }
+                            else
+                            {
+                                @foreach (var entry in entries)
+                                {
+                                    var captured = entry;
+                                    var isOwned = IsOwned(captured.Pal.Id);
+                                    var sub = EarliestText(captured);
+                                    var tip = L["Workers.CellTip", captured.Pal.DisplayName(Lang), captured.WorkLevel, sub].Value;
+                                    <button type="button"
+                                            class="@(isOwned ? "wk mine" : "wk")"
+                                            title="@tip"
+                                            aria-label="@tip"
+                                            @onclick="() => OnSelect.InvokeAsync(captured.Pal)">
+                                        <img class="pal" src="@("gamedata/" + captured.Pal.IconPath)" width="32" height="32" alt="" />
+                                        <span class="wl2 num" aria-label="@L["Workers.WorkLevelAria"].Value">@captured.WorkLevel.ToString(CultureInfo.InvariantCulture)</span>
+                                        <span class="tx2">
+                                            <b>@captured.Pal.DisplayName(Lang)</b>
+                                            <i>@sub</i>
+                                        </span>
+                                        @if (isOwned)
+                                        {
+                                            <span class="ok" title="@L["Detail.OwnedTick"].Value">
+                                                <Icon Name="check" Size="14" />
+                                            </span>
+                                        }
+                                    </button>
+                                }
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <p class="h">@L["Workers.FooterNote"]</p>
+</div>
+
+@code {
+    private static readonly WorkerStage[] Stages = [WorkerStage.Early, WorkerStage.Mid, WorkerStage.Late];
+
+    private IReadOnlyList<WorkerColumns> _allColumns = [];
+    private IReadOnlyDictionary<string, OwnedSpeciesStats> _owned = new Dictionary<string, OwnedSpeciesStats>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>When true, ranks only species currently owned inside the ownership scope.</summary>
+    [Parameter] public bool OwnedOnly { get; set; }
+
+    /// <summary>A species was clicked (the Paldex opens its detail).</summary>
+    [Parameter] public EventCallback<PalSpecies> OnSelect { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _allColumns = WorkerRanking.Compute(Data);
+        _owned = OwnedSpeciesStats.Compute(Scope.ScopedPals);
+        Scope.Changed += OnScopeChanged;
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        _owned = OwnedSpeciesStats.Compute(Scope.ScopedPals);
+        StateHasChanged();
+    });
+
+    private bool IsOwned(string speciesId) =>
+        _owned.TryGetValue(speciesId, out var stats) && stats.Total > 0;
+
+    private IReadOnlyList<WorkerColumns> ComputeOwnedColumns()
+    {
+        var ownedPals = Data.Pals.Where(p => IsOwned(p.Id)).ToList();
+        var earliest = ownedPals.ToDictionary(p => p.Id, WorkerRanking.Earliest, StringComparer.Ordinal);
+        var result = new List<WorkerColumns>(Data.WorkTypes.Count);
+
+        foreach (var workType in Data.WorkTypes)
+        {
+            var entries = new List<WorkerEntry>();
+            foreach (var pal in ownedPals)
+            {
+                if (!pal.Work.TryGetValue(workType.Id, out var level) || level <= 0) continue;
+                var (earliestLevel, method) = earliest[pal.Id];
+                entries.Add(new WorkerEntry(pal, level, earliestLevel, method, pal.Work.Count(w => w.Value > 0 && w.Key != workType.Id)));
+            }
+
+            var ordered = entries
+                .OrderByDescending(e => e.WorkLevel)
+                .ThenBy(e => e.EarliestLevel ?? int.MaxValue)
+                .ThenByDescending(e => e.OtherWork)
+                .ThenBy(e => e.Pal.DexNo)
+                .ThenBy(e => e.Pal.IsVariant)
+                .ThenBy(e => e.Pal.Id, StringComparer.Ordinal)
+                .ToList();
+
+            result.Add(new WorkerColumns(
+                workType.Id,
+                ordered.Where(e => e.EarliestLevel is { } l && l <= WorkerRanking.EarlyMaxLevel).Take(WorkerRanking.PerColumn).ToList(),
+                ordered.Where(e => e.EarliestLevel is { } l && l <= WorkerRanking.MidMaxLevel).Take(WorkerRanking.PerColumn).ToList(),
+                ordered.Take(WorkerRanking.PerColumn).ToList()));
+        }
+
+        return result;
+    }
+
+    private string EarliestText(WorkerEntry entry) =>
+        entry.EarliestLevel is { } level && entry.EarliestMethod != null
+            ? $"{ShortMethod(entry.EarliestMethod)} · {L["Detail.WildLevelSingle", level].Value}"
+            : L["Workers.BreedingOnlyShort"].Value;
+
+    private string ShortMethod(string method) => method switch
+    {
+        "AlphaBoss" => L["Workers.MethodAlpha"].Value,
+        "Fishing" => L["Workers.MethodFishing"].Value,
+        _ => Terms.ObtainMethod(method),
+    };
+
+    public override void Dispose()
+    {
+        Scope.Changed -= OnScopeChanged;
+        base.Dispose();
+    }
+}

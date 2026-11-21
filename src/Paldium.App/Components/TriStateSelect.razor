@@ -1,0 +1,34 @@
+@inherits LocalizedComponentBase
+
+@* Compact three-state segmented selector (Any / Yes / No) for filter rail rows. *@
+<div class="@($"tri{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")">
+    <span class="l2">@Label</span>
+    <Segmented TValue="string"
+               Mini="true"
+               Items="@Options()"
+               Value="@Code(Value)"
+               ValueChanged="OnChanged"
+               AriaLabel="@Label" />
+</div>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>null = any, true = yes, false = no.</summary>
+    [Parameter] public bool? Value { get; set; }
+
+    [Parameter] public EventCallback<bool?> ValueChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private IReadOnlyList<SegmentedItem<string>> Options() =>
+    [
+        new("any", L["Common.Any"].Value, IsWord: true),
+        new("yes", L["Common.Yes"].Value, IsWord: true),
+        new("no", L["Common.No"].Value, IsWord: true),
+    ];
+
+    private static string Code(bool? value) => value switch { true => "yes", false => "no", _ => "any" };
+
+    private Task OnChanged(string code) =>
+        ValueChanged.InvokeAsync(code switch { "yes" => true, "no" => false, _ => null });
+}

@@ -1,0 +1,292 @@
+@using Paldium.Core.Owned
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@{
+    var locCounts = CountByLocation();
+    var ownerCounts = CountByOwner(out var unknownOwners);
+    var sourceCounts = CountBySource();
+    var hideOwners = IsSinglePlayerScope(ownerCounts.Count, unknownOwners);
+}
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterSpecies"]</span>
+    <SearchField Value="@SpeciesFieldText()"
+                 ValueChanged="OnSpeciesQueryChanged"
+                 Placeholder="@L["MyPals.SearchPlaceholder"].Value"
+                 AriaLabel="@L["MyPals.FilterSpecies"].Value" />
+</div>
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterPassives"]</span>
+    @if (Filter.Passives.Count > 0)
+    {
+        <div class="pchips">
+            @foreach (var id in Filter.Passives)
+            {
+                var captured = id;
+                var passive = TryPassive(captured);
+                var name = passive?.Names.Get(Lang) ?? captured;
+                var rank = passive?.Rank ?? 1;
+                <span>
+                    <RankGlyph Rank="@rank" Size="16" />
+                    <span class="pchip-nm">@name</span>
+                    <button type="button"
+                            class="x"
+                            aria-label="@L["Filters.RemoveOne", name].Value"
+                            @onclick="() => RemovePassiveAsync(captured)">
+                        <Icon Name="x" Size="14" />
+                    </button>
+                </span>
+            }
+        </div>
+    }
+    <PassivePicker
+                   Exclude="@Filter.Passives"
+                   OnPick="AddPassiveAsync"
+                   Class="p-add-wrap">
+        <ChildContent Context="toggle">
+            <button type="button" class="field add-p" @onclick="toggle">
+                <Icon Name="plus" Size="16" />
+                <span class="add-p-txt">@L["PassivePicker.Add"]</span>
+            </button>
+        </ChildContent>
+    </PassivePicker>
+</div>
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterGender"]</span>
+    <Segmented TValue="string"
+               Items="@GenderItems()"
+               Value="@Filter.Gender"
+               ValueChanged="SetGenderAsync"
+               AriaLabel="@L["MyPals.FilterGender"].Value" />
+</div>
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterLocation"]</span>
+    <div class="chk">
+        @foreach (var entry in LocationEntries(locCounts))
+        {
+            var capturedKey = entry.Key;
+            var checkedNow = Filter.Locations.Contains(capturedKey);
+            <CheckRow Label="@entry.Label"
+                      Count="@entry.Count"
+                      Checked="@checkedNow"
+                      CheckedChanged="v => ToggleSetAsync(Filter.Locations, capturedKey, v, static (f, s) => f with { Locations = s }, StringComparer.Ordinal)" />
+        }
+    </div>
+</div>
+
+@if (!hideOwners && (ownerCounts.Count > 0 || unknownOwners > 0 || Filter.Owners.Count > 0))
+{
+    <div class="fg">
+        <span class="l">@L["MyPals.FilterOwner"]</span>
+        <div class="chk">
+            @foreach (var owner in ownerCounts.OrderBy(o => o.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                var capturedId = owner.Id;
+                var checkedNow = Filter.Owners.Contains(capturedId);
+                <CheckRow Label="@owner.Name"
+                          Count="@owner.Count"
+                          Checked="@checkedNow"
+                          CheckedChanged="v => ToggleSetAsync(Filter.Owners, capturedId, v, static (f, s) => f with { Owners = s }, StringComparer.OrdinalIgnoreCase)" />
+            }
+            @if (unknownOwners > 0 || Filter.Owners.Contains(OwnedPalFilter.UnknownOwnerKey))
+            {
+                <CheckRow Label="@L["MyPals.UnknownOwner"].Value"
+                          Count="@unknownOwners"
+                          Checked="@Filter.Owners.Contains(OwnedPalFilter.UnknownOwnerKey)"
+                          CheckedChanged="v => ToggleSetAsync(Filter.Owners, OwnedPalFilter.UnknownOwnerKey, v, static (f, s) => f with { Owners = s }, StringComparer.OrdinalIgnoreCase)" />
+            }
+        </div>
+    </div>
+}
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterSource"]</span>
+    <div class="chk">
+        @foreach (var kind in SourceOrder())
+        {
+            var count = sourceCounts.GetValueOrDefault(kind);
+            var key = kind.ToString();
+            var checkedNow = Filter.Sources.Contains(key);
+            if (kind == PalSourceKind.GlobalStorage && count == 0 && !checkedNow) continue;
+            <CheckRow Label="@SourceName(kind)"
+                      Count="@count"
+                      Checked="@checkedNow"
+                      CheckedChanged="v => ToggleSetAsync(Filter.Sources, key, v, static (f, s) => f with { Sources = s }, StringComparer.Ordinal)" />
+        }
+    </div>
+</div>
+
+<div class="fg">
+    <span class="l">@L["MyPals.FilterMinIv"]</span>
+    <Stepper Value="@Filter.MinIvTotal"
+             ValueChanged="SetMinIvAsync"
+             Min="0"
+             Max="300"
+             Step="10"
+             EmptyText="—"
+             AriaLabel="@L["MyPals.FilterMinIv"].Value" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OwnedPalFilter Filter { get; set; } = OwnedPalFilter.Empty;
+    [Parameter] public EventCallback<OwnedPalFilter> FilterChanged { get; set; }
+    [Parameter, EditorRequired] public OwnedPalSnapshot Snapshot { get; set; } = default!;
+
+    private string SpeciesFieldText()
+    {
+        if (!string.IsNullOrEmpty(Filter.SpeciesId))
+        {
+            return Data.TryNormalizePalId(Filter.SpeciesId, out var id)
+                ? Data.Pal(id).Names.Get(Lang)
+                : Filter.SpeciesId;
+        }
+        return Filter.SpeciesQuery;
+    }
+
+    private Task OnSpeciesQueryChanged(string text) =>
+        FilterChanged.InvokeAsync(Filter with { SpeciesId = null, SpeciesQuery = text });
+
+    private Task AddPassiveAsync(string passiveId)
+    {
+        if (Filter.Passives.Contains(passiveId, StringComparer.OrdinalIgnoreCase)) return Task.CompletedTask;
+        var next = Filter.Passives.Append(passiveId).ToList();
+        return FilterChanged.InvokeAsync(Filter with { Passives = next });
+    }
+
+    private Task RemovePassiveAsync(string passiveId)
+    {
+        var next = Filter.Passives.Where(p => !string.Equals(p, passiveId, StringComparison.OrdinalIgnoreCase)).ToList();
+        return FilterChanged.InvokeAsync(Filter with { Passives = next });
+    }
+
+    private Task SetGenderAsync(string gender) =>
+        FilterChanged.InvokeAsync(Filter with { Gender = gender });
+
+    private Task SetMinIvAsync(int minIv) =>
+        FilterChanged.InvokeAsync(Filter with { MinIvTotal = minIv });
+
+    private Task ToggleSetAsync(
+        IReadOnlySet<string> current,
+        string key,
+        bool add,
+        Func<OwnedPalFilter, IReadOnlySet<string>, OwnedPalFilter> updater,
+        StringComparer comparer)
+    {
+        var next = new HashSet<string>(current, comparer);
+        if (add) next.Add(key);
+        else next.Remove(key);
+        return FilterChanged.InvokeAsync(updater(Filter, next));
+    }
+
+    private IReadOnlyList<SegmentedItem<string>> GenderItems() =>
+    [
+        new(OwnedPalFilter.GenderAll, L["Common.All"].Value, IsWord: true),
+        new(OwnedPalFilter.GenderMale, L["Common.Male"].Value, IsWord: true),
+        new(OwnedPalFilter.GenderFemale, L["Common.Female"].Value, IsWord: true),
+        new(OwnedPalFilter.GenderUnknown, L["Common.Unknown"].Value, IsWord: true),
+    ];
+
+    private (Dictionary<LocationKind, int> Kinds, int Expedition) CountByLocation()
+    {
+        var kinds = new Dictionary<LocationKind, int>();
+        var expedition = 0;
+        foreach (var pal in Snapshot.Pals)
+        {
+            kinds[pal.Location.Kind] = kinds.GetValueOrDefault(pal.Location.Kind) + 1;
+            if (pal.IsOnExpedition) expedition++;
+        }
+        return (kinds, expedition);
+    }
+
+    private List<(string Key, string Label, int Count)> LocationEntries((Dictionary<LocationKind, int> Kinds, int Expedition) counts)
+    {
+        LocationKind[] ordered =
+        [
+            LocationKind.Palbox,
+            LocationKind.DimensionalStorage,
+            LocationKind.Base,
+            LocationKind.Party,
+            LocationKind.ViewingCage,
+            LocationKind.GlobalStorage,
+        ];
+
+        var list = new List<(string, string, int)>();
+        foreach (var kind in ordered)
+        {
+            var key = kind.ToString();
+            var count = counts.Kinds.GetValueOrDefault(kind);
+            var alwaysShow = kind is LocationKind.Palbox or LocationKind.DimensionalStorage or LocationKind.Base or LocationKind.Party;
+            if (alwaysShow || count > 0 || Filter.Locations.Contains(key))
+                list.Add((key, Terms.Location(kind), count));
+        }
+
+        if (counts.Expedition > 0 || Filter.Locations.Contains(OwnedPalFilter.ExpeditionLocationKey))
+            list.Add((OwnedPalFilter.ExpeditionLocationKey, L["MyPals.FilterExpedition"].Value, counts.Expedition));
+
+        return list;
+    }
+
+    private List<(string Id, string Name, int Count)> CountByOwner(out int unknownOwners)
+    {
+        unknownOwners = 0;
+        var map = new Dictionary<string, (string Name, int Count)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pal in Snapshot.Pals)
+        {
+            if (pal.Owner == null)
+            {
+                unknownOwners++;
+                continue;
+            }
+
+            var display = !string.IsNullOrWhiteSpace(pal.Owner.PlayerName) ? pal.Owner.PlayerName : pal.Owner.PlayerId;
+            if (map.TryGetValue(pal.Owner.PlayerId, out var existing))
+                map[pal.Owner.PlayerId] = (existing.Name, existing.Count + 1);
+            else
+                map[pal.Owner.PlayerId] = (display, 1);
+        }
+
+        return map.Select(kv => (kv.Key, kv.Value.Name, kv.Value.Count)).ToList();
+    }
+
+    private bool IsSinglePlayerScope(int knownOwnerCount, int unknownOwners)
+    {
+        if (Filter.Owners.Count > 0) return false;
+        var totalDistinct = knownOwnerCount + (unknownOwners > 0 ? 1 : 0);
+        return totalDistinct <= 1;
+    }
+
+    private Dictionary<PalSourceKind, int> CountBySource()
+    {
+        var counts = new Dictionary<PalSourceKind, int>();
+        foreach (var pal in Snapshot.Pals)
+            counts[pal.Source] = counts.GetValueOrDefault(pal.Source) + 1;
+        return counts;
+    }
+
+    private static IEnumerable<PalSourceKind> SourceOrder()
+    {
+        yield return PalSourceKind.ModBridge;
+        yield return PalSourceKind.Save;
+        yield return PalSourceKind.Manual;
+        yield return PalSourceKind.GlobalStorage;
+    }
+
+    private string SourceName(PalSourceKind kind) => kind switch
+    {
+        PalSourceKind.ModBridge => L["MyPals.FilterSourceModBridge"].Value,
+        PalSourceKind.Manual => L["MyPals.FilterSourceManual"].Value,
+        PalSourceKind.GlobalStorage => Term("GlobalPalbox"),
+        _ => L["SourceKind." + kind].Value,
+    };
+
+    private PassiveSkill? TryPassive(string id)
+    {
+        try { return Data.Passive(id); }
+        catch (KeyNotFoundException) { return null; }
+    }
+}

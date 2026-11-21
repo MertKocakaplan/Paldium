@@ -1,0 +1,44 @@
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+
+@{
+    var loc = Pal.Location;
+    var hasBox = (Paldium.Core.Domain.PalLocation.IsPaged(loc.Kind) || loc.Kind == LocationKind.GlobalStorage) && loc.SlotIndex is { } slotIdx && slotIdx >= 0 && slotIdx < Paldium.Core.Domain.PalLocation.PageSize;
+    var full = LocationText.Format(Pal, Terms, L) + (loc.Kind == LocationKind.GlobalStorage ? " · " + L["MyPals.GeneticCopy"].Value : "");
+
+    string primary;
+    string secondary;
+    if (loc.Kind == LocationKind.Base && !string.IsNullOrEmpty(loc.BaseName))
+    {
+        primary = Terms.Location(LocationKind.Base);
+        secondary = Pal.IsOnExpedition ? $"{loc.BaseName} · {L["Pal.OnExpedition"].Value}" : loc.BaseName;
+    }
+    else if (hasBox)
+    {
+        primary = LocationText.ShortPlace(Pal, Terms, L);
+        secondary = LocationText.TwoLine(Pal, Terms, L).Subtitle;
+    }
+    else
+    {
+        (primary, secondary) = LocationText.TwoLine(Pal, Terms, L);
+    }
+}
+
+<span class="@($"locc{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")" title="@full">
+    @if (hasBox)
+    {
+        <BoxMap Slot="@loc.SlotIndex" Cell="@BoxCell" />
+    }
+    else
+    {
+        <LocationTile Kind="@loc.Kind" Size="@PinSize" />
+    }
+    <span><b>@primary</b>@secondary</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public OwnedPal Pal { get; set; } = default!;
+    [Parameter] public int? BoxCell { get; set; }
+    [Parameter] public int PinSize { get; set; } = 34;
+    [Parameter] public string? Class { get; set; }
+}

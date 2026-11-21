@@ -1,0 +1,24 @@
+@namespace Paldium.App.Pages.PlannerParts
+@using System.Globalization
+@inherits LocalizedComponentBase
+
+<div class="toast" role="status" aria-live="polite">
+    <Icon Name="egg" />
+    <span>
+        <b>@L["Plan.BetterPlanFound"]</b>
+        <span class="num">@($"~{FormatEggs(OldEggs)} → ~{FormatEggs(NewEggs)}")</span> @L["Plan.EggsWord"]
+    </span>
+    <button type="button" class="btn2 acc" @onclick="OnShow">@L["Plan.ShowBetterPlan"]</button>
+    <button type="button" class="x" aria-label="@L["Common.Close"].Value" @onclick="OnDismiss">
+        <Icon Name="x" Size="14" />
+    </button>
+</div>
+
+@code {
+    [Parameter] public double OldEggs { get; set; }
+    [Parameter] public double NewEggs { get; set; }
+    [Parameter] public EventCallback OnShow { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private string FormatEggs(double value) => value.ToString("0.0", CultureInfo.GetCultureInfo(Lang));
+}

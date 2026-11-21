@@ -1,0 +1,93 @@
+@implements IDisposable
+@inherits LocalizedComponentBase
+@inject UpdateService Updates
+@inject SettingsStore Store
+
+@* Settings > Updates (screens/update.md): the version, the last check, "Check now", the start-up switch and the skipped version. *@
+@{
+    var settings = Updates.Settings;
+}
+<dl class="kv">
+    <dt>@L["Settings.UpdVersion"]</dt><dd class="num">@Updates.CurrentVersion</dd>
+    <dt>@L["Settings.UpdLastCheck"]</dt>
+    <dd>
+        @if (settings.LastCheckUtc is { } last)
+        {
+            @Ago(last)<text> · </text>
+            @if (Updates.Latest is { } latest)
+            {
+                <button type="button" class="lnk" @onclick="Updates.OpenDialog">@L["Settings.UpdReady", latest.Version]</button>
+            }
+            else
+            {
+                @L["Settings.UpdCurrent"]
+            }
+        }
+        else
+        {
+            @L["Settings.UpdNever"]
+        }
+    </dd>
+</dl>
+<div class="adds">
+    <button type="button" class="btn2" disabled="@Updates.Checking" @onclick="CheckNowAsync">
+        <Icon Name="refresh" Size="14" Class="@(Updates.Checking ? "spin" : null)" />@L["Settings.UpdCheckNow"]
+    </button>
+</div>
+@if (_message != null)
+{
+    <p class="@("hint2" + (_failed ? " neg" : ""))" role="status">@_message</p>
+}
+<SettingsRow Label="@L["Settings.UpdAuto"].Value">
+    <Segmented TValue="bool" Value="@settings.AutoCheck" ValueChanged="SetAuto" AriaLabel="@L["Settings.UpdAuto"].Value" Items="@AutoItems" />
+</SettingsRow>
+@if (!string.IsNullOrEmpty(settings.SkippedVersion))
+{
+    <p class="hint2">@L["Settings.UpdSkipped", settings.SkippedVersion] <button type="button" class="lnk" @onclick="Updates.Unskip">@L["Settings.UpdUndo"]</button></p>
+}
+
+@code {
+    private string? _message;
+    private bool _failed;
+
+    private IReadOnlyList<SegmentedItem<bool>> AutoItems => [new(true, L["Settings.UpdOn"].Value, true), new(false, L["Common.Off"].Value, true)];
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Updates.Changed += OnChanged;
+    }
+
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private void SetAuto(bool value) => Store.Update(s => s with { Update = s.Update with { AutoCheck = value } });
+
+    private async Task CheckNowAsync()
+    {
+        _message = null;
+        var result = await Updates.CheckAsync(manual: true);
+        _failed = result.Status is UpdateCheckStatus.Offline or UpdateCheckStatus.RateLimited;
+        _message = result.Status switch
+        {
+            UpdateCheckStatus.Offline => L["Update.Offline"].Value,
+            UpdateCheckStatus.RateLimited => L["Update.RateLimited"].Value,
+            _ => null,
+        };
+        if (result.Status == UpdateCheckStatus.Available && Updates.Available != null) Updates.OpenDialog();
+    }
+
+    private string Ago(DateTimeOffset at)
+    {
+        var span = DateTimeOffset.UtcNow - at;
+        if (span < TimeSpan.FromMinutes(1)) return L["Sources.AgoNow"].Value;
+        if (span < TimeSpan.FromHours(1)) return L["Sources.AgoMinutes", (int)span.TotalMinutes].Value;
+        if (span < TimeSpan.FromDays(1)) return L["Sources.AgoHours", (int)span.TotalHours].Value;
+        return L["Sources.AgoDays", (int)span.TotalDays].Value;
+    }
+
+    public override void Dispose()
+    {
+        Updates.Changed -= OnChanged;
+        base.Dispose();
+    }
+}

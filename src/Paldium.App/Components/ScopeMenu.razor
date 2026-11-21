@@ -1,0 +1,84 @@
+@using Paldium.Core.Owned
+@inherits LocalizedComponentBase
+@inject SettingsStore Store
+
+<Dropdown TValue="string"
+          Label="@(ShowScopePrefix ? null : Summary())"
+          TriggerContent="@(ShowScopePrefix ? PrefixTrigger() : null)"
+          AriaLabel="@SummaryAria()"
+          Open="_open"
+          OpenChanged="OnOpenChangedInternal"
+          AnchorOrigin="@AnchorOrigin"
+          TransformOrigin="@TransformOrigin"
+          Class="@Class">
+    <ChildContent>
+        <div class="pop-panel">
+            <ScopeEditor />
+            <div class="pop-foot">
+                <button type="button" class="btn2" @onclick="CloseAsync">@L["Common.Close"]</button>
+            </div>
+        </div>
+    </ChildContent>
+</Dropdown>
+
+@code {
+    private RenderFragment PrefixTrigger() => __builder =>
+    {
+        <span class="kx">@L["Scope.Prefix"]</span><span class="dd-txt">@Summary()</span>
+    };
+    private bool _open;
+
+    [Parameter] public bool ShortSummary { get; set; }
+    [Parameter] public bool ShowScopePrefix { get; set; }
+    [Parameter] public Origin AnchorOrigin { get; set; } = Origin.TopLeft;
+    [Parameter] public Origin TransformOrigin { get; set; } = Origin.BottomLeft;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback<bool> OnOpenChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Store.Changed += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged(object? sender, AppSettings settings) => InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        Store.Changed -= OnSettingsChanged;
+        base.Dispose();
+    }
+
+    private Task OnOpenChangedInternal(bool open)
+    {
+        _open = open;
+        return OnOpenChanged.InvokeAsync(open);
+    }
+
+    private Task CloseAsync() => OnOpenChangedInternal(false);
+
+    private string Summary()
+    {
+        var scope = Store.Current.Scope;
+        var mode = scope.Mode switch
+        {
+            ScopeSettings.Selected => L["Scope.Selected"].Value,
+            ScopeSettings.All => L["Scope.All"].Value,
+            _ => L["Scope.Mine"].Value,
+        };
+        if (ShortSummary) return mode;
+        return L["Scope.DropdownSummary", mode, scope.Locations.Count].Value;
+    }
+
+    private string SummaryAria()
+    {
+        var scope = Store.Current.Scope;
+        var mode = scope.Mode switch
+        {
+            ScopeSettings.Selected => L["Scope.Selected"].Value,
+            ScopeSettings.All => L["Scope.All"].Value,
+            _ => L["Scope.Mine"].Value,
+        };
+        return L["Scope.Summary", mode, scope.Locations.Count].Value;
+    }
+}
