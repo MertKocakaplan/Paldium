@@ -18,19 +18,19 @@ Paldium reads your Pals from Palworld save files, or, in a world you only joined
 - **Dedicated server:** `Pal\Saved\SaveGames\0\<WorldId>\`. On a rented server download the folder with SFTP or the control panel.
 
 ## Adding a source
-Open **My Pals, Sources** (not Settings), add a save source and pick the world folder. Then sync. The app copies the files first and never writes to the game folder. Your Pals appear in My Pals with their location (party, Pal Box with page and slot, base, cage).
+Open **Settings, Sources**, add a save source and pick the world folder. Then sync. The app copies the files first and never writes to the game folder. Your Pals appear in My Pals with their location (party, Pal Box with page and slot, base, cage).
 
 ## Joined worlds, option 1: the host shares the world folder
 The host puts a copy of the world folder into a synced folder (a cloud drive, for example) and you add that folder as a source. Everything the host's save holds is then readable, including every player's Pals. The copy is only as new as the host's last save.
 
 ## Joined worlds, option 2: the assistant mod
 The mod reads what the game has sent to your own client while you play.
-1. In **My Pals, Sources** press **Install mod** (or copy the `PaldiumBridge` folder into the game's `Mods\NativeMods\UE4SS\Mods` folder) and restart Palworld.
+1. In **Settings, Sources** press **Install mod** (or copy the `PaldiumBridge` folder into the game's `Mods\NativeMods\UE4SS\Mods` folder) and restart Palworld.
 2. Join the world and open your Pal Box or a Dimensional Pal Storage. Every page you look at is read within a moment.
 3. Press **F9** with the box open to let the mod turn the pages for you. **F10** writes a diagnostic to the UE4SS log (send it when something looks wrong). **F11** clears the mod's own session cache. The keys can be changed in Settings, Mod shortcuts.
 4. The sources panel shows, for every box, which pages were read and when. A page you have not opened yet is simply missing.
 
-The app keeps the pages of earlier game sessions (per world), so the list does not shrink when you restart the game; a page that is read again replaces its old content. "Clear page cache" in My Pals, Sources forgets all of them.
+The app keeps the pages of earlier game sessions (per world), so the list does not shrink when you restart the game; a page that is read again replaces its old content. "Clear page cache" in Settings, Sources forgets all of them.
 
 ### Limits
 - Only what the game sends to you is readable: your own Pal Box and party, the storages you open, and bases the game has replicated to you. A friend's party and storages nobody opened are not.

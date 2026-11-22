@@ -6,6 +6,9 @@
 @* Settings > Updates (screens/update.md): the version, the last check, "Check now", the start-up switch and the skipped version. *@
 @{
     var settings = Updates.Settings;
+    var cachedNewer = Updates.Latest == null && Updates.IsNewerVersion(settings.LastSeenVersion)
+        ? settings.LastSeenVersion
+        : null;
 }
 <dl class="kv">
     <dt>@L["Settings.UpdVersion"]</dt><dd class="num">@Updates.CurrentVersion</dd>
@@ -17,6 +20,10 @@
             @if (Updates.Latest is { } latest)
             {
                 <button type="button" class="lnk" @onclick="Updates.OpenDialog">@L["Settings.UpdReady", latest.Version]</button>
+            }
+            else if (cachedNewer != null)
+            {
+                <button type="button" class="lnk" @onclick="OpenCachedNewerAsync">@L["Settings.UpdReady", cachedNewer]</button>
             }
             else
             {
@@ -31,12 +38,12 @@
 </dl>
 <div class="adds">
     <button type="button" class="btn2" disabled="@Updates.Checking" @onclick="CheckNowAsync">
-        <Icon Name="refresh" Size="14" Class="@(Updates.Checking ? "spin" : null)" />@L["Settings.UpdCheckNow"]
+        <Icon Name="refresh" Size="14" Class="@(Updates.Checking ? "spin-icon" : null)" />@L["Settings.UpdCheckNow"]
     </button>
 </div>
-@if (_message != null)
+@if (_messageKey != null)
 {
-    <p class="@("hint2" + (_failed ? " neg" : ""))" role="status">@_message</p>
+    <p class="@("hint2" + (_failed ? " neg" : ""))" role="status">@L[_messageKey]</p>
 }
 <SettingsRow Label="@L["Settings.UpdAuto"].Value">
     <Segmented TValue="bool" Value="@settings.AutoCheck" ValueChanged="SetAuto" AriaLabel="@L["Settings.UpdAuto"].Value" Items="@AutoItems" />
@@ -47,7 +54,7 @@
 }
 
 @code {
-    private string? _message;
+    private string? _messageKey;
     private bool _failed;
 
     private IReadOnlyList<SegmentedItem<bool>> AutoItems => [new(true, L["Settings.UpdOn"].Value, true), new(false, L["Common.Off"].Value, true)];
@@ -62,15 +69,21 @@
 
     private void SetAuto(bool value) => Store.Update(s => s with { Update = s.Update with { AutoCheck = value } });
 
+    private async Task OpenCachedNewerAsync()
+    {
+        await CheckNowAsync();
+        if (Updates.Latest != null) Updates.OpenDialog();
+    }
+
     private async Task CheckNowAsync()
     {
-        _message = null;
+        _messageKey = null;
         var result = await Updates.CheckAsync(manual: true);
         _failed = result.Status is UpdateCheckStatus.Offline or UpdateCheckStatus.RateLimited;
-        _message = result.Status switch
+        _messageKey = result.Status switch
         {
-            UpdateCheckStatus.Offline => L["Update.Offline"].Value,
-            UpdateCheckStatus.RateLimited => L["Update.RateLimited"].Value,
+            UpdateCheckStatus.Offline => "Update.Offline",
+            UpdateCheckStatus.RateLimited => "Update.RateLimited",
             _ => null,
         };
         if (result.Status == UpdateCheckStatus.Available && Updates.Available != null) Updates.OpenDialog();

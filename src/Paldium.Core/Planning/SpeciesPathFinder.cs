@@ -198,8 +198,24 @@ public sealed class SpeciesPathFinder : ISpeciesPathFinder
             if (usableParent) settledKeys.Add(current);
         }
 
+        static (OwnedPal A, OwnedPal B)? PickDistinctPair(IReadOnlyList<OwnedPal> aPals, IReadOnlyList<OwnedPal> bPals)
+        {
+            if (aPals.Count == 0 || bPals.Count == 0) return null;
+            var firstA = aPals[0];
+            foreach (var b in bPals)
+                if (b.Uid != firstA.Uid) return (firstA, b);
+            var firstB = bPals[0];
+            foreach (var a in aPals)
+                if (a.Uid != firstB.Uid) return (a, firstB);
+            return null;
+        }
+
+        bool IsOwnedLeafKey(int key) =>
+            (best[key] == null || (leafOf[key] != null && dist[key].Steps == 0)) && leafOf[key] is { Pals.Count: > 0 };
+
         void Combine(int sKey, int sSpecies, int sGender, bool sStart, bool sPref, int tKey)
         {
+            if (IsOwnedLeafKey(sKey) && IsOwnedLeafKey(tKey) && PickDistinctPair(leafOf[sKey]!.Pals, leafOf[tKey]!.Pals) == null) return;
             var tSpecies = tKey >> 3;
             var tGender = (tKey >> 2) & 1;
             var tStart = ((tKey >> 1) & 1) == 1;
@@ -305,11 +321,18 @@ public sealed class SpeciesPathFinder : ISpeciesPathFinder
 
         BreedingPlan? BuildPlan(Recipe root)
         {
-            var used = new HashSet<string>(StringComparer.Ordinal);
             var notes = new List<string>();
-            var a = Expand(root.A, used, notes);
+            OwnedPal? forcedA = null;
+            OwnedPal? forcedB = null;
+            if (IsOwnedLeafKey(root.A) && IsOwnedLeafKey(root.B))
+            {
+                if (PickDistinctPair(leafOf[root.A]!.Pals, leafOf[root.B]!.Pals) is not { } pair) return null;
+                forcedA = pair.A;
+                forcedB = pair.B;
+            }
+            var a = Expand(root.A, notes, forcedA);
             if (a == null) return null;
-            var b = Expand(root.B, used, notes);
+            var b = Expand(root.B, notes, forcedB);
             if (b == null) return null;
 
             var rootProbability = wantedGender == GenderReq.Any ? 1.0
@@ -319,14 +342,14 @@ public sealed class SpeciesPathFinder : ISpeciesPathFinder
 
             var eggs = TotalEggs(step);
             var leavesOfPlan = PlanTreeValidator.Leaves(step).ToList();
-            var wild = leavesOfPlan.Count(l => l is WildLeaf);
+            var wild = PlanTreeValidator.CountWild(step);
             var preferredUsed = leavesOfPlan.OfType<OwnedLeaf>().Select(l => l.Pal.Uid).Where(preferredSet.Contains).Distinct().ToList();
             var startKey = ((root.A >> 1) & 1) == 1 || ((root.B >> 1) & 1) == 1;
             return new BreedingPlan(step, PlanTreeValidator.CountSteps(step), eggs, wild, startKey, preferredUsed, notes.Distinct().ToList());
         }
 
-        // Turns a state into a tree node using its best recipe, handing out distinct owned Pals.
-        PlanNode? Expand(int key, HashSet<string> used, List<string> notes)
+        // Turns a state into a tree node using its best recipe, handing out distinct owned Pals within each step.
+        PlanNode? Expand(int key, List<string> notes, OwnedPal? forcedOwned = null)
         {
             var recipe = best[key];
             if (recipe == null || (leafOf[key] != null && dist[key].Steps == 0))
@@ -343,12 +366,20 @@ public sealed class SpeciesPathFinder : ISpeciesPathFinder
                 }
 
                 // Breeding does not use a parent up and the steps run in order: the same Pal may serve several steps (T106, T110).
-                return new OwnedLeaf(leaf.Pals[0]);
+                return new OwnedLeaf(forcedOwned ?? leaf.Pals[0]);
             }
 
-            var left = Expand(recipe.A, used, notes);
+            OwnedPal? forcedA = null;
+            OwnedPal? forcedB = null;
+            if (IsOwnedLeafKey(recipe.A) && IsOwnedLeafKey(recipe.B))
+            {
+                if (PickDistinctPair(leafOf[recipe.A]!.Pals, leafOf[recipe.B]!.Pals) is not { } pair) return null;
+                forcedA = pair.A;
+                forcedB = pair.B;
+            }
+            var left = Expand(recipe.A, notes, forcedA);
             if (left == null) return null;
-            var right = Expand(recipe.B, used, notes);
+            var right = Expand(recipe.B, notes, forcedB);
             if (right == null) return null;
             var childGender = recipe.ChildGender == 0 ? Gender.Male : Gender.Female;
             var p = _breeding.ChildGenderProbability(pals[recipe.ChildSpecies].Id, childGender);

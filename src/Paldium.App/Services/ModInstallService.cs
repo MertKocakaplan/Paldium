@@ -161,15 +161,22 @@ public sealed class ModInstallService
             var json = Path.Combine(mods, "mods.json");
             if (File.Exists(json) && File.ReadAllText(json).Contains("\"" + LegacyModName + "\"", StringComparison.Ordinal))
             {
-                var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(json));
+                var docOptions = new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true };
+                var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(json), documentOptions: docOptions);
                 if (root is System.Text.Json.Nodes.JsonArray array)
                 {
-                    foreach (var entry in array.Where(e => e?["mod_name"]?.GetValue<string>() == LegacyModName).ToList()) array.Remove(entry);
+                    foreach (var entry in array.Where(e => e is System.Text.Json.Nodes.JsonObject obj
+                        && obj["mod_name"] is System.Text.Json.Nodes.JsonValue val
+                        && val.TryGetValue<string>(out var name)
+                        && name == LegacyModName).ToList())
+                    {
+                        array.Remove(entry);
+                    }
                     File.WriteAllText(json, array.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
         {
             throw new ModInstallException(ModInstallException.OldRemoveFailed, ex.Message);
         }
@@ -214,17 +221,26 @@ public sealed class ModInstallService
         var ue4ssMods = Path.GetDirectoryName(target)!;
         if (!Directory.Exists(ue4ssMods)) throw new ModInstallException(ModInstallException.NoUe4ss, ue4ssMods);
 
+        var enabledSource = Path.Combine(_sourceFolder, "enabled.txt");
+        var enabledTarget = Path.Combine(target, "enabled.txt");
         try
         {
             CopyFolder(_sourceFolder, target);
+            // Keep the new mod disabled until the legacy mod is removed so two bridges cannot load together.
+            if (File.Exists(enabledTarget) && HasLegacyMod(gameFolder)) File.Delete(enabledTarget);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new ModInstallException(ModInstallException.CopyFailed, ex.Message);
         }
 
-        // The old mod goes only after the new one is in place.
+        // The old mod goes before enabling the new one.
         RemoveLegacyMod(gameFolder);
+        if (File.Exists(enabledSource) && !File.Exists(enabledTarget))
+        {
+            try { File.Copy(enabledSource, enabledTarget, overwrite: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { throw new ModInstallException(ModInstallException.CopyFailed, ex.Message); }
+        }
         if (GetState(gameFolder) != ModInstallState.Current) throw new ModInstallException(ModInstallException.VerifyFailed, target);
         return target;
     }

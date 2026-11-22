@@ -166,6 +166,24 @@ public class EffigyModelTests
     }
 
     [Fact]
+    public void CountFor_ShowsMimogWhenCaptureDataExistsWithoutOtherRelics_AndMatchesCaseInsensitively()
+    {
+        var captureOnly = new CaptureRecord(new Dictionary<string, int> { ["SheepBall"] = 5 }, new Dictionary<string, int> { ["SheepBall"] = 5 });
+        var mimogCount = EffigyModel.CountFor(captureOnly, "MoveSpeed");
+        Assert.NotNull(mimogCount);
+        var mimogProgress = EffigyModel.Progress(Relic("MoveSpeed"), mimogCount, 1);
+        Assert.NotNull(mimogProgress);
+        Assert.Equal(1, mimogProgress.Collected);
+        Assert.Null(EffigyModel.CountFor(captureOnly, "JumpPower"));
+
+        var lowerKey = new CaptureRecord(new Dictionary<string, int>(), new Dictionary<string, int>())
+        {
+            Relics = new Dictionary<string, RelicCount>(StringComparer.Ordinal) { ["capturepower"] = new(1, 10) },
+        };
+        Assert.Equal(new RelicCount(1, 10), EffigyModel.CountFor(lowerKey, "CapturePower"));
+    }
+
+    [Fact]
     public void EffectAt_IsTheEffectOfARank_ZeroBeforeTheFirst_AndNullWhereTheTableHasNone()
     {
         Assert.Equal(0, EffigyModel.EffectAt(Relic("SwimSpeed"), 0));

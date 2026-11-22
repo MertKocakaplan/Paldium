@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -36,6 +38,7 @@ public sealed record UpdateCheckResult(UpdateCheckStatus Status, ReleaseInfo? Re
 public sealed class UpdateException(string key, string detail) : Exception(detail)
 {
     public const string NotWritable = "Update.NotWritable";
+    public const string UnsafeFolder = "Update.UnsafeFolder";
     public const string VerifyFailed = "Update.VerifyFailed";
     public const string DownloadFailed = "Update.DownloadFailed";
     public const string NoAsset = "Update.NoAsset";
@@ -58,17 +61,36 @@ public sealed record UpdateProgress(UpdatePhase Phase, long BytesRead = 0, long 
     public int Percent => TotalBytes > 0 ? (int)Math.Clamp(BytesRead * 100 / TotalBytes, 0, 100) : 0;
 }
 
-/// <summary>A version number "1.2.3" or "1.2.3-beta" (a leading "v" is dropped); compared the SemVer way: a pre-release is older than its release.</summary>
-public readonly record struct UpdateVersion(int Major, int Minor, int Patch, string? Pre) : IComparable<UpdateVersion>
+/// <summary>
+/// A version number "1.2.3", "1.2.3.4", or "1.2.3-beta.1" (a leading "v" is dropped);
+/// compared using SemVer 2.0 ordering for numeric and pre-release identifiers.
+/// </summary>
+public readonly record struct UpdateVersion(int Major, int Minor, int Patch, string? Pre, int Revision = 0) : IComparable<UpdateVersion>
 {
+    private static readonly Regex VersionRegex = new(
+        @"^(\d+)\.(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+.*)?$",
+        RegexOptions.CultureInvariant);
+
     public static bool TryParse(string? text, out UpdateVersion version)
     {
         version = default;
         if (string.IsNullOrWhiteSpace(text)) return false;
-        var match = Regex.Match(text.Trim().TrimStart('v', 'V'), @"^(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$");
+        var match = VersionRegex.Match(text.Trim().TrimStart('v', 'V'));
         if (!match.Success) return false;
-        version = new UpdateVersion(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value),
-            match.Groups[3].Success ? int.Parse(match.Groups[3].Value) : 0, match.Groups[4].Success ? match.Groups[4].Value : null);
+
+        if (!int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major) ||
+            !int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor))
+            return false;
+
+        var patch = 0;
+        if (match.Groups[3].Success && !int.TryParse(match.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out patch))
+            return false;
+
+        var revision = 0;
+        if (match.Groups[4].Success && !int.TryParse(match.Groups[4].Value, NumberStyles.None, CultureInfo.InvariantCulture, out revision))
+            return false;
+
+        version = new UpdateVersion(major, minor, patch, match.Groups[5].Success ? match.Groups[5].Value : null, revision);
         return true;
     }
 
@@ -80,13 +102,64 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch, str
         if (c != 0) return c;
         c = Patch.CompareTo(other.Patch);
         if (c != 0) return c;
+        c = Revision.CompareTo(other.Revision);
+        if (c != 0) return c;
         if (Pre == other.Pre) return 0;
         if (Pre == null) return 1;
         if (other.Pre == null) return -1;
-        return string.CompareOrdinal(Pre, other.Pre);
+        return ComparePreRelease(Pre, other.Pre);
     }
 
-    public override string ToString() => Pre == null ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}-{Pre}";
+    private static int ComparePreRelease(string left, string right)
+    {
+        var a = left.Split('.');
+        var b = right.Split('.');
+        var common = Math.Min(a.Length, b.Length);
+        for (var i = 0; i < common; i++)
+        {
+            var ai = a[i];
+            var bi = b[i];
+            var aDigits = IsAllAsciiDigits(ai);
+            var bDigits = IsAllAsciiDigits(bi);
+            if (aDigits && bDigits)
+            {
+                var cmp = CompareUnsignedDecimalStrings(ai, bi);
+                if (cmp != 0) return cmp;
+            }
+            else if (aDigits != bDigits)
+            {
+                return aDigits ? -1 : 1; // SemVer 2.0: numeric identifiers always have lower precedence than non-numeric
+            }
+            else
+            {
+                var cmp = string.CompareOrdinal(ai, bi);
+                if (cmp != 0) return cmp;
+            }
+        }
+        return a.Length.CompareTo(b.Length);
+    }
+
+    private static bool IsAllAsciiDigits(string s)
+    {
+        if (s.Length == 0) return false;
+        foreach (var ch in s)
+            if (ch < '0' || ch > '9') return false;
+        return true;
+    }
+
+    private static int CompareUnsignedDecimalStrings(string a, string b)
+    {
+        var ta = a.TrimStart('0');
+        var tb = b.TrimStart('0');
+        var lenCmp = ta.Length.CompareTo(tb.Length);
+        return lenCmp != 0 ? lenCmp : string.CompareOrdinal(ta, tb);
+    }
+
+    public override string ToString()
+    {
+        var core = Revision == 0 ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}.{Revision}";
+        return Pre == null ? core : $"{core}-{Pre}";
+    }
 }
 
 /// <summary>
@@ -96,12 +169,20 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch, str
 public sealed class UpdateService
 {
     public const string Repository = "MertKocakaplan/Paldium";
+    public static readonly string DefaultPageUrl = $"https://github.com/{Repository}/releases";
     public static readonly Uri LatestUrl = new($"https://api.github.com/repos/{Repository}/releases/latest");
     public static readonly TimeSpan MinInterval = TimeSpan.FromHours(6);
     public static readonly TimeSpan Period = TimeSpan.FromHours(24);
     public static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan TotalDownloadTimeout = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan ChecksumTimeout = TimeSpan.FromSeconds(30);
+    private const int MaxRedirectHops = 5;
+    private const long ProgressNotifyIntervalMs = 100;
 
     private static readonly string[] DownloadHosts = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
+    private static readonly Regex Hex64Regex = new("^[0-9A-Fa-f]{64}$", RegexOptions.CultureInvariant);
+    private static readonly Regex ChecksumLineWithFileRegex = new(@"^([0-9A-Fa-f]{64})\s+\*?(.+)$", RegexOptions.CultureInvariant);
 
     private readonly HttpMessageHandler _handler;
     private readonly SettingsStore _settings;
@@ -111,14 +192,17 @@ public sealed class UpdateService
     private readonly string _updatesFolder;
     private readonly string _appFolder;
     private readonly bool _autoAllowed;
+    private readonly IEnumerable<string>? _extraForbidden;
     private readonly object _gate = new();
     private CancellationTokenSource? _download;
+    private Task<UpdateCheckResult>? _inflightCheck;
+    private bool _preparing;
 
     /// <param name="handler">The HTTP handler (a fake one in tests).</param>
     /// <param name="currentVersion">The running version, e.g. "0.1.0".</param>
     /// <param name="autoAllowed">False in Debug builds and the demo and self-check modes: no automatic requests.</param>
     public UpdateService(HttpMessageHandler handler, SettingsStore settings, string currentVersion, string updatesFolder, string appFolder, bool autoAllowed,
-        Func<DateTimeOffset>? now = null, ILogger<UpdateService>? log = null)
+        Func<DateTimeOffset>? now = null, ILogger<UpdateService>? log = null, IEnumerable<string>? extraForbidden = null)
     {
         _handler = handler;
         _settings = settings;
@@ -128,6 +212,7 @@ public sealed class UpdateService
         _autoAllowed = autoAllowed;
         _now = now ?? (() => DateTimeOffset.UtcNow);
         _log = log;
+        _extraForbidden = extraForbidden;
     }
 
     public event EventHandler? Changed;
@@ -180,23 +265,67 @@ public sealed class UpdateService
             if (ShouldAutoCheck()) await CheckAsync(manual: false, ct);
             using var timer = new PeriodicTimer(Period);
             while (await timer.WaitForNextTickAsync(ct))
-                if (_autoAllowed && Settings.AutoCheck && (Settings.NextAutoCheckUtc is not { } next || _now() >= next)) await CheckAsync(manual: false, ct);
+                if (ShouldAutoCheck()) await CheckAsync(manual: false, ct);
         }
         catch (OperationCanceledException)
         {
         }
     }
 
-    public async Task<UpdateCheckResult> CheckAsync(bool manual, CancellationToken ct = default)
+    public Task<UpdateCheckResult> CheckAsync(bool manual, CancellationToken ct = default)
     {
-        lock (_gate) { Checking = true; }
-        Raise();
+        TaskCompletionSource<UpdateCheckResult>? owned = null;
+        Task<UpdateCheckResult> task;
+        lock (_gate)
+        {
+            if (_inflightCheck != null)
+            {
+                task = _inflightCheck;
+            }
+            else
+            {
+                Checking = true;
+                owned = new TaskCompletionSource<UpdateCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                task = _inflightCheck = owned.Task;
+            }
+        }
+
+        if (owned != null)
+        {
+            Raise();
+            _ = CompleteCheckAsync(owned);
+        }
+        return ct.CanBeCanceled ? task.WaitAsync(ct) : task;
+    }
+
+    private async Task CompleteCheckAsync(TaskCompletionSource<UpdateCheckResult> owned)
+    {
+        UpdateCheckResult result;
+        try
+        {
+            result = await CheckCoreAsync();
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                Checking = false;
+                if (ReferenceEquals(_inflightCheck, owned.Task))
+                    _inflightCheck = null;
+            }
+            Raise();
+        }
+        owned.TrySetResult(result);
+    }
+
+    private async Task<UpdateCheckResult> CheckCoreAsync()
+    {
         try
         {
             using var client = new HttpClient(_handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(10) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Paldium/" + _currentVersion);
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-            using var response = await client.GetAsync(LatestUrl, ct);
+            using var response = await client.GetAsync(LatestUrl);
 
             if (response.StatusCode == HttpStatusCode.NotFound) return Finish(UpdateCheckStatus.UpToDate, null);
             if (response.StatusCode is HttpStatusCode.Forbidden or (HttpStatusCode)429)
@@ -207,19 +336,13 @@ public sealed class UpdateService
             }
 
             response.EnsureSuccessStatusCode();
-            var release = ParseRelease(await response.Content.ReadAsStringAsync(ct));
-            return Finish(release != null && IsNewer(release.Version) ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, release);
+            var release = ParseRelease(await response.Content.ReadAsStringAsync());
+            return Finish(release != null && IsNewerVersion(release.Version) ? UpdateCheckStatus.Available : UpdateCheckStatus.UpToDate, release);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
         {
-            if (ct.IsCancellationRequested) throw;
             _log?.LogInformation(ex, "Update check failed");
             return new UpdateCheckResult(UpdateCheckStatus.Offline);
-        }
-        finally
-        {
-            lock (_gate) { Checking = false; }
-            Raise();
         }
     }
 
@@ -227,13 +350,29 @@ public sealed class UpdateService
     {
         var newer = status == UpdateCheckStatus.Available ? release : null;
         Latest = newer;
-        Available = newer != null && !string.Equals(Settings.SkippedVersion, newer.Version, StringComparison.OrdinalIgnoreCase) ? newer : null;
+        Available = newer != null && !IsSkipped(newer.Version) ? newer : null;
         _settings.Update(s => s with { Update = s.Update with { LastCheckUtc = _now(), LastSeenVersion = newer?.Version } });
         return new UpdateCheckResult(status, newer);
     }
 
-    private bool IsNewer(string version) =>
+    public bool IsNewerVersion(string? version) =>
         UpdateVersion.TryParse(version, out var candidate) && UpdateVersion.TryParse(_currentVersion, out var current) && candidate.CompareTo(current) > 0;
+
+    public bool IsSkipped(string? version) =>
+        !string.IsNullOrEmpty(version) && string.Equals(Settings.SkippedVersion, version, StringComparison.OrdinalIgnoreCase);
+
+    public static string ValidatePageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return DefaultPageUrl;
+        if (uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort) return DefaultPageUrl;
+        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return DefaultPageUrl;
+        var path = uri.AbsolutePath;
+        if (!path.StartsWith($"/{Repository}/", StringComparison.OrdinalIgnoreCase) &&
+            !path.Equals($"/{Repository}", StringComparison.OrdinalIgnoreCase))
+            return DefaultPageUrl;
+        return uri.AbsoluteUri;
+    }
 
     /// <summary>The release in GitHub's "latest" answer; null for a draft, a pre-release or an answer without a usable tag.</summary>
     public static ReleaseInfo? ParseRelease(string json)
@@ -264,8 +403,8 @@ public sealed class UpdateService
                 else if (name == assetName + ".sha256") checksumUrl = Str(asset, "browser_download_url");
             }
 
-        DateTimeOffset? published = DateTimeOffset.TryParse(Str(root, "published_at"), out var p) ? p : null;
-        return new ReleaseInfo(version, tag, Str(root, "body") ?? "", Str(root, "html_url") ?? $"https://github.com/{Repository}/releases", published,
+        DateTimeOffset? published = DateTimeOffset.TryParse(Str(root, "published_at"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var p) ? p : null;
+        return new ReleaseInfo(version, tag, Str(root, "body") ?? "", ValidatePageUrl(Str(root, "html_url")), published,
             assetUrl == null ? null : assetName, assetUrl, size, digest, checksumUrl);
     }
 
@@ -286,11 +425,13 @@ public sealed class UpdateService
     }
 
     /// <summary>A download from the project's releases, or from the hosts GitHub sends those downloads to.</summary>
-    public static bool IsAllowedUrl(Uri uri, bool final) =>
-        uri.Scheme == Uri.UriSchemeHttps && (final
-            ? DownloadHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase)
-            : uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
-              && uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/", StringComparison.Ordinal));
+    public static bool IsAllowedUrl(Uri uri, bool final)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort) return false;
+        if (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+            return uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/", StringComparison.Ordinal);
+        return final && DownloadHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>The app folder can be written to without extra rights (no UAC is ever asked).</summary>
     public bool IsAppFolderWritable()
@@ -315,21 +456,31 @@ public sealed class UpdateService
         if (!Uri.TryCreate(release.AssetUrl, UriKind.Absolute, out var assetUri) || !IsAllowedUrl(assetUri, final: false))
             throw new UpdateException(UpdateException.DownloadFailed, "The download address is not one of the project's releases.");
         if (!IsAppFolderWritable()) throw new UpdateException(UpdateException.NotWritable, _appFolder);
+        var safetyError = Paldium.Updater.AppFolderSafety.ValidateAppFolder(_appFolder, _updatesFolder, _extraForbidden);
+        if (safetyError != null) throw new UpdateException(UpdateException.UnsafeFolder, safetyError);
 
         var folder = Path.Combine(_updatesFolder, release.Version);
         var zip = Path.Combine(folder, release.AssetName);
         var staged = Path.Combine(folder, "staged");
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        lock (_gate) { _download = cancel; }
+        lock (_gate)
+        {
+            if (_preparing) throw new UpdateException(UpdateException.DownloadFailed, "An update download is already in progress.");
+            _preparing = true;
+            _download = cancel;
+        }
         try
         {
             if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
             Directory.CreateDirectory(folder);
+            TryDeleteFile(Path.Combine(_updatesFolder, "last-error.txt"));
 
             SetProgress(new UpdateProgress(UpdatePhase.Downloading, 0, release.AssetSize));
+            using var totalTimeout = new CancellationTokenSource(TotalDownloadTimeout);
+            using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(cancel.Token, totalTimeout.Token);
             using var client = new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Paldium/" + _currentVersion);
-            await DownloadAsync(client, assetUri, zip, release.AssetSize, cancel.Token);
+            await DownloadAsync(client, assetUri, zip, release.AssetSize, cancel.Token, downloadCts.Token);
 
             SetProgress(new UpdateProgress(UpdatePhase.Verifying));
             var expected = await ExpectedHashAsync(client, release, cancel.Token);
@@ -344,14 +495,14 @@ public sealed class UpdateService
             {
                 ZipFile.ExtractToDirectory(zip, staged);
             }
-            catch (Exception ex) when (ex is InvalidDataException or IOException)
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
             {
                 throw new UpdateException(UpdateException.BadPackage, ex.Message);
             }
 
-            if (!File.Exists(Path.Combine(staged, "Paldium.exe")) || !File.Exists(Path.Combine(staged, "data", "gamedata.json")))
-                throw new UpdateException(UpdateException.BadPackage, "The package has no Paldium.exe or data/gamedata.json.");
-            return staged;
+            var stagedRoot = Paldium.Updater.AppFolderSafety.ResolveStagedRoot(staged, requireGameData: true)
+                ?? throw new UpdateException(UpdateException.BadPackage, "The package has no Paldium.exe or data/gamedata.json.");
+            return stagedRoot;
         }
         catch
         {
@@ -361,7 +512,11 @@ public sealed class UpdateService
         }
         finally
         {
-            lock (_gate) { _download = null; }
+            lock (_gate)
+            {
+                _download = null;
+                _preparing = false;
+            }
         }
     }
 
@@ -371,26 +526,66 @@ public sealed class UpdateService
         lock (_gate) { _download?.Cancel(); }
     }
 
-    private async Task DownloadAsync(HttpClient client, Uri url, string target, long expectedSize, CancellationToken ct)
+    private async Task<HttpResponseMessage> GetWithValidatedRedirectsAsync(HttpClient client, Uri initialUrl, HttpCompletionOption completion, CancellationToken ct)
+    {
+        var current = initialUrl;
+        for (var hop = 0; hop <= MaxRedirectHops; hop++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, current);
+            var response = await client.SendAsync(request, completion, ct);
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location)
+            {
+                response.Dispose();
+                var next = location.IsAbsoluteUri ? location : new Uri(current, location);
+                if (!IsAllowedUrl(next, final: true))
+                    throw new UpdateException(UpdateException.DownloadFailed, "The download was sent to " + next.Host + ".");
+                current = next;
+                continue;
+            }
+            return response;
+        }
+        throw new UpdateException(UpdateException.DownloadFailed, "Too many redirects.");
+    }
+
+    private async Task DownloadAsync(HttpClient client, Uri url, string target, long expectedSize, CancellationToken userCt, CancellationToken totalCt)
     {
         try
         {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(totalCt);
+            headerCts.CancelAfter(ReadTimeout);
+            using var response = await GetWithValidatedRedirectsAsync(client, url, HttpCompletionOption.ResponseHeadersRead, headerCts.Token);
             response.EnsureSuccessStatusCode();
             var final = response.RequestMessage?.RequestUri ?? url;
             if (!IsAllowedUrl(final, final: true)) throw new UpdateException(UpdateException.DownloadFailed, "The download was sent to " + final.Host + ".");
             var total = response.Content.Headers.ContentLength ?? expectedSize;
-            await using var source = await response.Content.ReadAsStreamAsync(ct);
+            await using var source = await response.Content.ReadAsStreamAsync(headerCts.Token);
             await using var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None);
             var buffer = new byte[81920];
             long read = 0;
-            int n;
-            while ((n = await source.ReadAsync(buffer, ct)) > 0)
+            long lastNotifyRead = 0;
+            var lastNotifyTick = Environment.TickCount64;
+            while (true)
             {
-                await file.WriteAsync(buffer.AsMemory(0, n), ct);
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(totalCt);
+                readCts.CancelAfter(ReadTimeout);
+                var n = await source.ReadAsync(buffer, readCts.Token);
+                if (n <= 0) break;
+                await file.WriteAsync(buffer.AsMemory(0, n), totalCt);
                 read += n;
-                SetProgress(new UpdateProgress(UpdatePhase.Downloading, read, total));
+                var nowTick = Environment.TickCount64;
+                if (nowTick - lastNotifyTick >= ProgressNotifyIntervalMs)
+                {
+                    lastNotifyTick = nowTick;
+                    lastNotifyRead = read;
+                    SetProgress(new UpdateProgress(UpdatePhase.Downloading, read, total));
+                }
             }
+            if (read != lastNotifyRead)
+                SetProgress(new UpdateProgress(UpdatePhase.Downloading, read, total));
+        }
+        catch (OperationCanceledException) when (!userCt.IsCancellationRequested)
+        {
+            throw new UpdateException(UpdateException.DownloadFailed, "Download timed out.");
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -398,22 +593,57 @@ public sealed class UpdateService
         }
     }
 
-    private async Task<string?> ExpectedHashAsync(HttpClient client, ReleaseInfo release, CancellationToken ct)
+    private async Task<string?> ExpectedHashAsync(HttpClient client, ReleaseInfo release, CancellationToken userCt)
     {
-        if (release.Digest is { } digest && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) return digest["sha256:".Length..].Trim();
+        if (release.Digest is { } digest && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+        {
+            var hex = digest["sha256:".Length..].Trim();
+            if (Hex64Regex.IsMatch(hex)) return hex;
+        }
+
         if (release.ChecksumUrl == null || !Uri.TryCreate(release.ChecksumUrl, UriKind.Absolute, out var url) || !IsAllowedUrl(url, final: false)) return null;
         try
         {
-            using var response = await client.GetAsync(url, ct);
+            using var checksumCts = CancellationTokenSource.CreateLinkedTokenSource(userCt);
+            checksumCts.CancelAfter(ChecksumTimeout);
+            using var response = await GetWithValidatedRedirectsAsync(client, url, HttpCompletionOption.ResponseContentRead, checksumCts.Token);
             response.EnsureSuccessStatusCode();
             if (!IsAllowedUrl(response.RequestMessage?.RequestUri ?? url, final: true)) return null;
-            var match = Regex.Match(await response.Content.ReadAsStringAsync(ct), "[0-9A-Fa-f]{64}");
-            return match.Success ? match.Value : null;
+            var text = await response.Content.ReadAsStringAsync(checksumCts.Token);
+            return ParseChecksumText(text, release.AssetName);
+        }
+        catch (OperationCanceledException) when (!userCt.IsCancellationRequested)
+        {
+            return null;
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
             return null;
         }
+    }
+
+    public static string? ParseChecksumText(string content, string? assetName)
+    {
+        var bareLines = new List<string>();
+        var sawNamedLine = false;
+        foreach (var rawLine in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+            var namedMatch = ChecksumLineWithFileRegex.Match(line);
+            if (namedMatch.Success)
+            {
+                sawNamedLine = true;
+                var file = Path.GetFileName(namedMatch.Groups[2].Value.Trim());
+                if (assetName != null && string.Equals(file, assetName, StringComparison.OrdinalIgnoreCase))
+                    return namedMatch.Groups[1].Value;
+            }
+            else if (Hex64Regex.IsMatch(line))
+            {
+                bareLines.Add(line);
+            }
+        }
+        return !sawNamedLine && bareLines.Count == 1 ? bareLines[0] : null;
     }
 
     private static async Task<string> HashOfAsync(string file, CancellationToken ct)
@@ -429,26 +659,62 @@ public sealed class UpdateService
     {
         var source = Path.Combine(_appFolder, "updater");
         var exe = Path.Combine(source, "Paldium.Updater.exe");
-        if (!File.Exists(exe)) throw new UpdateException(UpdateException.BadPackage, "The updater is missing from the app folder.");
+        if (!File.Exists(exe))
+        {
+            SetProgress(new UpdateProgress(UpdatePhase.Idle));
+            throw new UpdateException(UpdateException.BadPackage, "The updater is missing from the app folder.");
+        }
 
-        var target = Path.Combine(_updatesFolder, "updater");
-        if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
-        Directory.CreateDirectory(target);
-        foreach (var file in Directory.EnumerateFiles(source)) File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
+        try
+        {
+            var target = Path.Combine(_updatesFolder, "updater");
+            if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
+            CopyDirectoryRecursive(source, target);
+            TryDeleteFile(Path.Combine(_updatesFolder, "last-error.txt"));
 
-        SetProgress(new UpdateProgress(UpdatePhase.Restarting));
-        var info = new ProcessStartInfo(Path.Combine(target, "Paldium.Updater.exe")) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = target };
-        foreach (var argument in new[] { Environment.ProcessId.ToString(), _appFolder.TrimEnd('\\'), stagedFolder, _updatesFolder, _currentVersion }) info.ArgumentList.Add(argument);
-        Process.Start(info);
+            SetProgress(new UpdateProgress(UpdatePhase.Restarting));
+            var info = new ProcessStartInfo(Path.Combine(target, "Paldium.Updater.exe"))
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = target,
+            };
+            var appArg = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_appFolder));
+            foreach (var argument in new[] { Environment.ProcessId.ToString(CultureInfo.InvariantCulture), appArg, stagedFolder, _updatesFolder, _currentVersion })
+                info.ArgumentList.Add(argument);
+
+            using var process = Process.Start(info);
+            if (process == null)
+                throw new UpdateException(UpdateException.BadPackage, "The updater process could not be started.");
+        }
+        catch (UpdateException)
+        {
+            SetProgress(new UpdateProgress(UpdatePhase.Idle));
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
+        {
+            SetProgress(new UpdateProgress(UpdatePhase.Idle));
+            throw new UpdateException(UpdateException.BadPackage, ex.Message);
+        }
     }
 
-    /// <summary>Keeps the backup of the version just replaced and removes older backups and the unpacked packages (called after a successful start).</summary>
-    public void CleanUp(string keepBackupVersion)
+    private static void CopyDirectoryRecursive(string sourceDir, string targetDir)
+    {
+        Directory.CreateDirectory(targetDir);
+        foreach (var file in Directory.EnumerateFiles(sourceDir))
+            File.Copy(file, Path.Combine(targetDir, Path.GetFileName(file)), overwrite: true);
+        foreach (var subDir in Directory.EnumerateDirectories(sourceDir))
+            CopyDirectoryRecursive(subDir, Path.Combine(targetDir, Path.GetFileName(subDir)));
+    }
+
+    /// <summary>Keeps the backup of the version just replaced (when known) and removes older backups and unpacked packages.</summary>
+    public void CleanUp(string? keepBackupVersion)
     {
         try
         {
             var backups = Path.Combine(_updatesFolder, "backup");
-            if (Directory.Exists(backups))
+            if (keepBackupVersion != null && Directory.Exists(backups))
                 foreach (var directory in Directory.EnumerateDirectories(backups).Where(d => Path.GetFileName(d) != keepBackupVersion)) Directory.Delete(directory, recursive: true);
             if (Directory.Exists(_updatesFolder))
                 foreach (var directory in Directory.EnumerateDirectories(_updatesFolder).Where(d => Path.GetFileName(d) is not ("backup" or "updater"))) Directory.Delete(directory, recursive: true);
@@ -459,7 +725,7 @@ public sealed class UpdateService
         }
     }
 
-    /// <summary>The text of <c>last-error.txt</c> the updater wrote when it could not finish; the file is removed once read.</summary>
+    /// <summary>The text of <c>last-error.txt</c> the updater wrote when it could not finish; logs it and removes the file once read.</summary>
     public string? TakeLastError()
     {
         var file = Path.Combine(_updatesFolder, "last-error.txt");
@@ -467,6 +733,7 @@ public sealed class UpdateService
         {
             if (!File.Exists(file)) return null;
             var text = File.ReadAllText(file);
+            _log?.LogError("Previous update failed: {Error}", text.Trim());
             File.Delete(file);
             return text;
         }
@@ -483,6 +750,12 @@ public sealed class UpdateService
     }
 
     private void Raise() => Changed?.Invoke(this, EventArgs.Empty);
+
+    private static void TryDeleteFile(string file)
+    {
+        try { if (File.Exists(file)) File.Delete(file); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
 
     private static void TryDelete(string folder)
     {

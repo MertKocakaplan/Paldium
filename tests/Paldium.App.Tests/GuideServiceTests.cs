@@ -82,4 +82,16 @@ public class GuideServiceTests
         state.GuideLang = "en";
         Assert.Equal("en", state.EffectiveLang("tr"));
     }
+
+    [Theory]
+    [InlineData("agil", true)]
+    [InlineData("tasima", true)]
+    [InlineData("binekler", true)]
+    [InlineData("heykeller", true)]
+    [InlineData("03-cakes", false)]
+    [InlineData(null, false)]
+    public void IsReferenceSlug_IdentifiesOnlyTheFourReferenceRoutes(string? slug, bool expected)
+    {
+        Assert.Equal(expected, GuideStateService.IsReferenceSlug(slug));
+    }
 }

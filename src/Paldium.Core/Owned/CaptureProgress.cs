@@ -105,7 +105,42 @@ public sealed class CaptureProgressStore
             wanted = players[0];
         }
 
-        var mine = all.Where(p => NormalizeId(p.PlayerId) == wanted).OrderByDescending(p => p.ReadAtUtc).FirstOrDefault();
-        return mine == null ? (CaptureAvailability.NoData, null) : (CaptureAvailability.Available, mine.Record);
+        var matching = all.Where(p => NormalizeId(p.PlayerId) == wanted).OrderByDescending(p => p.ReadAtUtc).ToList();
+        if (matching.Count == 0) return (CaptureAvailability.NoData, null);
+        if (matching.Count == 1) return (CaptureAvailability.Available, matching[0].Record);
+
+        var merged = matching[0].Record;
+        var bonus = merged.Bonus;
+        var count = merged.Count;
+        var relics = merged.Relics == null ? null : new Dictionary<string, RelicCount>(merged.Relics, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var older in matching.Skip(1).Select(m => m.Record))
+        {
+            if (bonus.Count == 0 && older.Bonus.Count > 0) bonus = older.Bonus;
+            if (count.Count == 0 && older.Count.Count > 0) count = older.Count;
+            if (older.Relics == null) continue;
+            if (relics == null)
+            {
+                relics = new Dictionary<string, RelicCount>(older.Relics, StringComparer.OrdinalIgnoreCase);
+                continue;
+            }
+
+            foreach (var (type, prev) in older.Relics)
+            {
+                if (!relics.TryGetValue(type, out var cur))
+                {
+                    relics[type] = prev;
+                    continue;
+                }
+
+                // Only fill Have from an older snapshot when Collected matches or was missing so unspent counts never mix across effigy pickups.
+                var have = cur.Have ?? (cur.Collected == null || cur.Collected == prev.Collected ? prev.Have : null);
+                var collected = cur.Collected ?? prev.Collected;
+                if (have != cur.Have || collected != cur.Collected)
+                    relics[type] = new RelicCount(have, collected);
+            }
+        }
+
+        return (CaptureAvailability.Available, new CaptureRecord(bonus, count) { Relics = relics });
     }
 }

@@ -28,15 +28,16 @@
                         <Icon Name="egg" Class="egg" />
                     }
                     <span class="t">@L["Plan.BreedSpeciesAction", SpeciesName(step.ChildSpeciesId)]</span>
+                    @{ var (inUseA, inUseB) = FlexChoices != null ? PlanText.ParentsInUse(Plan, step, FlexChoices) : (step.ParentA, step.ParentB); }
                     <span class="p">
-                        <PalIcon PalId="@step.ParentA.SpeciesId" Size="22" />
-                        <b>@ParentDisplay(step.ParentA)</b>
-                        <GenderIcon Gender="@NodeGender(step.ParentA)" Size="14" />
+                        <PalIcon PalId="@inUseA.SpeciesId" Size="22" />
+                        <b>@ParentDisplay(inUseA)</b>
+                        <GenderIcon Gender="@NodeGender(inUseA)" Size="14" />
                         <span>+</span>
-                        <PalIcon PalId="@step.ParentB.SpeciesId" Size="22" />
-                        <b>@ParentDisplay(step.ParentB)</b>
-                        <GenderIcon Gender="@NodeGender(step.ParentB)" Size="14" />
-                        @if (ParentLocationSuffix(step.ParentA, step.ParentB) is { } locNote)
+                        <PalIcon PalId="@inUseB.SpeciesId" Size="22" />
+                        <b>@ParentDisplay(inUseB)</b>
+                        <GenderIcon Gender="@NodeGender(inUseB)" Size="14" />
+                        @if (ParentLocationSuffix(inUseA, inUseB) is { } locNote)
                         {
                             <span> · @locNote</span>
                         }
@@ -54,6 +55,7 @@
 
     [Parameter, EditorRequired] public BreedingPlan Plan { get; set; } = default!;
     [Parameter] public IReadOnlySet<int> Done { get; set; } = new HashSet<int>();
+    [Parameter] public IReadOnlyDictionary<int, Gender>? FlexChoices { get; set; }
     [Parameter] public EventCallback<int> OnToggleStep { get; set; }
     [Parameter] public int? CanvasTop { get; set; }
     [Parameter] public string HeadingId { get; set; } = "st-h";

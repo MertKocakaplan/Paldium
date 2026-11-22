@@ -296,7 +296,7 @@
     private BridgeSummary? SummaryOf(SourceConfig source, SourceStatus? status)
     {
         if (_summaries.TryGetValue(source.Id, out var cached) && cached.At == status?.LastSyncUtc) return cached.Summary;
-        var summary = ModBridgeReader.Summarize(source.Path, GameData);
+        var summary = ModBridgeReader.Summarize(ModBridgeReader.EffectiveFile(source.Path), GameData);
         // The coverage of ALL stored pages (earlier game sessions included), not only of the last file.
         if (summary != null)
         {

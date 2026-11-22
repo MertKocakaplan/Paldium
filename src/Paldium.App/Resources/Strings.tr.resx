@@ -154,6 +154,7 @@
   <data name="Ranch.BaseFarming" xml:space="preserve"><value>Temel Çiftçilik {0}</value></data>
   <data name="Ranch.Level" xml:space="preserve"><value>Seviye {0}</value></data>
   <data name="Ranch.BelowBase" xml:space="preserve"><value>Bu türün temel seviyesi {0}</value></data>
+  <data name="Ranch.BelowBaseNote" xml:space="preserve"><value>Bu türün temel seviyesi {0}; bu seviye oyunda olmaz.</value></data>
   <data name="Ranch.Summary" xml:space="preserve"><value>Ağıl'a atanan Pal'ların düşürdüğü eşyalar; birden çok eşya varsa her birinin olasılığı ve Çiftçilik seviyesine göre adet.</value></data>
   <data name="Ranch.Scope" xml:space="preserve"><value>{0} Pal · {1} eşya</value></data>
   <data name="Ranch.SearchTool" xml:space="preserve"><value>Pal ya da eşya ara</value></data>
@@ -179,19 +180,19 @@
   <data name="Ranch.ShowInMyPals" xml:space="preserve"><value>Pal'larım'da göster</value></data>
   <data name="Ranch.NotOwned" xml:space="preserve"><value>Sende yok</value></data>
   <data name="Ranch.MakeInPlanner" xml:space="preserve"><value>Planlayıcı'da üret</value></data>
-  <data name="Ranch.EveryDrop" xml:space="preserve"><value>Çiftçilik seviyesi {0}'da her düşüşte</value></data>
+  <data name="Ranch.EveryDrop" xml:space="preserve"><value>{0}. Çiftçilik seviyesinde her düşüşte</value></data>
   <data name="Ranch.PalHintMulti" xml:space="preserve"><value>Her düşüşte tek eşya çıkar; olasılıklar toplamı %100. Seviye yükseldikçe yeni eşyalar ve daha çok adet gelir. Sağdaki tablo bütün seviyeleri gösterir; üstte olasılık, altta adet.</value></data>
   <data name="Ranch.PalHintSingle" xml:space="preserve"><value>Her düşüşte bu eşya çıkar; seviye yalnız adedi büyütür. Tablo bütün seviyeleri gösterir; hücrede adet.</value></data>
   <data name="Ranch.Item" xml:space="preserve"><value>Eşya</value></data>
   <data name="Ranch.PalWord" xml:space="preserve"><value>Pal</value></data>
-  <data name="Ranch.ChanceAt" xml:space="preserve"><value>Seviye {0}'da olasılık</value></data>
+  <data name="Ranch.ChanceAt" xml:space="preserve"><value>{0}. seviyede olasılık</value></data>
   <data name="Ranch.Amount" xml:space="preserve"><value>Adet</value></data>
   <data name="Ranch.Average" xml:space="preserve"><value>Ortalama</value></data>
   <data name="Ranch.AverageHint" xml:space="preserve"><value>Ortalama = olasılık × ortalama adet: bu Pal'ın her düşüşünde gelen beklenen {0}. Kaç dakikada bir düştüğü veride yok.</value></data>
   <data name="Ranch.LevelHeader" xml:space="preserve"><value>Seviye · bir sayıya tıkla</value></data>
   <data name="Ranch.LevelAria" xml:space="preserve"><value>Çiftçilik seviyesi {0}</value></data>
   <data name="Ranch.Always" xml:space="preserve"><value>her düşüşte</value></data>
-  <data name="Ranch.FromLevel" xml:space="preserve"><value>seviye {0}'dan itibaren</value></data>
+  <data name="Ranch.FromLevel" xml:space="preserve"><value>seviye {0} ve üstü</value></data>
   <data name="Ranch.CellAria" xml:space="preserve"><value>Seviye {0}: {1}, {2} adet</value></data>
   <data name="Ranch.CellAriaSingle" xml:space="preserve"><value>Seviye {0}: {1} adet</value></data>
   <data name="Ranch.ItemSub" xml:space="preserve"><value>Ağıl'da {0} Pal düşürür · sıra: düşüş başına ortalama adet</value></data>
@@ -778,7 +779,7 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Plan.ShelfAria" xml:space="preserve"><value>Raf: sahip olduğun Pal'lar</value></data>
   <data name="Plan.ShelfTitle" xml:space="preserve"><value>Raf</value></data>
   <data name="Plan.ShelfSearchPlaceholder" xml:space="preserve"><value>Pal ya da pasif ara</value></data>
-  <data name="Plan.ShelfFilterAria" xml:space="preserve"><value>Raf süzgeci</value></data>
+  <data name="Plan.ShelfFilterAria" xml:space="preserve"><value>Raf filtresi</value></data>
   <data name="Plan.ShelfListAria" xml:space="preserve"><value>Pal'lar</value></data>
   <data name="Plan.InPlanTag" xml:space="preserve"><value>Planda</value></data>
   <data name="Plan.AsStartTag" xml:space="preserve"><value>Başlangıç</value></data>
@@ -1463,6 +1464,7 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Settings.Cake" xml:space="preserve"><value>Kek</value></data>
   <data name="Settings.Cake.Special" xml:space="preserve"><value>Özel</value></data>
   <data name="Settings.Licenses" xml:space="preserve"><value>Lisanslar ve kaynaklar</value></data>
+  <data name="Settings.LicensesApp" xml:space="preserve"><value>Telif Hakkı (C) 2026 Mert Kocakaplan · GNU GPL-3.0-or-later altında lisanslıdır (uygulama klasöründeki LICENSE). v0.1.0 MIT idi; v0.1.1 libooz (GPL-3.0) nedeniyle GPL-3.0'a geçti.</value></data>
   <data name="Settings.LicensesFonts" xml:space="preserve"><value>Fontlar</value></data>
   <data name="Common.Off" xml:space="preserve"><value>Kapalı</value></data>
   <data name="Sources.Retry" xml:space="preserve"><value>Yeniden dene</value></data>
@@ -1492,8 +1494,8 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Transport.Owned" xml:space="preserve"><value>Sende</value></data>
   <data name="Transport.MinLevel" xml:space="preserve"><value>En az seviye</value></data>
   <data name="Transport.Count" xml:space="preserve"><value>{0} Pal</value></data>
-  <data name="Transport.NoResults" xml:space="preserve"><value>Bu süzgeçlere uyan Pal yok.</value></data>
-  <data name="Transport.ClearFilters" xml:space="preserve"><value>Süzgeçleri temizle</value></data>
+  <data name="Transport.NoResults" xml:space="preserve"><value>Bu filtrelere uyan Pal yok.</value></data>
+  <data name="Transport.ClearFilters" xml:space="preserve"><value>Filtreleri temizle</value></data>
   <data name="Transport.OwnedCell" xml:space="preserve"><value>Sende {0}</value></data>
   <data name="Transport.Terraria" xml:space="preserve"><value>Terraria</value></data>
   <data name="Paldex.Col.Capture" xml:space="preserve"><value>Yakalama</value></data>
@@ -1534,6 +1536,10 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Mounts.Stamina" xml:space="preserve"><value>Dayanıklılık</value></data>
   <data name="Mounts.Owned" xml:space="preserve"><value>Sende</value></data>
   <data name="Mounts.CellTip" xml:space="preserve"><value>Temel {0} · +%{1}</value></data>
+  <data name="Mounts.PassiveBonus" xml:space="preserve"><value>+%{0}</value></data>
+  <data name="Mounts.Group.Move" xml:space="preserve"><value>Hareket</value></data>
+  <data name="Mounts.Group.Swim" xml:space="preserve"><value>Yüzme</value></data>
+  <data name="Mounts.Group.Stamina" xml:space="preserve"><value>Dayanıklılık</value></data>
   <data name="Mounts.StarTip" xml:space="preserve"><value>{0}★ +%{1}</value></data>
   <data name="Mounts.ConditionalTip" xml:space="preserve"><value>{0}: yalnız bir koşulda geçerli, hesaba katılmaz ({1})</value></data>
   <data name="Effigy.Title" xml:space="preserve"><value>Heykeller: Pal Effigy</value></data>
@@ -1546,8 +1552,8 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Effigy.MaxEffect" xml:space="preserve"><value>En yüksek etki %{0}</value></data>
   <data name="Effigy.NoEffect" xml:space="preserve"><value>Etki değeri oyun verisinde yok</value></data>
   <data name="Effigy.BarAria" xml:space="preserve"><value>{0} seviye, toplam {1} heykel</value></data>
-  <data name="Effigy.Rank" xml:space="preserve"><value>Seviye {0} / {1} · etki {2} → sonraki {3}</value></data>
-  <data name="Effigy.RankNoNext" xml:space="preserve"><value>Seviye {0} / {1} · etki {2}</value></data>
+  <data name="Effigy.Rank" xml:space="preserve"><value>Seviye {0} / {1} · etki %{2} → sonraki %{3}</value></data>
+  <data name="Effigy.RankNoNext" xml:space="preserve"><value>Seviye {0} / {1} · etki %{2}</value></data>
   <data name="Effigy.RankPlain" xml:space="preserve"><value>Seviye {0} / {1}</value></data>
   <data name="Effigy.AtLeast" xml:space="preserve"><value>En az {0}</value></data>
   <data name="Effigy.Have" xml:space="preserve"><value>Elde {0}</value></data>
@@ -1555,8 +1561,11 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Effigy.NextNeed" xml:space="preserve"><value>Sonraki seviye için {0} daha</value></data>
   <data name="Effigy.CanRankUp" xml:space="preserve"><value>Sonraki seviye için yeterli</value></data>
   <data name="Effigy.MaxNeed" xml:space="preserve"><value>En yüksek seviye için {0} daha</value></data>
+  <data name="Effigy.AllCollectedUnspent" xml:space="preserve"><value>Hepsi toplandı · {0} heykel harcanmayı bekliyor</value></data>
+  <data name="Effigy.AllCollected" xml:space="preserve"><value>Hepsi toplandı</value></data>
   <data name="Effigy.Maxed" xml:space="preserve"><value>En yüksek seviye ✓</value></data>
   <data name="Effigy.NoData" xml:space="preserve"><value>İlerlemen kendi kaydından ya da moddan okunur.</value></data>
+  <data name="Effigy.NoPlayer" xml:space="preserve"><value>Ayarlar'da "Ben buyum"u seç.</value></data>
   <data name="Effigy.MimogNote" xml:space="preserve"><value>Her türden 5 Pal yakalayınca 1 heykel</value></data>
   <data name="Effigy.MimogLink" xml:space="preserve"><value>Paldex'te yakalama durumu</value></data>
   <data name="Nav.Technology" xml:space="preserve"><value>Teknoloji</value></data>
@@ -1579,7 +1588,7 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Tech.LeadsTo" xml:space="preserve"><value>Sonra açılır</value></data>
   <data name="Tech.Jump" xml:space="preserve"><value>Seviyeye atla</value></data>
   <data name="Tech.Empty" xml:space="preserve"><value>Eşleşen teknoloji yok.</value></data>
-  <data name="Tech.ClearFilters" xml:space="preserve"><value>Süzgeçleri temizle</value></data>
+  <data name="Tech.ClearFilters" xml:space="preserve"><value>Filtreleri temizle</value></data>
   <data name="Tech.NoData" xml:space="preserve"><value>Teknoloji verisi bu veri paketinde yok. Uygulamayı güncelle.</value></data>
   <data name="Sources.ModStateLegacy" xml:space="preserve"><value>Yardımcı modun eski sürümü kurulu. Değiştirmek için "Modu kur"a bas.</value></data>
   <data name="Mod.OldRemoveFailed" xml:space="preserve"><value>Yeni mod kopyalandı ama eski mod kaldırılamadı. Oyunu kapatıp yeniden dene.</value></data>
@@ -1588,6 +1597,8 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Update.BadgeDownloading" xml:space="preserve"><value>İndiriliyor %{0}</value></data>
   <data name="Update.Title" xml:space="preserve"><value>Paldium {0} hazır</value></data>
   <data name="Update.Sub" xml:space="preserve"><value>Sendeki sürüm {0} · {1} yayımlandı · {2}</value></data>
+  <data name="Update.SubVersion" xml:space="preserve"><value>Sendeki sürüm {0}</value></data>
+  <data name="Update.SubReleased" xml:space="preserve"><value>{0} yayımlandı</value></data>
   <data name="Update.Install" xml:space="preserve"><value>Güncelle ve yeniden başlat</value></data>
   <data name="Update.Later" xml:space="preserve"><value>Sonra</value></data>
   <data name="Update.Skip" xml:space="preserve"><value>Bu sürümü atla</value></data>
@@ -1596,11 +1607,12 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Update.Downloading" xml:space="preserve"><value>İndiriliyor… {0}</value></data>
   <data name="Update.Verifying" xml:space="preserve"><value>Doğrulanıyor…</value></data>
   <data name="Update.Restarting" xml:space="preserve"><value>Yeniden başlatılıyor…</value></data>
-  <data name="Update.Done" xml:space="preserve"><value>Paldium {0}'a güncellendi.</value></data>
+  <data name="Update.Done" xml:space="preserve"><value>Paldium {0} sürümüne güncellendi.</value></data>
   <data name="Update.UpdateMod" xml:space="preserve"><value>Modu da güncelle</value></data>
   <data name="Update.Failed" xml:space="preserve"><value>Güncelleme yapılamadı, eski sürüm açıldı.</value></data>
   <data name="Update.VerifyFailed" xml:space="preserve"><value>İndirilen dosya doğrulanamadı. Sürüm sayfasından elle indirebilirsin.</value></data>
   <data name="Update.NotWritable" xml:space="preserve"><value>Bu klasöre yazılamıyor. Sürüm sayfasından indirip elle güncelleyebilirsin.</value></data>
+  <data name="Update.UnsafeFolder" xml:space="preserve"><value>Paldium bu klasörde otomatik güncelleme yapamaz. Güncellemeyi sürüm sayfasından indirip elle kur.</value></data>
   <data name="Update.DownloadFailed" xml:space="preserve"><value>İndirme yarıda kesildi.</value></data>
   <data name="Update.NoAsset" xml:space="preserve"><value>Bu sürümde indirilecek paket yok.</value></data>
   <data name="Update.BadPackage" xml:space="preserve"><value>İndirilen paket eksik.</value></data>

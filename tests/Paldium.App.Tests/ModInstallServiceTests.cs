@@ -176,4 +176,33 @@ public class ModInstallServiceTests : IDisposable
         var ex = Assert.Throws<ModInstallException>(() => NewService().Install(_game));
         Assert.True(ex.Key is ModInstallException.CopyFailed or ModInstallException.VerifyFailed);
     }
+
+    [Fact]
+    public void Install_ParsesModsJsonWithCommentsAndTrailingCommas_AndDisablesNewModIfLegacyRemovalFails()
+    {
+        var mods = Path.Combine(_game, "Mods", "NativeMods", "UE4SS", "Mods");
+        var old = Path.Combine(mods, "PalbreedingBridge");
+        Directory.CreateDirectory(Path.Combine(old, "Scripts"));
+        File.WriteAllText(Path.Combine(old, "Scripts", "main.lua"), "old");
+        File.WriteAllText(Path.Combine(mods, "mods.json"), """
+            [
+              // comment in UE4SS mods.json
+              { "mod_name": 42, "mod_enabled": true },
+              { "mod_name": "PalbreedingBridge", "mod_enabled": true, },
+            ]
+            """);
+
+        // Lock a file in legacy folder so removal fails -> new mod must not keep enabled.txt active.
+        using (var locked = new FileStream(Path.Combine(old, "Scripts", "main.lua"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var ex = Assert.Throws<ModInstallException>(() => NewService().Install(_game));
+            Assert.Equal(ModInstallException.OldRemoveFailed, ex.Key);
+            Assert.False(File.Exists(Path.Combine(mods, "PaldiumBridge", "enabled.txt")));
+        }
+
+        // Once unlocked, install completes cleanly and cleans commented mods.json.
+        NewService().Install(_game);
+        Assert.True(File.Exists(Path.Combine(mods, "PaldiumBridge", "enabled.txt")));
+        Assert.DoesNotContain("PalbreedingBridge", File.ReadAllText(Path.Combine(mods, "mods.json")));
+    }
 }

@@ -60,16 +60,38 @@ public static class LegacyDataMigration
     /// <summary>Runs the move for the two folder pairs under the given roots. Never throws; <see cref="MigrationResult"/> tells what happened.</summary>
     public static MigrationResult Run(string roamingRoot, string localRoot, Action<string, Exception?>? log = null, bool applyFallback = true)
     {
-        var roaming = CopyFolder(Path.Combine(roamingRoot, AppFolders.LegacyName), Path.Combine(roamingRoot, AppFolders.Name), roaming: true, log);
-        var local = CopyFolder(Path.Combine(localRoot, AppFolders.LegacyName), Path.Combine(localRoot, AppFolders.Name), roaming: false, log);
+        var roamingOld = Path.Combine(roamingRoot, AppFolders.LegacyName);
+        var roamingNew = Path.Combine(roamingRoot, AppFolders.Name);
+        var localOld = Path.Combine(localRoot, AppFolders.LegacyName);
+        var localNew = Path.Combine(localRoot, AppFolders.Name);
+
+        var roaming = CopyFolder(roamingOld, roamingNew, roaming: true, log, writeMarker: false);
+        var local = CopyFolder(localOld, localNew, roaming: false, log, writeMarker: true);
 
         var rewritten = 0;
         if (roaming.Copied)
         {
-            try { rewritten = RewriteSettings(Path.Combine(roaming.New, "settings.json"), [(roaming.Old, roaming.New), (local.Old, local.New)]); }
+            var pairs = new List<(string Old, string New)> { (roaming.Old, roaming.New) };
+            if (!local.Failed) pairs.Add((local.Old, local.New));
+            try
+            {
+                rewritten = RewriteSettings(Path.Combine(roaming.New, "settings.json"), pairs);
+                WriteMarker(roaming.Old, roaming.New);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
                 log?.Invoke("Paldium: the paths in the copied settings.json could not be changed.", ex);
+            }
+        }
+        else if (local.Copied && !roaming.Failed && Directory.Exists(roaming.New))
+        {
+            try
+            {
+                rewritten = RewriteSettings(Path.Combine(roaming.New, "settings.json"), [(local.Old, local.New)]);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                log?.Invoke("Paldium: the local paths in settings.json could not be changed.", ex);
             }
         }
 
@@ -87,7 +109,10 @@ public static class LegacyDataMigration
     /// <summary>Written into the new folder when the move is done; a folder that exists without it (something created it early) is still moved into.</summary>
     public const string MarkerFile = ".migrated-from-palbreeding";
 
-    private static MigrationFolderResult CopyFolder(string old, string current, bool roaming, Action<string, Exception?>? log)
+    private static void WriteMarker(string old, string current) =>
+        File.WriteAllText(Path.Combine(current, MarkerFile), "moved from " + old + " at " + DateTimeOffset.Now.ToString("O") + Environment.NewLine);
+
+    private static MigrationFolderResult CopyFolder(string old, string current, bool roaming, Action<string, Exception?>? log, bool writeMarker)
     {
         var marker = Path.Combine(current, MarkerFile);
         if (!Directory.Exists(old) || File.Exists(marker)) return new MigrationFolderResult(old, current, false, null);
@@ -97,7 +122,7 @@ public static class LegacyDataMigration
             // Roaming: the old files replace the new ones of the same name (a default file made by an early start stays as .bak).
             // Local: only what the new folder does not have is copied.
             CopyRecursive(old, current, replace: roaming);
-            File.WriteAllText(marker, "moved from " + old + " at " + DateTimeOffset.Now.ToString("O") + Environment.NewLine);
+            if (writeMarker) WriteMarker(old, current);
             log?.Invoke($"Paldium: moved the data of the former name from {old} to {current} (the old folder was left in place).", null);
             return new MigrationFolderResult(old, current, true, null);
         }
@@ -118,10 +143,16 @@ public static class LegacyDataMigration
             if (File.Exists(destination))
             {
                 if (!replace) continue;
-                File.Move(destination, destination + ".bak", overwrite: true);
             }
 
-            File.Copy(file, destination);
+            var temp = destination + ".tmp";
+            File.Copy(file, temp, overwrite: true);
+            if (File.Exists(destination))
+            {
+                var bak = destination + ".bak";
+                if (!File.Exists(bak)) File.Move(destination, bak);
+            }
+            File.Move(temp, destination, overwrite: true);
         }
 
         foreach (var directory in Directory.EnumerateDirectories(source))

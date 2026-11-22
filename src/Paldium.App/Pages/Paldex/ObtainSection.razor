@@ -269,8 +269,9 @@
         {
             var name = g.HasName ? g.Region : Plain(Raw(g.Region));
             var title = name + (g.Night ? " · " + L["Obtain.Night"].Value : "") + (g.Aura ? " · " + L["Obtain.Aura"].Value : "");
+            var displayName = name + (g.Aura ? " · " + L["Obtain.Aura"].Value : "");
             var meta = Levels(g.LevelMin, g.LevelMax) + " · " + L["Obtain.AreaCount", g.Areas].Value;
-            _places.Add(new MapPlace("wild", Terms.ObtainMethod("Wild"), title, meta, title, g.OnMain,
+            _places.Add(new MapPlace("wild", Terms.ObtainMethod("Wild"), displayName, meta, title, g.OnMain,
                 g.Points.Select(pt => DotOf(pt, alpha: false, night: g.Night)).ToList(), g.Night));
         }
 

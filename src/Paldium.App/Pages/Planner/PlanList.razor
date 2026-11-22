@@ -37,6 +37,7 @@
             var pathIds = PathIds(plan);
             var wildIds = WildIds(plan);
             <button type="button"
+                    @ref="_tabButtons[capturedIdx]"
                     role="tab"
                     class="pt rt"
                     disabled="@Computing"
@@ -182,6 +183,7 @@
     private bool _excludeOpen;
     private string _presetName = string.Empty;
     private List<UserDataStore.SavedPreset> _saved = [];
+    private readonly Dictionary<int, ElementReference> _tabButtons = new();
 
     [Parameter, EditorRequired] public PlannerSettings Query { get; set; } = new();
     [Parameter] public EventCallback<PlannerSettings> QueryChanged { get; set; }
@@ -222,13 +224,15 @@
         var idle = !Computing && !Improving;
         var setsShown = Plans.Count == 0 ? !Computing && !EmptyResult : idle && EditingInputs;
         var notesShown = Plans.Count > 0 && idle && !Compact && Notes.Count > 0;
-        if (_excludeOpen && ExclusionOps.Count(Query) == 0) { _excludeOpen = false; await OnMenuOpenChanged.InvokeAsync(false); }
+        var excludeShown = ((Plans.Count > 0 && idle) || (EmptyResult && !Computing)) && ExclusionOps.Count(Query) > 0;
+        var closeExclude = !excludeShown && _excludeOpen;
         var closeSets = !setsShown && (_savedOpen || _rolesOpen);
         var closeNotes = !notesShown && _notesOpen;
-        if (!closeSets && !closeNotes) return;
+        if (!closeExclude && !closeSets && !closeNotes) return;
+        if (closeExclude) _excludeOpen = false;
         if (closeSets) { _savedOpen = false; _rolesOpen = false; }
         if (closeNotes) _notesOpen = false;
-        await OnMenuOpenChanged.InvokeAsync(false);
+        await OnMenuOpenChanged.InvokeAsync(_excludeOpen || _savedOpen || _rolesOpen || _notesOpen);
     }
 
     /// <summary>"Saved sets" and "Ready sets": shown before the first calculation and while the target is being edited.</summary>
@@ -481,22 +485,26 @@
 
     private Task SelectTabAsync(int index) => OnSelectPlanIndex.InvokeAsync(index);
 
-    private Task OnTabKeyDownAsync(KeyboardEventArgs e, int currentIdx, IReadOnlyList<int> visible)
+    private async Task OnTabKeyDownAsync(KeyboardEventArgs e, int currentIdx, IReadOnlyList<int> visible)
     {
-        if (e.Key != "ArrowLeft" && e.Key != "ArrowRight") return Task.CompletedTask;
+        if (e.Key != "ArrowLeft" && e.Key != "ArrowRight") return;
         var pos = -1;
         for (var i = 0; i < visible.Count; i++)
         {
             if (visible[i] == currentIdx) { pos = i; break; }
         }
-        if (pos < 0 || visible.Count <= 1) return Task.CompletedTask;
+        if (pos < 0 || visible.Count <= 1) return;
         var nextPos = e.Key == "ArrowRight" ? (pos + 1) % visible.Count : (pos - 1 + visible.Count) % visible.Count;
-        return OnSelectPlanIndex.InvokeAsync(visible[nextPos]);
+        var nextIdx = visible[nextPos];
+        await OnSelectPlanIndex.InvokeAsync(nextIdx);
+        if (_tabButtons.TryGetValue(nextIdx, out var el))
+            await el.FocusAsync();
     }
 
     private Task ToggleSavedAsync()
     {
         if (!_savedOpen) _saved = UserData.LoadPresets();
+        _excludeOpen = false;
         _rolesOpen = false;
         _notesOpen = false;
         _savedOpen = !_savedOpen;
@@ -505,6 +513,7 @@
 
     private Task ToggleRolesAsync()
     {
+        _excludeOpen = false;
         _savedOpen = false;
         _notesOpen = false;
         _rolesOpen = !_rolesOpen;
@@ -513,6 +522,7 @@
 
     private Task ToggleNotesAsync()
     {
+        _excludeOpen = false;
         _savedOpen = false;
         _rolesOpen = false;
         _notesOpen = !_notesOpen;

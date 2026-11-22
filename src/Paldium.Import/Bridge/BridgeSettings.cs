@@ -98,10 +98,12 @@ public sealed record BridgeSettings
 public sealed class BridgeSettingsStore
 {
     private readonly string _path;
+    private readonly string? _legacyPath;
 
     public BridgeSettingsStore(string? folder = null)
     {
         _path = Path.Combine(folder ?? Path.GetDirectoryName(ModBridgeReader.DefaultFile)!, BridgeSettings.FileName);
+        _legacyPath = folder == null ? Path.Combine(Path.GetDirectoryName(ModBridgeReader.LegacyFile)!, BridgeSettings.FileName) : null;
     }
 
     public string FilePath => _path;
@@ -111,7 +113,8 @@ public sealed class BridgeSettingsStore
     {
         try
         {
-            return File.Exists(_path) ? BridgeSettings.Parse(File.ReadAllText(_path)) : new BridgeSettings();
+            var path = !File.Exists(_path) && _legacyPath != null && File.Exists(_legacyPath) ? _legacyPath : _path;
+            return File.Exists(path) ? BridgeSettings.Parse(BridgeFileIo.ReadAllText(path)) : new BridgeSettings();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {

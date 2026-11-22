@@ -94,4 +94,116 @@ public class ModScriptLoadTests
         }
         return count;
     }
+
+    [Fact]
+    public void LuaHelpers_PreserveFalseBooleans_EscapeControlCharsWithoutBreakingZOrUtf8_HandleNaNInf_AndParseUtf8Titles()
+    {
+        var source = File.ReadAllText(MainLua);
+        static string SliceBetween(string src, string startMarker, string endMarker)
+        {
+            var s = src.IndexOf(startMarker, StringComparison.Ordinal);
+            var e = src.IndexOf(endMarker, s, StringComparison.Ordinal);
+            Assert.True(s >= 0 && e > s, $"Slice not found: {startMarker} .. {endMarker}");
+            return src[s..e];
+        }
+
+        using var lua = new Lua();
+        lua.Encoding = System.Text.Encoding.UTF8;
+        var memberSnippet = "function valid(o) return o ~= nil end\nfunction unwrap(v) return v end\n"
+            + SliceBetween(source, "function member(", "function length(");
+        lua.DoString(memberSnippet + "\nlocal obj = { Flag = false }\nlocal v, how = member(obj, 'Flag')\nreturn tostring(v) .. '|' .. tostring(how)");
+        Assert.Equal("false|property", lua.ToString(-1));
+        lua.Pop(lua.GetTop());
+
+        var jsonSnippet = SliceBetween(source, "local function jsonString(", "function array(");
+        lua.DoString(jsonSnippet + "\nreturn jsonValue({ z = 'Grizzbolt \u011f\u015f', nan = 0/0, inf = math.huge, ninf = -math.huge, ctrl = 'a\\nb', nilbyte = 'x\\0y' })");
+        var json = lua.ToString(-1);
+        lua.Pop(lua.GetTop());
+        Assert.Contains("\"z\":\"Grizzbolt \u011f\u015f\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"nan\":null", json, StringComparison.Ordinal);
+        Assert.Contains("\"inf\":null", json, StringComparison.Ordinal);
+        Assert.Contains("\"ninf\":null", json, StringComparison.Ordinal);
+        Assert.Contains("\"ctrl\":\"a\\nb\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"nilbyte\":\"x\\u0000y\"", json, StringComparison.Ordinal);
+
+        var titleSnippet = SliceBetween(source, "local function ownerNameFromTitle(", "uiMenus = {}");
+        lua.DoString(titleSnippet + "\nreturn (ownerNameFromTitle('\u738b\u5c0f\u660e\u2019s Dimensional Pal Storage') or '') .. '|' .. (ownerNameFromTitle('Ali\\\'n\u0131n Boyutsal Pal Deposu') or '')");
+        Assert.Equal("\u738b\u5c0f\u660e|Ali", lua.ToString(-1));
+        lua.Pop(lua.GetTop());
+    }
+
+    [Fact]
+    public void ReadRelics_DoesNotSetHaveToZero_WhenClientEntriesArrayIsEmpty()
+    {
+        var source = File.ReadAllText(MainLua);
+        var start = source.IndexOf("local RELIC_TYPES = {", StringComparison.Ordinal);
+        var end = source.IndexOf("-- T133: the cumulative effigy cost", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+
+        using var lua = new Lua();
+        lua.Encoding = System.Text.Encoding.UTF8;
+        var setup = """
+            function valid(o) return type(o) == 'table' end
+            function unwrap(v) return v end
+            function member(o, k) if valid(o) then return o[k] end return nil end
+            function text(v) return v ~= nil and tostring(v) or nil end
+            function number(v) return type(v) == 'number' and v or nil end
+            function items(t) return type(t) == 'table' and t or nil end
+            """;
+        var script = setup + "\n" + source[start..end] + """
+            local record = {
+                RelicPossessNumArray = { Entries = {} },
+                RelicObtainForInstanceFlag_CapturePower = { Items = { { Value = true }, { Value = false }, { Value = true } } },
+            }
+            local r, found = readRelics(record)
+            return tostring(found) .. '|' .. tostring(r.CapturePower.have) .. '|' .. tostring(r.CapturePower.collected) .. '|' .. tostring(r.JumpPower)
+            """;
+        lua.DoString(script);
+        Assert.Equal("true|nil|2|nil", lua.ToString(-1));
+        lua.Pop(lua.GetTop());
+    }
+
+    [Fact]
+    public void PickLocalController_PicksLocalOnHost_FallsBackToLocalPlayerOrSingleCandidate_AndNeverGuesses()
+    {
+        var source = File.ReadAllText(MainLua);
+        var start = source.IndexOf("local function pickLocalController(", StringComparison.Ordinal);
+        var end = source.IndexOf("local function controllerIsLocal(", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "pickLocalController helper not found in main.lua");
+
+        using var lua = new Lua();
+        lua.Encoding = System.Text.Encoding.UTF8;
+        var snippet = source[start..end];
+
+        var script = snippet + """
+            local function isLocal(c) return c.isLocal end
+            local function pClass(c) return c.playerClass end
+
+            local client = { id = 'client', isLocal = false, playerClass = 'NetConnection /Engine/Transient.NetConnection_0' }
+            local host = { id = 'host', isLocal = true, playerClass = 'LocalPlayer /Engine/Transient.LocalPlayer_0' }
+            local p1, m1 = pickLocalController({ client, host }, isLocal, pClass)
+
+            local cNet = { id = 'remote', playerClass = 'NetConnection_1' }
+            local cLoc = { id = 'localp', playerClass = 'PalLocalPlayer_0' }
+            local p2, m2 = pickLocalController({ cNet, cLoc }, isLocal, pClass)
+
+            local solo = { id = 'solo' }
+            local p3, m3 = pickLocalController({ solo }, isLocal, pClass)
+
+            local remoteOnly = { id = 'remoteSolo', isLocal = false, playerClass = 'NetConnection_2' }
+            local p4, m4 = pickLocalController({ remoteOnly }, isLocal, pClass)
+
+            local p5, m5 = pickLocalController({ { id = 'a' }, { id = 'b' } }, isLocal, pClass)
+
+            return string.format('%s:%s|%s:%s|%s:%s|%s:%s|%s:%s',
+                p1 and p1.id or 'nil', tostring(m1),
+                p2 and p2.id or 'nil', tostring(m2),
+                p3 and p3.id or 'nil', tostring(m3),
+                p4 and p4.id or 'nil', tostring(m4),
+                p5 and p5.id or 'nil', tostring(m5))
+            """;
+        lua.DoString(script);
+        Assert.Equal("host:a|localp:b|solo:c|nil:nil|nil:nil", lua.ToString(-1));
+        lua.Pop(lua.GetTop());
+    }
 }

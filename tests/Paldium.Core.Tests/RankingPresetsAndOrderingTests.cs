@@ -7,8 +7,8 @@ using Paldium.Core.Queries;
 
 namespace Paldium.Core.Tests;
 
-/// <summary>QA-2 calculation fixes (T61).</summary>
-public class T61Tests
+/// <summary>Ranking presets, breeding power ordering, and earliest level checks.</summary>
+public class RankingPresetsAndOrderingTests
 {
     private static readonly Lazy<GameData> Data = new(() => GameDataLoader.Load(TestPaths.DataFolder));
     private static readonly Lazy<BreedingCalculator> Breeding = new(() => BreedingCalculator.Load(Data.Value, TestPaths.DataFolder));

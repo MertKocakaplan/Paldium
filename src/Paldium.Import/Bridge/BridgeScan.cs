@@ -52,6 +52,7 @@ public sealed class BridgeScanService : IDisposable
     public const string StatusFileName = "status.json";
 
     private readonly string _folder;
+    private readonly string? _legacyFolder;
     private readonly Timer _timer;
     private readonly object _gate = new();
     private string? _lastText;
@@ -60,6 +61,7 @@ public sealed class BridgeScanService : IDisposable
     public BridgeScanService(string? folder = null, TimeSpan? pollInterval = null)
     {
         _folder = folder ?? Path.GetDirectoryName(ModBridgeReader.DefaultFile)!;
+        _legacyFolder = folder == null ? Path.GetDirectoryName(ModBridgeReader.LegacyFile) : null;
         var interval = pollInterval ?? TimeSpan.FromMilliseconds(700);
         _timer = new Timer(_ => Poll(), null, interval, interval);
     }
@@ -84,9 +86,14 @@ public sealed class BridgeScanService : IDisposable
             try
             {
                 var path = Path.Combine(_folder, StatusFileName);
+                if (!File.Exists(path) && _legacyFolder != null)
+                {
+                    var legacyPath = Path.Combine(_legacyFolder, StatusFileName);
+                    if (File.Exists(legacyPath)) path = legacyPath;
+                }
                 if (File.Exists(path))
                 {
-                    text = File.ReadAllText(path);
+                    text = BridgeFileIo.ReadAllText(path);
                     if (text == _lastText) return;
                     status = BridgeStatus.Parse(text);
                 }

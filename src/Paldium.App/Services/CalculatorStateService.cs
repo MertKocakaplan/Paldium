@@ -96,17 +96,22 @@ public sealed class CalculatorStateService
         string? target,
         IGameData data,
         IOwnedPalRepository repository,
-        string? passive = null)
+        string? passive = null,
+        bool force = false)
     {
         var hasMode = !string.IsNullOrWhiteSpace(mode);
         var hasA = !string.IsNullOrWhiteSpace(a);
         var hasB = !string.IsNullOrWhiteSpace(b);
         var hasTarget = !string.IsNullOrWhiteSpace(target);
         var hasPassive = !string.IsNullOrWhiteSpace(passive);
-        if (!hasMode && !hasA && !hasB && !hasTarget && !hasPassive) return false;
+        if (!hasMode && !hasA && !hasB && !hasTarget && !hasPassive)
+        {
+            _lastAppliedQueryKey = null;
+            return false;
+        }
 
         var key = $"{mode}|{a}|{b}|{target}|{passive}";
-        if (string.Equals(key, _lastAppliedQueryKey, StringComparison.Ordinal)) return false;
+        if (!force && string.Equals(key, _lastAppliedQueryKey, StringComparison.Ordinal)) return false;
         _lastAppliedQueryKey = key;
 
         if (hasA && hasB)
@@ -206,23 +211,44 @@ public sealed class CalculatorStateService
     /// </summary>
     public bool TryOpenOwnedPair(string speciesAId, GenderReq aReq, string speciesBId, GenderReq bReq, IEnumerable<OwnedPal> pals)
     {
-        var list = pals.ToList();
-        OwnedPal? Best(string speciesId, GenderReq req, string? exceptUid) => list
-            .Where(p => string.Equals(p.SpeciesId, speciesId, StringComparison.OrdinalIgnoreCase) && p.Uid != exceptUid)
-            .Where(p => req == GenderReq.Any || (req == GenderReq.Male ? p.Gender == Gender.Male : p.Gender == Gender.Female))
-            .OrderByDescending(p => p.Passives.Count)
-            .ThenByDescending(p => p.Level)
-            .ThenBy(p => p.Uid, StringComparer.Ordinal)
-            .FirstOrDefault();
+        static bool MatchesReq(OwnedPal p, GenderReq req) =>
+            req == GenderReq.Any || (req == GenderReq.Male ? p.Gender == Gender.Male : p.Gender == Gender.Female);
 
-        var a = Best(speciesAId, aReq, null);
-        var b = a == null ? null : Best(speciesBId, bReq, a.Uid);
-        if (a == null || b == null) return false;
+        var list = pals.ToList();
+        var candidatesA = list.Where(p => string.Equals(p.SpeciesId, speciesAId, StringComparison.OrdinalIgnoreCase) && MatchesReq(p, aReq)).ToList();
+        var candidatesB = list.Where(p => string.Equals(p.SpeciesId, speciesBId, StringComparison.OrdinalIgnoreCase) && MatchesReq(p, bReq)).ToList();
+
+        OwnedPal? bestA = null;
+        OwnedPal? bestB = null;
+        foreach (var a in candidatesA)
+        {
+            foreach (var b in candidatesB)
+            {
+                if (a.Uid == b.Uid) continue;
+                if (a.Gender != null && b.Gender != null && a.Gender == b.Gender) continue;
+                if (bestA == null || ComparePair(a, b, bestA, bestB!) < 0)
+                {
+                    bestA = a;
+                    bestB = b;
+                }
+            }
+        }
+        if (bestA == null || bestB == null) return false;
         OwnedModeA = true;
         OwnedModeB = true;
-        SetOwned(true, a);
-        SetOwned(false, b);
+        SetOwned(true, bestA);
+        SetOwned(false, bestB);
         return true;
+
+        static int ComparePair(OwnedPal a1, OwnedPal b1, OwnedPal a2, OwnedPal b2)
+        {
+            var c = (a1.Passives.Count + b1.Passives.Count).CompareTo(a2.Passives.Count + b2.Passives.Count);
+            if (c != 0) return -c;
+            c = (a1.Level + b1.Level).CompareTo(a2.Level + b2.Level);
+            if (c != 0) return -c;
+            c = string.CompareOrdinal(a1.Uid, a2.Uid);
+            return c != 0 ? c : string.CompareOrdinal(b1.Uid, b2.Uid);
+        }
     }
 
     public void SwitchPairToSpeciesMode(OwnedPal? ownedA, OwnedPal? ownedB)

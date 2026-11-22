@@ -1,6 +1,7 @@
 <Project>
-  <!-- The release version. build/publish.ps1 reads it. src/Directory.Build.props imports this file; external/palcalc is unaffected. -->
+  <!-- Release metadata. build/publish.ps1 reads <Version>. Both src/ and tools/ import this file; external/palcalc keeps its own settings. -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

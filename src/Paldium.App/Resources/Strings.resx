@@ -154,6 +154,7 @@
   <data name="Ranch.BaseFarming" xml:space="preserve"><value>Base Farming {0}</value></data>
   <data name="Ranch.Level" xml:space="preserve"><value>Level {0}</value></data>
   <data name="Ranch.BelowBase" xml:space="preserve"><value>This species' base level is {0}</value></data>
+  <data name="Ranch.BelowBaseNote" xml:space="preserve"><value>This species' base level is {0}; this level does not occur in game.</value></data>
   <data name="Ranch.Summary" xml:space="preserve"><value>Items Pals drop at the Ranch; the chance of each item and how the amount grows with Farming level.</value></data>
   <data name="Ranch.Scope" xml:space="preserve"><value>{0} Pals · {1} items</value></data>
   <data name="Ranch.SearchTool" xml:space="preserve"><value>Search a Pal or an item</value></data>
@@ -1463,6 +1464,7 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Settings.Cake" xml:space="preserve"><value>Cake</value></data>
   <data name="Settings.Cake.Special" xml:space="preserve"><value>Special</value></data>
   <data name="Settings.Licenses" xml:space="preserve"><value>Licenses and sources</value></data>
+  <data name="Settings.LicensesApp" xml:space="preserve"><value>Copyright (C) 2026 Mert Kocakaplan · Licensed under GNU GPL-3.0-or-later (shipped in LICENSE). v0.1.0 was MIT; v0.1.1 switched to GPL-3.0 because it bundles libooz (GPL-3.0).</value></data>
   <data name="Settings.LicensesFonts" xml:space="preserve"><value>Fonts</value></data>
   <data name="Common.Off" xml:space="preserve"><value>Off</value></data>
   <data name="Sources.Retry" xml:space="preserve"><value>Retry</value></data>
@@ -1533,7 +1535,11 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Mounts.SwimSprint" xml:space="preserve"><value>Swim sprint</value></data>
   <data name="Mounts.Stamina" xml:space="preserve"><value>Stamina</value></data>
   <data name="Mounts.Owned" xml:space="preserve"><value>Owned</value></data>
-  <data name="Mounts.CellTip" xml:space="preserve"><value>Base {0} - +{1}%</value></data>
+  <data name="Mounts.CellTip" xml:space="preserve"><value>Base {0} · +{1}%</value></data>
+  <data name="Mounts.PassiveBonus" xml:space="preserve"><value>+{0}%</value></data>
+  <data name="Mounts.Group.Move" xml:space="preserve"><value>Movement</value></data>
+  <data name="Mounts.Group.Swim" xml:space="preserve"><value>Swimming</value></data>
+  <data name="Mounts.Group.Stamina" xml:space="preserve"><value>Stamina</value></data>
   <data name="Mounts.StarTip" xml:space="preserve"><value>{0} stars +{1}%</value></data>
   <data name="Mounts.ConditionalTip" xml:space="preserve"><value>{0}: only under a condition, not counted ({1})</value></data>
   <data name="Effigy.Title" xml:space="preserve"><value>Effigies: Pal Effigy</value></data>
@@ -1546,8 +1552,8 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Effigy.MaxEffect" xml:space="preserve"><value>Highest effect {0}%</value></data>
   <data name="Effigy.NoEffect" xml:space="preserve"><value>Effect value is not in the game data</value></data>
   <data name="Effigy.BarAria" xml:space="preserve"><value>{0} ranks, {1} effigies in total</value></data>
-  <data name="Effigy.Rank" xml:space="preserve"><value>Rank {0} / {1} · effect {2} → next {3}</value></data>
-  <data name="Effigy.RankNoNext" xml:space="preserve"><value>Rank {0} / {1} · effect {2}</value></data>
+  <data name="Effigy.Rank" xml:space="preserve"><value>Rank {0} / {1} · effect {2}% → next {3}%</value></data>
+  <data name="Effigy.RankNoNext" xml:space="preserve"><value>Rank {0} / {1} · effect {2}%</value></data>
   <data name="Effigy.RankPlain" xml:space="preserve"><value>Rank {0} / {1}</value></data>
   <data name="Effigy.AtLeast" xml:space="preserve"><value>At least {0}</value></data>
   <data name="Effigy.Have" xml:space="preserve"><value>In hand {0}</value></data>
@@ -1555,8 +1561,11 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Effigy.NextNeed" xml:space="preserve"><value>{0} more for the next rank</value></data>
   <data name="Effigy.CanRankUp" xml:space="preserve"><value>Enough for the next rank</value></data>
   <data name="Effigy.MaxNeed" xml:space="preserve"><value>{0} more for the highest rank</value></data>
+  <data name="Effigy.AllCollectedUnspent" xml:space="preserve"><value>All collected · {0} effigies waiting to be spent</value></data>
+  <data name="Effigy.AllCollected" xml:space="preserve"><value>All collected</value></data>
   <data name="Effigy.Maxed" xml:space="preserve"><value>Highest rank ✓</value></data>
   <data name="Effigy.NoData" xml:space="preserve"><value>Your progress comes from your own save or the mod.</value></data>
+  <data name="Effigy.NoPlayer" xml:space="preserve"><value>Pick "This is me" in Settings.</value></data>
   <data name="Effigy.MimogNote" xml:space="preserve"><value>1 effigy for every species caught 5 times</value></data>
   <data name="Effigy.MimogLink" xml:space="preserve"><value>Capture progress in the Paldex</value></data>
   <data name="Nav.Technology" xml:space="preserve"><value>Technology</value></data>
@@ -1588,6 +1597,8 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Update.BadgeDownloading" xml:space="preserve"><value>Downloading {0}%</value></data>
   <data name="Update.Title" xml:space="preserve"><value>Paldium {0} is available</value></data>
   <data name="Update.Sub" xml:space="preserve"><value>You have {0} · released {1} · {2}</value></data>
+  <data name="Update.SubVersion" xml:space="preserve"><value>You have {0}</value></data>
+  <data name="Update.SubReleased" xml:space="preserve"><value>released {0}</value></data>
   <data name="Update.Install" xml:space="preserve"><value>Update and restart</value></data>
   <data name="Update.Later" xml:space="preserve"><value>Later</value></data>
   <data name="Update.Skip" xml:space="preserve"><value>Skip this version</value></data>
@@ -1601,6 +1612,7 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Update.Failed" xml:space="preserve"><value>The update failed; the previous version was started.</value></data>
   <data name="Update.VerifyFailed" xml:space="preserve"><value>The download could not be verified. You can download it from the release page.</value></data>
   <data name="Update.NotWritable" xml:space="preserve"><value>This folder is not writable. Download the release page zip to update by hand.</value></data>
+  <data name="Update.UnsafeFolder" xml:space="preserve"><value>Paldium cannot update automatically from this folder. Download the update from the release page instead.</value></data>
   <data name="Update.DownloadFailed" xml:space="preserve"><value>The download failed.</value></data>
   <data name="Update.NoAsset" xml:space="preserve"><value>This release has no package to download.</value></data>
   <data name="Update.BadPackage" xml:space="preserve"><value>The downloaded package is not complete.</value></data>

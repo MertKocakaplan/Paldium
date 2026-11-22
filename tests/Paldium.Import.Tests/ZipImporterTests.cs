@@ -122,4 +122,24 @@ public class ZipImporterTests : IDisposable
         Assert.True(importer.TryRemove(result.WorldFolder));
         Assert.False(Directory.Exists(result.ExtractedRoot));
     }
+
+    [Fact]
+    public void ReservedDosNamesAndDotNames_AreSanitizedSafely()
+    {
+        var importer = NewImporter();
+        var con = importer.Import(MakeZip("CON", ("Level.sav", "x")));
+        Assert.StartsWith(Path.GetFullPath(importer.ImportsRoot) + Path.DirectorySeparatorChar, con.ExtractedRoot, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual("CON", Path.GetFileName(con.ExtractedRoot), StringComparer.OrdinalIgnoreCase);
+
+        var dotZip = Path.Combine(_dir, "..zip");
+        using (var archive = ZipFile.Open(dotZip, ZipArchiveMode.Create))
+        {
+            using var w = new StreamWriter(archive.CreateEntry("Level.sav").Open());
+            w.Write("x");
+        }
+        var dotResult = importer.Import(dotZip);
+        Assert.Equal("import", Path.GetFileName(dotResult.ExtractedRoot));
+        Assert.True(importer.TryRemove(dotResult.WorldFolder));
+        Assert.False(Directory.Exists(dotResult.ExtractedRoot));
+    }
 }

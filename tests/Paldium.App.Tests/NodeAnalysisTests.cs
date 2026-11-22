@@ -227,4 +227,33 @@ public class NodeAnalysisT112Tests
         Assert.Equal(["CowPal"], PlanList.PathIds(oneWild));
         Assert.Empty(PlanList.PathIds(bothWild));
     }
+
+    [Fact]
+    public void AltPartner_IsIncludedInLeaves_StepsUsing_UseCounts_OutOfScope_AndSignature()
+    {
+        string[] d = ["Artisan"];
+        var flex = Step(
+            new OwnedLeaf(Pal("a1", "CowPal", Gender.Female, d)),
+            new OwnedLeaf(Pal("a2", "SheepBall", Gender.Male)),
+            "WizardOwl", GenderReq.Any, 0, 0.25, d);
+        var backup = Pal("b1", "ChickenPal", Gender.Female, d);
+        var root = Step(flex, new OwnedLeaf(Pal("m1", "ChickenPal", Gender.Male)), "Anubis", GenderReq.Female, 0, 0.25, d, new OwnedLeaf(backup));
+        var plan = new BreedingPlan(root, 2, 10.0, 0, false, [], []);
+
+        var leaves = PlanText.Leaves(plan);
+        Assert.Equal(4, leaves.Count);
+        Assert.Contains(leaves, l => l.SpeciesId == "ChickenPal" && l.Gender == Gender.Female);
+
+        Assert.Equal([2], NodeAlternatives.StepsUsing(plan, "b1"));
+        Assert.Equal(1, NodeAlternatives.UseCounts(plan)["b1"]);
+
+        var outOfScope = PlanText.FindOutOfScopeLeaves(plan, new HashSet<string>(["a1", "a2", "m1"], StringComparer.Ordinal), PlannerStateServiceTests.GameDataForTests, "en");
+        Assert.Contains(outOfScope, o => o.Pal.Uid == "b1" && o.StepNumber == 2);
+
+        var otherBackup = Pal("b2", "ChickenPal", Gender.Female, d);
+        var otherRoot = Step(flex, new OwnedLeaf(Pal("m1", "ChickenPal", Gender.Male)), "Anubis", GenderReq.Female, 0, 0.25, d, new OwnedLeaf(otherBackup));
+        Assert.NotEqual(
+            Paldium.App.Services.PlannerStateService.Signature(plan),
+            Paldium.App.Services.PlannerStateService.Signature(new BreedingPlan(otherRoot, 2, 10.0, 0, false, [], [])));
+    }
 }

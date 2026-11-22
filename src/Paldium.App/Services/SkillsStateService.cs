@@ -69,14 +69,19 @@ public sealed class SkillsStateService
         string? tab,
         string? passive,
         IGameData data,
-        IReadOnlySet<string>? ownedPassiveIds = null)
+        IReadOnlySet<string>? ownedPassiveIds = null,
+        bool force = false)
     {
         var hasTab = !string.IsNullOrWhiteSpace(tab);
         var hasPassive = !string.IsNullOrWhiteSpace(passive);
-        if (!hasTab && !hasPassive) return false;
+        if (!hasTab && !hasPassive)
+        {
+            _lastQueryKey = null;
+            return false;
+        }
 
         var key = $"{tab}|{passive}";
-        if (string.Equals(key, _lastQueryKey, StringComparison.Ordinal)) return false;
+        if (!force && string.Equals(key, _lastQueryKey, StringComparison.Ordinal)) return false;
         _lastQueryKey = key;
 
         if (hasPassive)

@@ -100,7 +100,7 @@
     <div class="chk" role="radiogroup" aria-label="@L["Filter.Capture"].Value">
         @foreach (var option in CaptureOrder)
         {
-            var selected = Filter.Capture == option;
+            var selected = (Capture == null ? PalCaptureFilter.Any : Filter.Capture) == option;
             <button type="button"
                     class="r"
                     role="radio"
@@ -115,7 +115,7 @@
     </div>
     @if (Capture == null)
     {
-        <span class="m">@L["Filter.Capture.Disabled"]</span>
+        <span class="m">@(CaptureState == CaptureAvailability.NoPlayer ? L["Paldex.CaptureNoPlayer"] : L["Filter.Capture.Disabled"])</span>
     }
 </div>
 

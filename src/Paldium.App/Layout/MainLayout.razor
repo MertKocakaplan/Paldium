@@ -32,8 +32,9 @@
             @if (Updates.Progress.Phase == UpdatePhase.Downloading || Updates.Available != null)
             {
                 var downloading = Updates.Progress.Phase == UpdatePhase.Downloading;
+                var badgeVersion = (Updates.Available ?? Updates.Latest)?.Version ?? Updates.CurrentVersion;
                 <button type="button" class="updbadge" @onclick="Updates.OpenDialog"
-                        aria-label="@(downloading ? L["Update.BadgeDownloading", Updates.Progress.Percent].Value : L["Update.Badge", Updates.Available!.Version].Value)">
+                        aria-label="@(downloading ? L["Update.BadgeDownloading", Updates.Progress.Percent].Value : L["Update.Badge", badgeVersion].Value)">
                     <Icon Name="arrow-up" Size="14" />
                     @if (downloading)
                     {
@@ -41,7 +42,7 @@
                     }
                     else
                     {
-                        <span class="pre">@L["Update.BadgeLabel"] · </span><b class="num">@Updates.Available!.Version</b>
+                        <span class="pre">@L["Update.BadgeLabel"] · </span><b class="num">@badgeVersion</b>
                     }
                 </button>
             }
@@ -71,8 +72,8 @@
         @if (_banner != null)
         {
             <div class="updnote" role="status">
-                <span>@_banner.Text</span>
-                @if (_banner.Href != null) { <a href="@_banner.Href" class="lnk" @onclick="() => _banner = null">@_banner.LinkText</a> }
+                <span>@(_banner.TextArg != null ? L[_banner.TextKey, _banner.TextArg] : L[_banner.TextKey])</span>
+                @if (_banner.Href != null && _banner.LinkKey != null) { <a href="@_banner.Href" class="lnk" @onclick="() => _banner = null">@L[_banner.LinkKey]</a> }
                 <button type="button" class="ib2" aria-label="@L["Common.Close"].Value" @onclick="() => _banner = null"><Icon Name="x" Size="14" /></button>
             </div>
         }
@@ -84,7 +85,7 @@
 </CascadingValue>
 
 @code {
-    private sealed record Banner(string Text, string? Href = null, string? LinkText = null);
+    private sealed record Banner(string TextKey, string? TextArg = null, string? Href = null, string? LinkKey = null);
 
     private Banner? _banner;
     private readonly CancellationTokenSource _updateLoop = new();
@@ -97,8 +98,18 @@
     private string LanguageName() => Language.Current == "tr" ? "Türkçe" : "English";
 
     // Reading mode of a guide: the shell hides its tabs and the sync badge (the bar keeps its height).
-    private bool IsReading() => GuideState.Reading && PageTab.IsPathActive(Navigation.ToBaseRelativePath(Navigation.Uri), "guides")
-        && Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').StartsWith("guides/", StringComparison.OrdinalIgnoreCase);
+    private bool IsReading()
+    {
+        if (!GuideState.Reading) return false;
+        var rel = Navigation.ToBaseRelativePath(Navigation.Uri);
+        if (!PageTab.IsPathActive(rel, "guides")) return false;
+        var q = rel.IndexOfAny(['?', '#']);
+        if (q >= 0) rel = rel[..q];
+        rel = rel.Trim('/');
+        if (!rel.StartsWith("guides/", StringComparison.OrdinalIgnoreCase)) return false;
+        var slug = rel["guides/".Length..];
+        return slug.Length > 0 && !GuideStateService.IsReferenceSlug(slug);
+    }
 
     private bool IsSettingsActive() => PageTab.IsPathActive(Navigation.ToBaseRelativePath(Navigation.Uri), "settings");
 
@@ -124,18 +135,24 @@
     {
         var current = Updates.CurrentVersion;
         var lastRun = Settings.Current.Update.LastRunVersion;
-        if (Updates.TakeLastError() != null)
+        var upgraded = UpdateVersion.TryParse(lastRun, out var before) && UpdateVersion.TryParse(current, out var now) && now.CompareTo(before) > 0;
+        if (upgraded)
         {
-            _banner = new Banner(L["Update.Failed"].Value, "settings#veri", L["Settings.OpenLogs"].Value);
-        }
-        else if (UpdateVersion.TryParse(lastRun, out var before) && UpdateVersion.TryParse(current, out var now) && now.CompareTo(before) > 0)
-        {
+            _ = Updates.TakeLastError();
             var game = ModInstaller.FindGameFolder(Settings.Current.PalworldFolderPicked);
             var modOutdated = game != null && ModInstaller.GetState(game) is ModInstallState.Outdated or ModInstallState.LegacyInstalled;
             _banner = modOutdated
-                ? new Banner(L["Update.Done", current].Value, "settings#kaynak", L["Update.UpdateMod"].Value)
-                : new Banner(L["Update.Done", current].Value);
-            Updates.CleanUp(lastRun!);
+                ? new Banner("Update.Done", current, "settings#kaynak", "Update.UpdateMod")
+                : new Banner("Update.Done", current);
+            Updates.CleanUp(lastRun);
+        }
+        else if (Updates.TakeLastError() != null)
+        {
+            _banner = new Banner("Update.Failed", null, "settings#veri", "Settings.OpenLogs");
+        }
+        else if (lastRun == null)
+        {
+            Updates.CleanUp(null);
         }
 
         if (lastRun != current) Settings.Update(s => s with { Update = s.Update with { LastRunVersion = current } });
@@ -226,7 +243,10 @@
         Navigation.LocationChanged -= OnLocationChanged;
         GuideState.Changed -= OnGuideStateChanged;
         State.Changed -= OnStateChanged;
+        Updates.Changed -= OnUpdateChanged;
         if (_sync != null) _sync.StatusesChanged -= OnSyncChanged;
+        _updateLoop.Cancel();
+        _updateLoop.Dispose();
         _ = _watchHandle?.InvokeVoidAsync("dispose");
         _self?.Dispose();
     }

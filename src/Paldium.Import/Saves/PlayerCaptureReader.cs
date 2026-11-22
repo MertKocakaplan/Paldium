@@ -41,15 +41,25 @@ public static class PlayerCaptureReader
             else if (string.Equals(path, LegacyFlagsPath, StringComparison.OrdinalIgnoreCase)) legacyFlags = new Dictionary<string, int> { [CapturePowerType] = CountTrue(map) };
         }
 
-        foreach (var value in gvas.Properties.Values)
+        foreach (var (key, value) in gvas.Properties)
         {
-            if (value is not IProperty prop) continue;
-            Look(prop);
-            prop.Traverse(Look);
+            if (!string.Equals(key, "SaveData", StringComparison.OrdinalIgnoreCase)) continue;
+            var saveFields = value is StructProperty saveStruct ? saveStruct.Value as IDictionary<string, object> : value as IDictionary<string, object>;
+            if (saveFields == null) continue;
+            foreach (var (subKey, subVal) in saveFields)
+            {
+                if (!string.Equals(subKey, "RecordData", StringComparison.OrdinalIgnoreCase)) continue;
+                var recordFields = subVal is StructProperty recordStruct ? recordStruct.Value as IDictionary<string, object> : subVal as IDictionary<string, object>;
+                if (recordFields == null) continue;
+                foreach (var recordProp in recordFields.Values)
+                {
+                    if (recordProp is IProperty prop) Look(prop);
+                }
+            }
         }
 
         // The per-type flags are the newer record; saves without them only have the old map, which holds the Lifmunk effigies.
-        var collected = collectedByType ?? legacyFlags;
+        var collected = collectedByType is { Count: > 0 } ? collectedByType : legacyFlags ?? collectedByType;
         var relics = BuildRelics(have, collected);
         if (bonus == null && count == null && relics == null) return null;
         return Normalize(new CaptureRecord(bonus ?? [], count ?? []) { Relics = relics }, data, log);
@@ -64,12 +74,20 @@ public static class PlayerCaptureReader
     public static Dictionary<string, RelicCount>? BuildRelics(IReadOnlyDictionary<string, int>? have, IReadOnlyDictionary<string, int>? collected)
     {
         if (have == null && collected == null) return null;
-        var result = new Dictionary<string, RelicCount>(StringComparer.Ordinal);
-        foreach (var type in (have?.Keys ?? Enumerable.Empty<string>()).Concat(collected?.Keys ?? Enumerable.Empty<string>()).Distinct(StringComparer.Ordinal))
+        static int LookupOrZero(IReadOnlyDictionary<string, int> map, string key)
+        {
+            if (map.TryGetValue(key, out var val)) return val;
+            foreach (var (k, v) in map)
+                if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) return v;
+            return 0;
+        }
+
+        var result = new Dictionary<string, RelicCount>(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in (have?.Keys ?? Enumerable.Empty<string>()).Concat(collected?.Keys ?? Enumerable.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             // A type that is not in the held map is 0 when the map exists (the game leaves out the types the player never had).
-            int? h = have == null ? null : have.GetValueOrDefault(type);
-            int? c = collected == null ? null : collected.GetValueOrDefault(type);
+            int? h = have == null ? null : LookupOrZero(have, type);
+            int? c = collected == null ? null : LookupOrZero(collected, type);
             result[type] = new RelicCount(h, c);
         }
 
@@ -90,13 +108,17 @@ public static class PlayerCaptureReader
     /// <summary><c>RelicObtainForInstanceFlagByType</c>: an array of { Type (enum), Flags (map: effigy id, collected) }; gives the collected count per type.</summary>
     private static Dictionary<string, int> ReadFlagsByType(ArrayProperty array)
     {
-        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (array.Value is not object[] items) return result;
         foreach (var item in items)
         {
             if (item is not IDictionary<string, object> entry) continue;
-            if (!entry.TryGetValue("Type", out var type) || !entry.TryGetValue("Flags", out var flags) || flags is not MapProperty map) continue;
-            var name = type is EnumProperty e ? e.EnumValue : type?.ToString();
+            if (!entry.TryGetValue("Flags", out var flags) || flags is not MapProperty map) continue;
+            string? name;
+            if (entry.TryGetValue("Type", out var type))
+                name = type is EnumProperty e ? e.EnumValue : type?.ToString();
+            else
+                name = CapturePowerType; // UE GVAS omits enum default 0 (CapturePower).
             if (string.IsNullOrEmpty(name)) continue;
             result[RelicTypeName(name)] = CountTrue(map);
         }

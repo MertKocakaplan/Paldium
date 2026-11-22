@@ -74,7 +74,10 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
         foreach (var account in accounts)
         {
             if (!Directory.Exists(account)) continue;
-            foreach (var folder in Directory.EnumerateDirectories(account).Order(StringComparer.Ordinal))
+            IEnumerable<string> folders;
+            try { folders = Directory.EnumerateDirectories(account).Order(StringComparer.Ordinal).ToList(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            foreach (var folder in folders)
             {
                 var worldId = Path.GetFileName(folder);
                 if (!WorldIdPattern().IsMatch(worldId)) continue;
@@ -90,11 +93,19 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
 
     private static DateTimeOffset LastWriteUtc(string worldFolder)
     {
-        var times = Directory.EnumerateFiles(worldFolder, "*.sav").Select(f => File.GetLastWriteTimeUtc(f)).ToList();
-        var players = Path.Combine(worldFolder, "Players");
-        if (Directory.Exists(players))
-            times.AddRange(Directory.EnumerateFiles(players, "*.sav").Select(f => File.GetLastWriteTimeUtc(f)));
-        return new DateTimeOffset(times.Count > 0 ? times.Max() : Directory.GetLastWriteTimeUtc(worldFolder), TimeSpan.Zero);
+        try
+        {
+            var times = Directory.EnumerateFiles(worldFolder, "*.sav").Select(f => File.GetLastWriteTimeUtc(f)).ToList();
+            var players = Path.Combine(worldFolder, "Players");
+            if (Directory.Exists(players))
+                times.AddRange(Directory.EnumerateFiles(players, "*.sav").Select(f => File.GetLastWriteTimeUtc(f)));
+            var latest = times.Count > 0 ? times.Max() : Directory.GetLastWriteTimeUtc(worldFolder);
+            return new DateTimeOffset(latest, TimeSpan.Zero);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return DateTimeOffset.MinValue;
+        }
     }
 
     private string? TryReadWorldName(string worldFolder)
@@ -139,7 +150,7 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
             var worldName = TryReadMetaName(save);
             var levelData = save.Level.ReadCharacterData(PalDB.LoadEmbedded(), GameSettings.Defaults, save.Players, null);
             snapshot = MapWorld(worldId, worldName, seenAt, levelData);
-            snapshot = snapshot with { Captures = ReadCaptures(copy, snapshot.Players) };
+            snapshot = snapshot with { Captures = ReadCaptures(copy, snapshot.Players, save.Players) };
         }
 
         stopwatch.Stop();
@@ -152,17 +163,47 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
     }
 
     /// <summary>The capture record of every player whose file is in the copied world (T121). A player without a file or with a broken one is left out.</summary>
-    private IReadOnlyList<PlayerCapture> ReadCaptures(string worldCopy, IReadOnlyList<PlayerInfo> players)
+    private IReadOnlyList<PlayerCapture> ReadCaptures(string worldCopy, IReadOnlyList<PlayerInfo> players, IReadOnlyList<PlayersSaveFile> savePlayers)
     {
         var result = new List<PlayerCapture>();
+        Dictionary<string, string>? byInternalId = null;
+        var now = DateTimeOffset.UtcNow;
+
         foreach (var player in players)
         {
-            var file = Path.Combine(worldCopy, "Players", CaptureProgressStore.NormalizeId(player.PlayerId).ToUpperInvariant() + ".sav");
-            if (!File.Exists(file)) continue;
+            var normalizedId = CaptureProgressStore.NormalizeId(player.PlayerId);
+            var file = Path.Combine(worldCopy, "Players", normalizedId.ToUpperInvariant() + ".sav");
+            if (!File.Exists(file))
+            {
+                if (byInternalId == null)
+                {
+                    byInternalId = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (var p in savePlayers)
+                    {
+                        var path = p.FilePaths.FirstOrDefault();
+                        if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+                        try
+                        {
+                            var meta = p.ReadPlayerContent();
+                            if (!string.IsNullOrEmpty(meta?.PlayerId))
+                                byInternalId.TryAdd(CaptureProgressStore.NormalizeId(meta.PlayerId), path);
+                        }
+                        catch (Exception ex)
+                        {
+                            _log?.Invoke($"Could not inspect player save {Path.GetFileName(path)} for PlayerUId.", ex);
+                        }
+                    }
+                }
+                if (!byInternalId.TryGetValue(normalizedId, out var matchedFile) || !File.Exists(matchedFile)) continue;
+                file = matchedFile;
+            }
             try
             {
                 var record = PlayerCaptureReader.Read(file, _data, _log);
-                if (record != null) result.Add(new PlayerCapture(player.PlayerId, record, new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero)));
+                if (record == null) continue;
+                var readAt = new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
+                if (readAt > now) readAt = now;
+                result.Add(new PlayerCapture(player.PlayerId, record, readAt));
             }
             catch (Exception ex)
             {

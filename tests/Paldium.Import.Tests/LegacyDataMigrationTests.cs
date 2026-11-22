@@ -135,4 +135,30 @@ public class LegacyDataMigrationTests : IDisposable
         Assert.Equal(legacy, ModBridgeReader.EffectiveFile(current, current, legacy));    // the old mod wrote last
         Assert.Equal("elsewhere.json", ModBridgeReader.EffectiveFile("elsewhere.json", current, legacy));
     }
+
+    [Fact]
+    public void WhenLocalCopyFails_LocalPathsInSettingsStayOnOldFolder_AndBackupIsPreservedOnRetry()
+    {
+        Seed();
+        using (var locked = new FileStream(Path.Combine(Local, "Palbreeding", "bridge", "palbox.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var result = LegacyDataMigration.Run(Roaming, Local, applyFallback: false);
+            Assert.True(result.Roaming.Copied);
+            Assert.True(result.Local.Failed);
+
+            var settings = File.ReadAllText(Path.Combine(Roaming, "Paldium", "settings.json"));
+            Assert.Contains(Path.Combine(Local, "Palbreeding", "bridge", "palbox.json").Replace("\\", "\\\\"), settings);
+            Assert.True(File.Exists(Path.Combine(Roaming, "Paldium", LegacyDataMigration.MarkerFile)));
+        }
+
+        // Preserve existing .bak files during roaming overwrite retries.
+        var bak = Path.Combine(Roaming, "Paldium", "overrides.json.bak");
+        File.WriteAllText(bak, "keep-original-bak");
+        File.Delete(Path.Combine(Roaming, "Paldium", LegacyDataMigration.MarkerFile));
+        var retry = LegacyDataMigration.Run(Roaming, Local, applyFallback: false);
+        Assert.True(retry.Local.Copied);
+        Assert.Equal("keep-original-bak", File.ReadAllText(bak));
+        var updated = File.ReadAllText(Path.Combine(Roaming, "Paldium", "settings.json"));
+        Assert.Contains(Path.Combine(Local, "Paldium", "bridge", "palbox.json").Replace("\\", "\\\\"), updated);
+    }
 }

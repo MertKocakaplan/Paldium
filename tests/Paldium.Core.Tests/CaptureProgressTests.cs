@@ -125,4 +125,42 @@ public class CaptureProgressTests
         Assert.False(PalQuery.MatchesCapture(odd, PalCaptureFilter.Open, record));
         Assert.True(PalQuery.MatchesCapture(odd, PalCaptureFilter.Any, record));
     }
+
+    [Fact]
+    public void Store_MergesMissingRelicsOrCaptureFields_AcrossMultipleSourcesForSamePlayer()
+    {
+        var store = new CaptureProgressStore();
+        var saveTime = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
+        var saveRecord = Record(("Sheepball", 5)) with
+        {
+            Relics = new Dictionary<string, RelicCount>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CapturePower"] = new(2, 66),
+                ["JumpPower"] = new(1, 5),
+            },
+        };
+        store.Publish("save", [new PlayerCapture("P1", saveRecord, saveTime)]);
+
+        var modWithoutRelics = Record(("Sheepball", 5), ("ChickenPal", 3));
+        store.Publish("mod", [new PlayerCapture("P1", modWithoutRelics, saveTime.AddMinutes(5))]);
+
+        var resolved = store.Resolve("P1");
+        Assert.Equal(CaptureAvailability.Available, resolved.State);
+        Assert.Equal(3, resolved.Record!.BonusOf("ChickenPal"));
+        Assert.Equal(new RelicCount(2, 66), resolved.Record.Relics!["CapturePower"]);
+        Assert.Equal(new RelicCount(1, 5), resolved.Record.Relics["JumpPower"]);
+
+        // A newer client mod snapshot that only knows Collected preserves empty relics without borrowing Have if Collected advanced.
+        var newerModWithClientRelics = new CaptureRecord(new Dictionary<string, int>(), new Dictionary<string, int>())
+        {
+            Relics = new Dictionary<string, RelicCount>(StringComparer.OrdinalIgnoreCase) { ["CapturePower"] = new(null, 70) },
+        };
+        store.Publish("mod", [new PlayerCapture("P1", newerModWithClientRelics, saveTime.AddMinutes(10))]);
+
+        var merged = store.Resolve("P1").Record!;
+        Assert.Equal(5, merged.BonusOf("Sheepball"));
+        Assert.Null(merged.Relics!["CapturePower"].Have);
+        Assert.Equal(70, merged.Relics["CapturePower"].Collected);
+        Assert.Equal(new RelicCount(1, 5), merged.Relics["JumpPower"]);
+    }
 }

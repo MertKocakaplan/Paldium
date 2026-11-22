@@ -133,4 +133,19 @@ public class LocalizationTests : IDisposable
                 || kv.Key.StartsWith("Sources.Coverage", StringComparison.Ordinal) || kv.Key.StartsWith("Sources.InstallMod", StringComparison.Ordinal))
             .Where(kv => tr.TryGetValue(kv.Key, out var value) && value == kv.Value).Select(kv => kv.Key).ToList();
         Assert.Empty(same);
-    }}
+    }
+
+    [Fact]
+    public void AuditPolish_TurkishFiltersAndPercentAndPunctuation_MatchRules()
+    {
+        var en = ReadResx("Strings.resx");
+        var tr = ReadResx("Strings.tr.resx");
+
+        Assert.DoesNotContain(tr, kv => kv.Value.Contains("süzgeç", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("·", en["Mounts.CellTip"]);
+        Assert.DoesNotContain("- +", en["Mounts.CellTip"]);
+        Assert.StartsWith("+%", tr["Mounts.PassiveBonus"]);
+        Assert.EndsWith("%", en["Mounts.PassiveBonus"]);
+        Assert.False(string.IsNullOrWhiteSpace(tr["Ranch.BelowBaseNote"]));
+    }
+}

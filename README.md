@@ -19,7 +19,7 @@ A Windows desktop tool for **Palworld** (tested with 1.0.5): a breeding planner 
 
 ## Download
 
-Get the latest `Paldium-<version>-win-x64.zip` from the [Releases](https://github.com/MertKocakaplan/Paldium/releases) page, unzip it anywhere you can write to (for example `Documents`) and run `Paldium.exe`. Each release also has a `.sha256` file with the checksum of the zip.
+Get the latest `Paldium-<version>-win-x64.zip` from the [Releases](https://github.com/MertKocakaplan/Paldium/releases) page, extract the `Paldium` folder anywhere you can write to (for example `Documents\Paldium`) and run `Paldium.exe` inside it. Each release also has a `.sha256` file with the checksum of the zip.
 
 Requirements:
 
@@ -53,7 +53,15 @@ If you cloned without submodules: `git submodule update --init`. You need the .N
 
 ## Notes
 
-Paldium is an unofficial fan project. It is not affiliated with or endorsed by Pocketpair, Inc. Palworld and its names, texts and images belong to Pocketpair. The source code is under the [MIT License](LICENSE); the game data and images in `data/` are not covered by it. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for PalCalc, fonts and packages.
+Paldium is an unofficial fan project. It is not affiliated with or endorsed by Pocketpair, Inc. Palworld and its names, texts and images belong to Pocketpair.
+
+## License
+
+Copyright (C) 2026 Mert Kocakaplan
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+The source code is licensed under [GPL-3.0](LICENSE); the game data and images in `data/` are **not** covered by this license and remain the property of Pocketpair, Inc. v0.1.0 was published under MIT; from v0.1.1 on, Paldium is licensed under GPL-3.0 because it bundles `libooz` (GPL-3.0). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for `ooz`/`libooz`, PalCalc, fonts and packages.
 
 ---
 
@@ -61,8 +69,8 @@ Paldium is an unofficial fan project. It is not affiliated with or endorsed by P
 
 **Paldium**, Palworld için bir Windows masaüstü aracıdır: üreme planlayıcı ve hesaplayıcı, yakalama ilerlemeli Paldex, yetenekler, kendi Pal'ların, rehberler ve teknoloji ağacı. Kayıt dosyalarını okur, çevrimdışı çalışır ve kayıtlarına hiçbir şey yazmaz.
 
-- **İndirme:** [Releases](https://github.com/MertKocakaplan/Paldium/releases) sayfasındaki `Paldium-<sürüm>-win-x64.zip` dosyasını bir klasöre aç ve `Paldium.exe`'yi çalıştır. Gereksinimler: Windows 10/11, .NET 10 Desktop Runtime, WebView2 ve Visual C++ Redistributable.
+- **İndirme:** [Releases](https://github.com/MertKocakaplan/Paldium/releases) sayfasındaki `Paldium-<sürüm>-win-x64.zip` arşivindeki `Paldium` klasörünü yazabileceğin bir yere çıkar ve içindeki `Paldium.exe`'yi çalıştır. Gereksinimler: Windows 10/11, .NET 10 Desktop Runtime, WebView2 ve Visual C++ Redistributable.
 - **Güncelleme:** uygulama açılışta ve günde bir kez GitHub'da yeni sürüm arar (*Ayarlar > Güncellemeler*'den kapatılır). Yeni sürümde üst çubukta bir rozet çıkar; *Güncelle ve yeniden başlat* zip'i indirir, SHA-256'yı doğrular, dosyaları değiştirir ve yeni sürümü açar. Verilerine dokunulmaz.
 - **Yardımcı mod (isteğe bağlı):** başkasının dünyasında istemci olarak oynuyorsan, Pal Kutun hiçbir dosyada bulunmaz. UE4SS kuruluyken *Ayarlar > Kaynaklar*'ndan *Modu kur*'a bas (oyun kapalıyken).
 - **Kaynaktan derleme:** yukarıdaki komutlar; `--recurse-submodules` ile klonla.
-- Resmî olmayan bir hayran projesidir; Palworld ve görselleri Pocketpair'e aittir. Kaynak kod MIT lisanslıdır, `data/` içindeki oyun verisi bu lisansın dışındadır.
+- **Lisans:** resmî olmayan bir hayran projesidir; Palworld ve görselleri Pocketpair'e aittir ve bu lisansın dışındadır. v0.1.0 MIT olarak yayımlandı; v0.1.1'den itibaren paketteki `libooz` (GPL-3.0) nedeniyle kaynak kod **GPL-3.0** lisanslıdır ([LICENSE](LICENSE), [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).

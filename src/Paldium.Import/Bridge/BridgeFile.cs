@@ -126,3 +126,14 @@ public sealed record BridgeFile
         return file;
     }
 }
+
+internal static class BridgeFileIo
+{
+    /// <summary>Opens the bridge file with read/write/delete sharing so Lua atomic renames never lose updates on Windows.</summary>
+    public static string ReadAllText(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+}

@@ -31,10 +31,10 @@ public class ParallelSolverTests
         finally { PassiveSolver.MinPairsPerWorker = old; }
     }
 
-    // Counters of the one-thread search before T119 (recorded with the old code): the fast stage is the same search, state by state.
+    // Counters of the single-thread search (updated after QA 2.2.1 intermediate target gender cost fix): all thread counts must stay identical.
     [Theory]
-    [InlineData("crowd6", 18474, 1250, "leaf:LotusDragon+ScorpionMan=10/1/0")]
-    [InlineData("crowd4", 14619, 1250, "leaf:LotusDragon+ScorpionMan=10/1/0")]
+    [InlineData("crowd6", 17873, 1239, "leaf:LotusDragon+ScorpionMan=10/1/0")]
+    [InlineData("crowd4", 14231, 1239, "leaf:LotusDragon+ScorpionMan=10/1/0")]
     [InlineData("mozSekhmet", 2810, 1099, "ScorpionMan>=100/2/2")]
     [InlineData("mozVixy", 1202, 826, "WizardOwl>Carbunclo>=200/3/3")]
     public void StageOne_IsTheSameSearchAsBeforeTheParallelVersion(string scenario, long generated, long expanded, string firstPlan)

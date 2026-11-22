@@ -111,6 +111,35 @@ public class PlayerCaptureReaderTests : IDisposable
         Assert.Equal(new RelicCount(3, 5), PlayerCaptureReader.Normalize(raw, TestSupport.GameData, null).Relics!["JumpPower"]);
     }
 
+    [Fact]
+    public void BuildRelics_IsCaseInsensitive()
+    {
+        var relics = PlayerCaptureReader.BuildRelics(
+            new Dictionary<string, int> { ["capturepower"] = 4 },
+            new Dictionary<string, int> { ["CapturePower"] = 60 })!;
+
+        Assert.Single(relics);
+        Assert.Equal(new RelicCount(4, 60), relics["CapturePower"]);
+    }
+
+    [Fact]
+    public void ModFile_ZeroCaptureBlock_StillPublishesCaptureRecord_AndHandlesDuplicateOrNullRelics_AndClampsFutureTimestamp()
+    {
+        var file = Path.Combine(_dir, "palbox.json");
+        File.WriteAllText(file, """
+            { "schemaVersion": 1, "exportedAtUtc": "2099-01-01T00:00:00Z", "playerUid": "AABBCCDD-0000-0000-0000-000000000001", "pals": [],
+              "capture": { "bonus": {}, "count": {} },
+              "relics": { "CapturePower": null, "EPalRelicType::JumpPower": { "collected": 4 }, "JumpPower": { "have": 1, "collected": 5 } } }
+            """);
+
+        var (pals, captures) = new ModBridgeReader(TestSupport.GameData).ReadAll(file, "s");
+        Assert.Empty(pals);
+        var capture = Assert.Single(captures);
+        Assert.True(capture.ReadAtUtc <= DateTimeOffset.UtcNow.AddSeconds(1));
+        Assert.Equal(new RelicCount(1, 5), capture.Record.Relics!["JumpPower"]);
+        Assert.False(capture.Record.Relics.ContainsKey("CapturePower"));
+    }
+
     // ---- real saves (skipped unless PALDIUM_TEST_WORLD is set) ------------------------------------------------
 
     [RealSaveFact(TestSupport.WorldVariable)]

@@ -260,19 +260,32 @@ else
                 () => FilterChanged.InvokeAsync(f with { Ranks = [] })));
         }
 
-        foreach (var tag in f.Tags)
+        if (f.Tags.Count > 1 && !f.TagsMatchAll)
         {
-            var captured = tag;
-            var label = $"{L["Skills.TagPrefix"].Value}: {SkillsText.TagLabel(captured, L, Terms)}";
+            var tags = f.Tags.ToList();
+            var label = string.Join(" / ", tags.Select(t => SkillsText.TagLabel(t, L, Terms)));
             list.Add(new(
-                "tag:" + captured,
-                label,
-                p => p.Tags.Contains(captured, StringComparer.OrdinalIgnoreCase),
-                () =>
-                {
-                    var next = f.Tags.Where(t => !string.Equals(t, captured, StringComparison.OrdinalIgnoreCase)).ToList();
-                    return FilterChanged.InvokeAsync(f with { Tags = next });
-                }));
+                "tags-any",
+                $"{L["Skills.TagPrefix"].Value}: {label}",
+                p => tags.Any(t => p.Tags.Contains(t, StringComparer.OrdinalIgnoreCase)),
+                () => FilterChanged.InvokeAsync(f with { Tags = [], TagsMatchAll = true })));
+        }
+        else
+        {
+            foreach (var tag in f.Tags)
+            {
+                var captured = tag;
+                var label = $"{L["Skills.TagPrefix"].Value}: {SkillsText.TagLabel(captured, L, Terms)}";
+                list.Add(new(
+                    "tag:" + captured,
+                    label,
+                    p => p.Tags.Contains(captured, StringComparer.OrdinalIgnoreCase),
+                    () =>
+                    {
+                        var next = f.Tags.Where(t => !string.Equals(t, captured, StringComparison.OrdinalIgnoreCase)).ToList();
+                        return FilterChanged.InvokeAsync(f with { Tags = next, TagsMatchAll = next.Count <= 1 || f.TagsMatchAll });
+                    }));
+            }
         }
 
         if (f.CanAppearRandomly is { } rnd)

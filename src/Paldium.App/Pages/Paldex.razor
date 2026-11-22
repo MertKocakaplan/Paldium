@@ -32,7 +32,7 @@
                         PanelKey="paldex"
                         Open="@_filtersOpen"
                         OpenChanged="v => _filtersOpen = v"
-                        AnyActive="@(!_state.Filter.IsEmpty)"
+                        AnyActive="@(activeClauses.Count > 0)"
                         OnClear="ClearFilters">
                 <PaldexFilters Filter="_state.Filter"
                                FilterChanged="SetFilter"
@@ -212,6 +212,10 @@
     [SupplyParameterFromQuery(Name = "active")]
     public string? ActiveSkillParameter { get; set; }
 
+    /// <summary>Optional <c>?capture=open|started|none|done</c>: filters the species list by capture bonus status.</summary>
+    [SupplyParameterFromQuery(Name = "capture")]
+    public string? CaptureParameter { get; set; }
+
     private PaldexSettings _state = new();
     private string _mode = "list";
     private bool _workersOwnedOnly;
@@ -228,6 +232,7 @@
     private int _ownedVersion;
     private readonly OnceParameter _palParameter = new();
     private readonly OnceParameter _activeParameter = new();
+    private readonly OnceParameter _captureParameter = new();
 
     protected override void OnInitialized()
     {
@@ -253,6 +258,14 @@
                 _mode = "list";
                 SetFilter(new PalFilter { ActiveSkill = matched.Id });
             }
+        }
+
+        if (_captureParameter.IsNew(CaptureParameter) && !string.IsNullOrEmpty(CaptureParameter)
+            && Enum.TryParse<PalCaptureFilter>(CaptureParameter, ignoreCase: true, out var cap) && Enum.IsDefined(cap))
+        {
+            _selected = null;
+            _mode = "list";
+            if (_capture != null) SetFilter(new PalFilter { Capture = cap });
         }
 
         if (!_palParameter.IsNew(PalParameter) || string.IsNullOrEmpty(PalParameter)) return;
@@ -668,13 +681,7 @@
     {
         var shownPattern = L["Paldex.SummaryShown", "\x01", "\x02"].Value;
         @RenderBoldTokenized(shownPattern, totalSpecies.ToString(CultureInfo.InvariantCulture), shownSpecies.ToString(CultureInfo.InvariantCulture))
-        <span class="tx">
-            <text> </text>
-            @{
-                var ownedPattern = L["Paldex.SummaryOwned", "\x01"].Value;
-            }
-            @RenderBoldTokenized(ownedPattern, ownedSpecies.ToString(CultureInfo.InvariantCulture), string.Empty)
-        </span>
+        <span class="tx">@(" ")@RenderBoldTokenized(L["Paldex.SummaryOwned", "\x01"].Value, ownedSpecies.ToString(CultureInfo.InvariantCulture), string.Empty)</span>
     };
 
     // "· 2/299 species 5/5": the species that are finished out of the ones that can be caught (nothing when no record is known).
@@ -683,11 +690,7 @@
         if (_capture == null) return;
         var (done, capturable) = CaptureBarModel.Summary(_capture, Data.Pals);
         var pattern = L["Paldex.CaptureSummary", "\x01", capturable.ToString(CultureInfo.InvariantCulture)].Value;
-        <span class="tx">
-            <text> · </text>
-            <img class="mimg" src="@MimogIcon" width="14" height="14" alt="" />
-            @RenderBoldTokenized(pattern, done.ToString(CultureInfo.InvariantCulture), string.Empty)
-        </span>
+        <span class="tx">@(" · ")<img class="mimg" src="@MimogIcon" width="14" height="14" alt="" />@RenderBoldTokenized(pattern, done.ToString(CultureInfo.InvariantCulture), string.Empty)</span>
     };
 
     // The "Capture" cell: five little segments and "3/5" ("✓ 5/5" when finished); "-" for species that cannot be caught and when no record is known.

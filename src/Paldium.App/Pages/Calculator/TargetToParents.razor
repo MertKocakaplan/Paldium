@@ -273,7 +273,9 @@
                 (reqA, reqB) = (reqB, reqA);
             }
 
-            var tier = (stA.Total > 0 && stB.Total > 0) ? 2 : (stA.Total > 0 || stB.Total > 0) ? 1 : 0;
+            var tier = string.Equals(spA.Id, spB.Id, StringComparison.OrdinalIgnoreCase)
+                ? (stA.Total >= 2 ? 2 : stA.Total == 1 ? 1 : 0)
+                : (stA.Total > 0 && stB.Total > 0) ? 2 : (stA.Total > 0 || stB.Total > 0) ? 1 : 0;
             if (tier >= 1) anyCount++;
             if (tier == 2) bothCount++;
             list.Add(new PairRow(spA, spB, reqA, reqB, stA, stB, tier));

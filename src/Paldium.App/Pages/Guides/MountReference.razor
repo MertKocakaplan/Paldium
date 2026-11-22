@@ -10,6 +10,7 @@
 @* "Mounts: who is fastest" (screens/guides.md, T124): every rideable Pal in one table, worked out for a star level and the speed passives switched on above it.
    Built from the Transport table's parts (top bar, search, check box, table styles). *@
 <div class="rread ranch transport mounts">
+    <h1 class="sr" tabindex="-1">@L["Mounts.Title"]</h1>
     <div class="rbar">
         <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
         <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Mounts.Title"]</b></span>
@@ -25,15 +26,23 @@
             </span>
             <div class="mpas" role="group" aria-label="@L["Mounts.Passives"].Value">
                 <span class="l">@L["Mounts.Passives"]</span>
-                @foreach (var passive in _passives)
+                @foreach (var group in PassiveGroups)
                 {
-                    var id = passive.Skill.Id;
-                    var on = State.MountPassives.Contains(id, StringComparer.Ordinal);
-                    var blocked = !on && !MountModel.CanAdd(Selection, _maxPassives);
-                    <button type="button" class="pt9" role="checkbox" aria-checked="@(on ? "true" : "false")" disabled="@blocked"
-                            title="@(blocked ? L["Mounts.MaxPassives", _maxPassives].Value : null)" @onclick="() => TogglePassive(id)">
-                        <span class="n">@passive.Skill.Names.Get(Lang)</span><b class="num">+@passive.Percent.ToString(CultureInfo.InvariantCulture)%</b>
-                    </button>
+                    var inGroup = _passives.Where(p => p.Group == group).ToList();
+                    if (inGroup.Count == 0) continue;
+                    <span class="mpgrp" role="group" aria-label="@L["Mounts.Group." + group].Value">
+                        <span class="mpgl">@L["Mounts.Group." + group]</span>
+                        @foreach (var passive in inGroup)
+                        {
+                            var id = passive.Skill.Id;
+                            var on = State.MountPassives.Contains(id, StringComparer.Ordinal);
+                            var blocked = !on && !MountModel.CanAdd(Selection, _maxPassives);
+                            <button type="button" class="pt9" role="checkbox" aria-checked="@(on ? "true" : "false")" disabled="@blocked"
+                                    title="@(blocked ? L["Mounts.MaxPassives", _maxPassives].Value : null)" @onclick="() => TogglePassive(id)">
+                                <span class="n">@passive.Skill.Names.Get(Lang)</span><b class="num">@L["Mounts.PassiveBonus", passive.Percent]</b>
+                            </button>
+                        }
+                    </span>
                 }
                 <button type="button" class="lnk9" disabled="@(State.MountPassives.Count == 0 && State.MountStars == 0)" @onclick="ResetSelection">@L["Mounts.Reset"]</button>
             </div>
@@ -56,7 +65,7 @@
                     </button>
                 }
             </span>
-            <button type="button" class="ck9" role="checkbox" aria-checked="@(State.MountOnlyOwned ? "true" : "false")" disabled="@(OwnedCount() == 0)" @onclick="ToggleOwned">
+            <button type="button" class="ck9" role="checkbox" aria-checked="@(State.MountOnlyOwned ? "true" : "false")" disabled="@(OwnedCount() == 0 && !State.MountOnlyOwned)" @onclick="ToggleOwned">
                 <span class="sq">@if (State.MountOnlyOwned) { <Icon Name="check" Size="12" /> }</span>
                 @L["Ranch.OnlyOwned"]
             </button>
@@ -137,6 +146,7 @@
 
 @code {
     private static readonly string[] Kinds = [MountKind.Ground, MountKind.Flying, MountKind.Water];
+    private static readonly string[] PassiveGroups = [MountModel.GroupMove, MountModel.GroupSwim, MountModel.GroupStamina];
 
     [Parameter] public string? PalId { get; set; }
 
@@ -144,6 +154,7 @@
     private IReadOnlyList<MountRow> _visible = [];
     private IReadOnlyList<MountPassive> _passives = [];
     private int _maxPassives = 4;
+    private readonly OnceParameter _palOnce = new();
 
     private MountSelection Selection => new(State.MountStars, State.MountPassives);
 
@@ -159,8 +170,9 @@
 
     protected override void OnParametersSet()
     {
+        base.OnParametersSet();
         // /guides/binekler?pal=<id> (from the library search): the search box starts with that Pal's name.
-        if (!string.IsNullOrEmpty(PalId) && _all.FirstOrDefault(r => r.Pal.Id == PalId) is { } row)
+        if (_palOnce.IsNew(PalId) && !string.IsNullOrEmpty(PalId) && _all.FirstOrDefault(r => r.Pal.Id == PalId) is { } row)
         {
             State.MountQuery = row.Pal.Names.Get(Lang);
             Refresh();
@@ -258,7 +270,7 @@
         string tip;
         if (counted != null) tip = string.Join(" · ", counted.Select(x => L["Mounts.StarTip", x.Stars, x.Percent].Value));
         else tip = L["Mounts.ConditionalTip", row.Pal.PartnerSkill?.Names.Get(Lang) ?? "", string.Join(" · ", conditional!.Select(x => L["Mounts.StarTip", x.Stars, x.Percent].Value))].Value;
-        <span class="smk" title="@tip">★</span>
+        <span class="@(counted != null ? "smk" : "smk cond")" title="@tip">★</span>
     };
 
     private RenderFragment Header(string key, string label, string cls) => __builder =>

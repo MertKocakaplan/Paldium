@@ -56,7 +56,7 @@ public sealed class MyPalsStateService
                 ? filtered.OrderByDescending(p => p.SeenAtUtc)
                 : filtered.OrderBy(p => p.SeenAtUtc);
             return ordered
-                .ThenBy(p => data.Pal(p.SpeciesId).DexNo)
+                .ThenBy(p => data.TryNormalizePalId(p.SpeciesId, out var cid) ? data.Pal(cid).DexNo : int.MaxValue)
                 .ThenBy(p => p.Uid, StringComparer.Ordinal)
                 .ToList();
         }

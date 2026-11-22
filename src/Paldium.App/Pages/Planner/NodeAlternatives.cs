@@ -16,12 +16,15 @@ public static class NodeAlternatives
         {
             foreach (var x in Walk(s.ParentA)) yield return x;
             foreach (var x in Walk(s.ParentB)) yield return x;
+            if (s.AltPartner != null)
+                foreach (var x in Walk(s.AltPartner)) yield return x;
         }
     }
 
     /// <summary>The step that has <paramref name="node"/> as a parent (reference equality), or null.</summary>
     public static BreedStep? StepOf(BreedingPlan plan, PlanNode node) =>
-        Walk(plan.Root).OfType<BreedStep>().FirstOrDefault(s => ReferenceEquals(s.ParentA, node) || ReferenceEquals(s.ParentB, node));
+        Walk(plan.Root).OfType<BreedStep>().FirstOrDefault(s =>
+            ReferenceEquals(s.ParentA, node) || ReferenceEquals(s.ParentB, node) || ReferenceEquals(s.AltPartner, node));
 
     /// <summary>
     /// Other wild-catchable species that make the same step (same child, the genders the step needs) with the same partner; the step needs the
@@ -56,7 +59,10 @@ public static class NodeAlternatives
         var steps = PlanText.StepsOf(plan);
         var list = new List<int>();
         for (var i = 0; i < steps.Count; i++)
-            if ((steps[i].ParentA is OwnedLeaf a && a.Pal.Uid == uid) || (steps[i].ParentB is OwnedLeaf b && b.Pal.Uid == uid)) list.Add(i + 1);
+            if ((steps[i].ParentA is OwnedLeaf a && a.Pal.Uid == uid)
+                || (steps[i].ParentB is OwnedLeaf b && b.Pal.Uid == uid)
+                || (steps[i].AltPartner is OwnedLeaf alt && alt.Pal.Uid == uid))
+                list.Add(i + 1);
         return list;
     }
 
@@ -66,8 +72,11 @@ public static class NodeAlternatives
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         if (plan == null) return counts;
         foreach (var step in Walk(plan.Root).OfType<BreedStep>())
-            foreach (var parent in new[] { step.ParentA, step.ParentB })
-                if (parent is OwnedLeaf o) counts[o.Pal.Uid] = counts.GetValueOrDefault(o.Pal.Uid) + 1;
+        {
+            if (step.ParentA is OwnedLeaf oa) counts[oa.Pal.Uid] = counts.GetValueOrDefault(oa.Pal.Uid) + 1;
+            if (step.ParentB is OwnedLeaf ob) counts[ob.Pal.Uid] = counts.GetValueOrDefault(ob.Pal.Uid) + 1;
+            if (step.AltPartner is OwnedLeaf oalt) counts[oalt.Pal.Uid] = counts.GetValueOrDefault(oalt.Pal.Uid) + 1;
+        }
         return counts;
     }
 

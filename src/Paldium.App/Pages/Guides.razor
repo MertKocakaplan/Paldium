@@ -55,10 +55,13 @@
     [SupplyParameterFromQuery(Name = "rank")]
     public int? Rank { get; set; }
 
+    private readonly OnceParameter _readOnce = new();
+
     protected override void OnParametersSet()
     {
+        base.OnParametersSet();
         _lang = State.EffectiveLang(Lang);
-        if (Read == "1") State.Reading = true;
+        if (_readOnce.IsNew(Read) && Read == "1") State.Reading = true;
         Refresh();
     }
 
@@ -67,7 +70,7 @@
     private void Refresh()
     {
         _lang = State.EffectiveLang(Lang);
-        _doc = Slug == null || Slug == "agil" || Slug == "tasima" || Slug == "binekler" || Slug == "heykeller" ? null : GuideSvc.Load(Slug, _lang);
+        _doc = Slug == null || GuideStateService.IsReferenceSlug(Slug) ? null : GuideSvc.Load(Slug, _lang);
         _guides = GuideSvc.Search(_lang, State.Query);
         if (_doc != null)
         {

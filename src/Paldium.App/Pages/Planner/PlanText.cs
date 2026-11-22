@@ -209,6 +209,7 @@ public static class PlanText
                 case BreedStep step:
                     Walk(step.ParentA);
                     Walk(step.ParentB);
+                    if (step.AltPartner != null) Walk(step.AltPartner);
                     break;
                 case OwnedLeaf owned:
                     Add(owned.SpeciesId, owned.Pal.Gender);
@@ -459,11 +460,14 @@ public static class PlanText
             if (node is not BreedStep step) return;
             Walk(step.ParentA);
             Walk(step.ParentB);
+            if (step.AltPartner != null) Walk(step.AltPartner);
             stepIdx++;
             if (step.ParentA is OwnedLeaf oa && !scopedUids.Contains(oa.Pal.Uid) && seen.Add(oa.Pal.Uid))
                 list.Add(new OutOfScopeLeaf(stepIdx, oa.Pal, PalName(oa.Pal)));
             if (step.ParentB is OwnedLeaf ob && !scopedUids.Contains(ob.Pal.Uid) && seen.Add(ob.Pal.Uid))
                 list.Add(new OutOfScopeLeaf(stepIdx, ob.Pal, PalName(ob.Pal)));
+            if (step.AltPartner is OwnedLeaf oalt && !scopedUids.Contains(oalt.Pal.Uid) && seen.Add(oalt.Pal.Uid))
+                list.Add(new OutOfScopeLeaf(stepIdx, oalt.Pal, PalName(oalt.Pal)));
         }
 
         Walk(plan.Root);

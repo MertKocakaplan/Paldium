@@ -243,6 +243,26 @@ public class CalculatorStateTests
         Assert.Contains(passive.Id, state.OddsDesired, StringComparer.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ApplyQuery_WithForce_ReappliesAfterModeSwitch_AndEmptyQueryClearsCache()
+    {
+        var repo = RepoWith();
+        var state = new CalculatorStateService();
+        var passive = Data.Value.Passives.First();
+
+        Assert.True(state.ApplyQuery("olasilik", null, null, null, Data.Value, repo, passive.Id));
+        state.Mode = CalculatorStateService.ModePair;
+        state.OddsDesired.Clear();
+
+        Assert.False(state.ApplyQuery("olasilik", null, null, null, Data.Value, repo, passive.Id));
+        Assert.True(state.ApplyQuery("olasilik", null, null, null, Data.Value, repo, passive.Id, force: true));
+        Assert.Equal(CalculatorStateService.ModeOdds, state.Mode);
+        Assert.Contains(passive.Id, state.OddsDesired, StringComparer.OrdinalIgnoreCase);
+
+        Assert.False(state.ApplyQuery(null, null, null, null, Data.Value, repo));
+        Assert.True(state.ApplyQuery("olasilik", null, null, null, Data.Value, repo, passive.Id));
+    }
+
     private sealed class StubMaleFirstBreeding : IBreedingCalculator
     {
         public string GetChild(string a, string b, Gender? ga = null, Gender? gb = null) => "Sekhmet";

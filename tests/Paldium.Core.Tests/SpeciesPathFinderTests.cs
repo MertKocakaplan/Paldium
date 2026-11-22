@@ -422,4 +422,19 @@ public class SpeciesPathFinderTests
         Assert.Contains($"{rootPair.A}>", keys);
         Assert.Contains($"{rootPair.B}>", keys);
     }
+
+    [Fact]
+    public async Task TwoUnknownGenderOwnedPals_PairAsTwoDistinctPals()
+    {
+        var owned = new[]
+        {
+            Pal("u1", "Sekhmet", null, level: 50),
+            Pal("u2", "Sekhmet", null, level: 10),
+        };
+        var result = await Finder().FindAsync(Query("Sekhmet", wild: false), owned, CancellationToken.None);
+        var plan = Assert.Single(result.Plans);
+        Assert.True(PlanTreeValidator.IsValid(plan.Root));
+        var step = Assert.IsType<BreedStep>(plan.Root);
+        Assert.Equal(["u1", "u2"], new[] { ((OwnedLeaf)step.ParentA).Pal.Uid, ((OwnedLeaf)step.ParentB).Pal.Uid }.Order().ToArray());
+    }
 }

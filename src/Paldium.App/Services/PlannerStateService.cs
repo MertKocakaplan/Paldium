@@ -204,7 +204,7 @@ public sealed class PlannerStateService : IDisposable
     {
         OwnedLeaf owned => "o:" + owned.Pal.Uid,
         WildLeaf wild => $"w:{wild.SpeciesId}:{wild.Gender}",
-        BreedStep step => $"({Signature(step.ParentA)}+{Signature(step.ParentB)}>{step.ChildSpeciesId}:{step.Gender})",
+        BreedStep step => $"({Signature(step.ParentA)}+{Signature(step.ParentB)}{(step.AltPartner != null ? "|" + Signature(step.AltPartner) : "")}>{step.ChildSpeciesId}:{step.Gender})",
         _ => node.SpeciesId,
     };
 

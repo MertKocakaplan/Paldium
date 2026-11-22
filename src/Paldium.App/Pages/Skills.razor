@@ -115,6 +115,7 @@
 
     private IReadOnlyList<ActiveSkill>? _activeResults;
     private (ActiveFilter, ActiveSort, string)? _activeKey;
+    private readonly OnceParameter _queryOnce = new();
 
     [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
 
@@ -137,7 +138,9 @@
     protected override void OnParametersSet()
     {
         base.OnParametersSet();
-        if (State.ApplyQuery(Tab, Passive, Data, _ownedPassiveIds))
+        var hasQuery = !string.IsNullOrWhiteSpace(Tab) || !string.IsNullOrWhiteSpace(Passive);
+        var key = hasQuery ? $"{Tab}|{Passive}" : null;
+        if (_queryOnce.IsNew(key) && hasQuery && State.ApplyQuery(Tab, Passive, Data, _ownedPassiveIds, force: true))
             _passiveResults = null;
     }
 
@@ -272,7 +275,8 @@
         _filtersOpen = false;
     }
 
-    private void SetPassiveFilter(PassiveFilter filter) => State.PassiveFilter = filter;
+    private void SetPassiveFilter(PassiveFilter filter) =>
+        State.PassiveFilter = filter.Tags.Count <= 1 && !filter.TagsMatchAll ? filter with { TagsMatchAll = true } : filter;
     private void SetPassiveOwnedOnly(bool ownedOnly) => State.PassiveOwnedOnly = ownedOnly;
     private void SetPassiveSort(PassiveSort sort) => State.PassiveSort = sort;
     private void SetActiveFilter(ActiveFilter filter) => State.ActiveFilter = filter;
@@ -280,7 +284,7 @@
     private void SelectPassive(string? id)
     {
         State.SelectedPassiveId = id;
-        if (id != null && !CompactNav)
+        if (id != null)
             _filtersOpen = false;
     }
 
@@ -372,7 +376,8 @@
         else if (key.StartsWith("tag:", StringComparison.Ordinal))
         {
             var tag = key["tag:".Length..];
-            State.PassiveFilter = pf with { Tags = pf.Tags.Where(x => !string.Equals(x, tag, StringComparison.OrdinalIgnoreCase)).ToList() };
+            var nextTags = pf.Tags.Where(x => !string.Equals(x, tag, StringComparison.OrdinalIgnoreCase)).ToList();
+            State.PassiveFilter = pf with { Tags = nextTags, TagsMatchAll = nextTags.Count <= 1 || pf.TagsMatchAll };
         }
         else if (key == "random") State.PassiveFilter = pf with { CanAppearRandomly = null };
         else if (key == "surgery") State.PassiveFilter = pf with { SurgerySupported = null };

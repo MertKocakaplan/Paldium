@@ -61,7 +61,7 @@ public sealed class BridgePageStore
         try
         {
             if (!File.Exists(path)) return new State();
-            return JsonSerializer.Deserialize<State>(File.ReadAllText(path), Options) ?? new State();
+            return JsonSerializer.Deserialize<State>(BridgeFileIo.ReadAllText(path), Options) ?? new State();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -115,8 +115,10 @@ public sealed class BridgePageStore
                 var uid = ModBridgeReader.NormalizeOwner(coverage.BoxOwnerUid);
                 // A file that does not know the owner keeps what is known (the game's answer of an earlier session, or the user's choice).
                 var known = uid != null || !string.IsNullOrEmpty(coverage.OwnerName);
+                var ownerName = !string.IsNullOrEmpty(coverage.OwnerName) ? coverage.OwnerName : previous?.OwnerName;
+                var ownerSource = !string.IsNullOrEmpty(coverage.OwnerSource) ? coverage.OwnerSource : previous?.OwnerSource;
                 state.Boxes.Add(known || previous == null
-                    ? new StoredBox(world, coverage.Kind, box, uid, coverage.OwnerName, coverage.OwnerSource, coverage.PageCount)
+                    ? new StoredBox(world, coverage.Kind, box, uid ?? previous?.OwnerUid, ownerName, ownerSource, coverage.PageCount ?? previous?.PageCount)
                     : previous with { PageCount = coverage.PageCount ?? previous.PageCount });
             }
 
@@ -316,16 +318,21 @@ public sealed class BridgePageStore
             }
         }
 
-        // 3. A storage none of whose Pals was read last in it is gone (it was emptied or sorted away), even when its owner is known.
+        // 3. A storage or base none of whose Pals was read last in it is gone (emptied, sorted away, or dismantled).
         var finalLast = LastRead();
-        foreach (var key in Keys())
+        var targets = Keys().Select(k => (Kind: Dps, Key: k))
+            .Concat(state.Pages.Where(p => p.World == world && p.Kind == "Base").Select(p => p.Box)
+                .Concat(state.Boxes.Where(b => b.World == world && b.Kind == "Base").Select(b => b.Box))
+                .Distinct(StringComparer.Ordinal).Select(k => (Kind: "Base", Key: k)))
+            .ToList();
+        foreach (var (kind, key) in targets)
         {
-            var pages = state.Pages.Where(p => p.World == world && p.Kind == Dps && p.Box == key).ToList();
+            var pages = state.Pages.Where(p => p.World == world && p.Kind == kind && p.Box == key).ToList();
             var holdsSomething = pages.Any(page => page.Pals.Any(pal => string.IsNullOrEmpty(pal.InstanceId))
-                || IdsOf(page).Any(id => finalLast.TryGetValue(id, out var where) && where.Kind == Dps && where.Box == key));
+                || IdsOf(page).Any(id => finalLast.TryGetValue(id, out var where) && where.Kind == kind && where.Box == key));
             if (holdsSomething) continue;
-            state.Pages.RemoveAll(p => p.World == world && p.Kind == Dps && p.Box == key);
-            state.Boxes.RemoveAll(b => b.World == world && b.Kind == Dps && b.Box == key);
+            state.Pages.RemoveAll(p => p.World == world && p.Kind == kind && p.Box == key);
+            state.Boxes.RemoveAll(b => b.World == world && b.Kind == kind && b.Box == key);
         }
     }
 

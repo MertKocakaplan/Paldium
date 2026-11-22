@@ -1,7 +1,7 @@
 {
-  "ModName": "Paldium Bridge (prototype)",
+  "ModName": "Paldium Bridge",
   "PackageName": "PaldiumBridge",
-  "Version": "0.1.0",
+  "Version": "0.1.1",
   "DebugMode": false,
   "MinRevision": 82182,
   "Author": "Paldium",

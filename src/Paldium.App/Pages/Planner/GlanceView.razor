@@ -109,30 +109,41 @@
                     </button>
                 </span>
             }
+            else if (_currentIdx >= 0)
+            {
+                <button type="button"
+                        class="gbig"
+                        @ref="_doneBtn"
+                        @onclick="CompleteActiveStep">
+                    <Icon Name="check" Size="20" />
+                    <span>@L["Plan.GlanceStepDone"]</span>
+                </button>
+            }
             else
             {
                 <button type="button"
-                        class="@($"gbig{(_currentIdx < 0 ? " done-btn" : "")}")"
+                        class="gbig done-btn"
                         @ref="_doneBtn"
-                        disabled="@(_currentIdx < 0)"
-                        @onclick="CompleteActiveStep">
+                        title="@L["Plan.FinishTitle"].Value"
+                        @onclick="OnFinish">
                     <Icon Name="check" Size="20" />
-                    <span>@(_currentIdx >= 0 ? L["Plan.GlanceStepDone"] : L["Plan.Completed"])</span>
+                    <span>@L["Plan.Completed"]</span>
                 </button>
             }
 
             @if (_currentIdx >= 0 && _currentIdx + 1 < _steps.Count)
             {
                 var next = _steps[_currentIdx + 1];
+                var (nextA, nextB) = PlanText.ParentsInUse(Plan, next, FlexChoices);
                 <span class="m">
                     <span>@L["Plan.GlanceThenLabel"]</span>
-                    <PalIcon PalId="@next.ParentA.SpeciesId" Size="26" />
-                    <b>@ParentDisplay(next.ParentA)</b>
-                    <GenderIcon Gender="@NodeGender(next.ParentA)" Size="14" />
+                    <PalIcon PalId="@nextA.SpeciesId" Size="26" />
+                    <b>@ParentDisplay(nextA)</b>
+                    <GenderIcon Gender="@NodeGender(nextA)" Size="14" />
                     <span>+</span>
-                    <PalIcon PalId="@next.ParentB.SpeciesId" Size="26" />
-                    <b>@ParentDisplay(next.ParentB)</b>
-                    <GenderIcon Gender="@NodeGender(next.ParentB)" Size="14" />
+                    <PalIcon PalId="@nextB.SpeciesId" Size="26" />
+                    <b>@ParentDisplay(nextB)</b>
+                    <GenderIcon Gender="@NodeGender(nextB)" Size="14" />
                     <span aria-hidden="true">→</span>
                     <span>@SpeciesName(next.ChildSpeciesId)</span>
                 </span>
@@ -145,6 +156,7 @@
 
         <PlanChecklist Plan="@Plan"
                        Done="@Done"
+                       FlexChoices="@FlexChoices"
                        OnToggleStep="@OnToggleStep"
                        HeadingId="st-h-glance" />
     </div>
@@ -162,6 +174,7 @@
     [Parameter, EditorRequired] public IReadOnlyCollection<string> WantedPassives { get; set; } = Array.Empty<string>();
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<int> OnCompleteStep { get; set; }
+    [Parameter] public EventCallback OnFinish { get; set; }
     [Parameter] public EventCallback<int> OnToggleStep { get; set; }
     [Parameter] public IReadOnlyDictionary<int, Gender> FlexChoices { get; set; } = new Dictionary<int, Gender>();
     [Parameter] public EventCallback<(int Index, Gender Gender)> OnCompleteFlexStep { get; set; }

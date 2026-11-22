@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\tools\Paldium.Updater\AppFolderSafety.cs" Link="Services\AppFolderSafety.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Markdig" Version="1.6.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.130" />
     <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.15" />
@@ -35,6 +39,8 @@
     - data/icons/** under wwwroot/gamedata/icons, where the web view serves it.
   -->
   <ItemGroup>
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\content\**\*.md" Link="content\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\mod\PaldiumBridge\**\*" Link="mod\PaldiumBridge\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\data\*.json" Link="data\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

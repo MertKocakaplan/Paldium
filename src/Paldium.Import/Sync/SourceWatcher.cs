@@ -17,6 +17,7 @@ internal sealed class SourceWatcher : IDisposable
     private readonly Timer _debounce;
     private readonly Timer? _poll;
     private FileSystemWatcher? _watcher;
+    private FileSystemWatcher? _secondaryWatcher;
     private string? _lastReadSignature;
     private bool _disposed;
 
@@ -77,23 +78,46 @@ internal sealed class SourceWatcher : IDisposable
         foreach (var file in Directory.EnumerateFiles(players, "*.sav")) yield return file;
     }
 
+    private static FileSystemWatcher? CreateFileWatcher(string filePath, FileSystemEventHandler handler)
+    {
+        var directory = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) return null;
+        var watcher = new FileSystemWatcher(directory, Path.GetFileName(filePath))
+        {
+            IncludeSubdirectories = false,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.CreationTime,
+        };
+        watcher.Changed += handler;
+        watcher.Created += handler;
+        watcher.Renamed += (s, e) => handler(s, e);
+        watcher.Deleted += handler;
+        watcher.EnableRaisingEvents = true;
+        return watcher;
+    }
+
     private void TryStartWatcher()
     {
         try
         {
-            if (_config.Type is SourceType.GlobalStorageFile or SourceType.ModBridgeFile)
+            if (_config.Type == SourceType.ModBridgeFile)
             {
-                var directory = Path.GetDirectoryName(_config.Path);
-                if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) return;
-                _watcher = new FileSystemWatcher(directory, Path.GetFileName(_config.Path)) { IncludeSubdirectories = false };
+                var effective = Bridge.ModBridgeReader.EffectiveFile(_config.Path);
+                _watcher = CreateFileWatcher(effective, OnFileEvent);
+                if (!string.Equals(effective, _config.Path, StringComparison.OrdinalIgnoreCase))
+                    _secondaryWatcher = CreateFileWatcher(_config.Path, OnFileEvent);
+                return;
             }
-            else
+            if (_config.Type == SourceType.GlobalStorageFile)
             {
-                if (!Directory.Exists(_config.Path)) return;
-                _watcher = new FileSystemWatcher(_config.Path, "*.sav") { IncludeSubdirectories = true };
+                _watcher = CreateFileWatcher(_config.Path, OnFileEvent);
+                return;
             }
-
-            _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.CreationTime;
+            if (!Directory.Exists(_config.Path)) return;
+            _watcher = new FileSystemWatcher(_config.Path, "*.sav")
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.CreationTime,
+            };
             _watcher.Changed += OnFileEvent;
             _watcher.Created += OnFileEvent;
             _watcher.Renamed += OnFileEvent;
@@ -105,14 +129,19 @@ internal sealed class SourceWatcher : IDisposable
             // Polling still covers the source (for example a network share without change notifications).
             _watcher?.Dispose();
             _watcher = null;
+            _secondaryWatcher?.Dispose();
+            _secondaryWatcher = null;
         }
     }
 
     private void OnFileEvent(object sender, FileSystemEventArgs e)
     {
         // Older copies of the world live in a "backup" folder; they are not part of the source.
-        var relative = Path.GetRelativePath(_config.Path, e.FullPath);
-        if (relative.StartsWith("backup" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return;
+        if (_config.Type == SourceType.WorldFolder)
+        {
+            var relative = Path.GetRelativePath(_config.Path, e.FullPath);
+            if (relative.StartsWith("backup" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return;
+        }
         Schedule();
     }
 
@@ -163,6 +192,7 @@ internal sealed class SourceWatcher : IDisposable
         }
 
         _watcher?.Dispose();
+        _secondaryWatcher?.Dispose();
         _poll?.Dispose();
         _debounce.Dispose();
     }

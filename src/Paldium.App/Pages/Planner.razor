@@ -48,6 +48,7 @@
                     WantedPassives="@_query.DesiredPassives"
                     OnClose="() => _glanceOpen = false"
                     OnCompleteStep="CompleteGlanceStep"
+                    OnFinish="FinishPlan"
                     FlexChoices="@State.FlexChoices"
                     OnCompleteFlexStep="CompleteFlexStep"
                     OnOtherHatched="OtherHatched"
@@ -253,10 +254,18 @@
     protected override void OnParametersSet()
     {
         base.OnParametersSet();
-        if (string.IsNullOrEmpty(Target) || !_targetParameter.IsNew(Target) || !Data.TryNormalizePalId(Target, out var id)) return;
+        var isNewTarget = _targetParameter.IsNew(Target);
+        if (!isNewTarget || string.IsNullOrEmpty(Target) || !Data.TryNormalizePalId(Target, out var id)) return;
         if (!string.Equals(_query.TargetId, id, StringComparison.Ordinal))
         {
+            CancelDebounce();
+            Cancel();
             _query = _query with { TargetId = id };
+            _editingInputs = false;
+            _glanceOpen = false;
+            _selectedNode = null;
+            _bandText = null;
+            _undo = null;
             Store.Update(s => s with { Planner = _query });
             ClearPendingImprove();
             State.Reset();
@@ -267,7 +276,7 @@
     [JSInvokable]
     public Task OnEnterShortcut()
     {
-        if (_computingStage1 || _improvingStage2 || AnyPickerOpen() || string.IsNullOrEmpty(_query.TargetId))
+        if (_computingStage1 || _improvingStage2 || _glanceOpen || (State.CurrentPlan != null && !_editingInputs) || AnyPickerOpen() || string.IsNullOrEmpty(_query.TargetId))
             return Task.CompletedTask;
         return StartComputeAsync(explicitSolve: true);
     }
@@ -334,6 +343,7 @@
                 case BreedStep s:
                     Walk(s.ParentA);
                     Walk(s.ParentB);
+                    if (s.AltPartner != null) Walk(s.AltPartner);
                     break;
             }
         }
@@ -358,7 +368,7 @@
     private void OnStateChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
 
     private static bool TreeContains(PlanNode root, PlanNode node) =>
-        ReferenceEquals(root, node) || (root is BreedStep s && (TreeContains(s.ParentA, node) || TreeContains(s.ParentB, node)));
+        ReferenceEquals(root, node) || (root is BreedStep s && (TreeContains(s.ParentA, node) || TreeContains(s.ParentB, node) || (s.AltPartner != null && TreeContains(s.AltPartner, node))));
 
     private void SelectNode(PlanNode node) { _panelInitialTab = null; _selectedNode = ReferenceEquals(_selectedNode, node) ? null : node; }
 
@@ -536,6 +546,8 @@
 
         if (changedTarget)
         {
+            CancelDebounce();
+            Cancel();
             ClearPendingImprove();
             State.Reset();
             _editingInputs = false;

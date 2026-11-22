@@ -85,6 +85,7 @@
     ];
 
     private readonly Dictionary<int, ElementReference> _tabButtons = new();
+    private readonly OnceParameter _queryOnce = new();
 
     /// <summary>Optional <c>?mode=cift|ebeveynler|olasilik|mutasyon</c>.</summary>
     [SupplyParameterFromQuery(Name = "mode")]
@@ -108,7 +109,14 @@
     protected override void OnParametersSet()
     {
         base.OnParametersSet();
-        CalcState.ApplyQuery(ModeParam, ParentA, ParentB, Target, Data, Repository, PassiveParam);
+        var hasQuery = !string.IsNullOrWhiteSpace(ModeParam)
+            || !string.IsNullOrWhiteSpace(ParentA)
+            || !string.IsNullOrWhiteSpace(ParentB)
+            || !string.IsNullOrWhiteSpace(Target)
+            || !string.IsNullOrWhiteSpace(PassiveParam);
+        var key = hasQuery ? $"{ModeParam}|{ParentA}|{ParentB}|{Target}|{PassiveParam}" : null;
+        if (_queryOnce.IsNew(key) && hasQuery)
+            CalcState.ApplyQuery(ModeParam, ParentA, ParentB, Target, Data, Repository, PassiveParam, force: true);
     }
 
     private void SelectMode(string mode) => CalcState.Mode = mode;

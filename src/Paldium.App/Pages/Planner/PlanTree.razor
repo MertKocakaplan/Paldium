@@ -210,10 +210,18 @@
         node is OwnedLeaf o && SelectedNode is OwnedLeaf sel && !ReferenceEquals(node, sel) && sel.Pal.Uid == o.Pal.Uid;
 
     private readonly Dictionary<PlanNode, int> _altCounts = new(ReferenceEqualityComparer.Instance);
+    private BreedingPlan? _altCountsOfPlan;
+    private PlannerSettings? _altCountsOfQuery;
 
     private int AltCountOf(PlanNode node)
     {
         if (node is not WildLeaf wild || Plan == null) return 0;
+        if (!ReferenceEquals(_altCountsOfPlan, Plan) || !Equals(_altCountsOfQuery, Query))
+        {
+            _altCounts.Clear();
+            _altCountsOfPlan = Plan;
+            _altCountsOfQuery = Query;
+        }
         if (!_altCounts.TryGetValue(node, out var n))
             _altCounts[node] = n = NodeAlternatives.SameStepSpecies(Data, Breeding, Query, Plan, wild).Count;
         return n;

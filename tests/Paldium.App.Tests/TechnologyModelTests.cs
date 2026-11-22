@@ -103,4 +103,18 @@ public class TechnologyModelTests
         Assert.All(All.Where(t => t.IconPath != null), t => Assert.Equal(t.IconPath, TechnologyModel.IconOf(t)));
         Assert.True(All.Count(t => TechnologyModel.IconOf(t) == null) <= 3);
     }
+
+    [Fact]
+    public void CaseInsensitiveMatchedIcons_ArePresentForFixedTechnologiesAndUnlocks()
+    {
+        var shotGunBullet = Tech("ShotGunBullet");
+        Assert.Equal("icons/items/ShotgunBullet.png", shotGunBullet.IconPath);
+
+        Assert.Equal("icons/buildings/WorkBench.png", Tech("Workbench").Unlocks.Single(u => u.Id == "Workbench").IconPath);
+        Assert.Equal("icons/items/Pickaxe_Default.png", Tech("Product_Pickaxe_Grade_01").Unlocks.Single(u => u.Id == "Pickaxe_Tier_00").IconPath);
+        Assert.Equal("icons/items/Pickaxe_Default.png", Tech("Product_Pickaxe_Grade_02").Unlocks.Single(u => u.Id == "Pickaxe_Tier_01").IconPath);
+        Assert.Equal("icons/items/Pickaxe_Default.png", Tech("Product_Pickaxe_Grade_03").Unlocks.Single(u => u.Id == "Pickaxe_Tier_02").IconPath);
+        Assert.Equal("icons/items/Bow3.png", Tech("Battle_RangeWeapon_Bow3").Unlocks.Single(u => u.Id == "Bow_triple").IconPath);
+        Assert.Equal("icons/items/SakuraSaurus_Water.png", Tech("SkillUnlock_SakuraSaurus_Water").Unlocks.Single(u => u.Id == "SkillUnlock_Sakurasaurus_Water").IconPath);
+    }
 }

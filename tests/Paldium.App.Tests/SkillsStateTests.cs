@@ -56,4 +56,23 @@ public class SkillsStateTests
         Assert.False(state.PassiveOwnedOnly);
         Assert.Null(state.PassiveFilter.Text);
     }
+
+    [Fact]
+    public void ApplyQuery_WithForce_ReappliesAfterTabSwitch_AndEmptyQueryClearsCache()
+    {
+        var state = new SkillsStateService();
+        var target = Data.Value.Passives.First();
+
+        Assert.True(state.ApplyQuery(null, target.Id, Data.Value));
+        state.ActiveTab = SkillsStateService.TabActives;
+        state.SelectedPassiveId = null;
+
+        Assert.False(state.ApplyQuery(null, target.Id, Data.Value));
+        Assert.True(state.ApplyQuery(null, target.Id, Data.Value, force: true));
+        Assert.Equal(SkillsStateService.TabPassives, state.ActiveTab);
+        Assert.Equal(target.Id, state.SelectedPassiveId);
+
+        Assert.False(state.ApplyQuery(null, null, Data.Value));
+        Assert.True(state.ApplyQuery(null, target.Id, Data.Value));
+    }
 }

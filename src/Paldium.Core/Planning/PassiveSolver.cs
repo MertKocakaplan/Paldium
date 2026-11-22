@@ -162,7 +162,8 @@ public sealed class PassiveSolver : IPassiveSolver
                 .OrderBy(p => p.ExpectedEggsTotal).ThenBy(p => p.Steps).Take(maxResults).ToList();
             var diagnostics = stage1.Diagnostics.Where(d => d != PlanNotes.NoPlan && !d.StartsWith("Plan.Diag.", StringComparison.Ordinal) || all.Count == 0).ToList();
             if (timedOut) { diagnostics.Add(PlanNotes.TimedOut); diagnostics.Add(PlanNotes.BetterMayExist); }
-            return new PlanResult(all, stage1.Feasibility, diagnostics.Distinct().ToList(), timedOut, stage1.OwnedTargets, stage1.OwnedMatching);
+            return new PlanResult(all, stage1.Feasibility, diagnostics.Distinct().ToList(), timedOut, stage1.OwnedTargets, stage1.OwnedMatching,
+                all.Count == 0 ? stage1.Blockers : null);
         }
 
         var stage2 = Run(q, owned, ct, progress, new RunOptions(true, upper, watch, limit2, improved =>
@@ -271,7 +272,9 @@ public sealed class PassiveSolver : IPassiveSolver
                 var list = bucket.ToList();
                 return list.Where(g => !list.Any(o => !ReferenceEquals(o, g) && (o.Have & g.Have) == g.Have &&
                                                       o.UnwantedIds.All(x => g.UnwantedIds.Contains(x, StringComparer.OrdinalIgnoreCase)) &&
-                                                      (o.Have != g.Have || o.UnwantedIds.Length < g.UnwantedIds.Length)));
+                                                      (o.Have != g.Have || o.UnwantedIds.Length < g.UnwantedIds.Length) &&
+                                                      (o.Pals.Count >= 2 || o.Pals.Any(p => p.Gender != null) ||
+                                                       g.Pals.All(gp => o.Pals.Any(op => op.Uid == gp.Uid)))));
             })
             .ToList();
 
@@ -373,6 +376,9 @@ public sealed class PassiveSolver : IPassiveSolver
             emin = pMax <= 0 ? double.PositiveInfinity : 1.0 / (pMax * rootFactor);
         }
 
+        bool IsSolution(int species, int sub, bool start, bool pref) =>
+            species == target && sub == fullMask && (!needStart || start) && (!needPreferred || pref);
+
         // Admissible lower bound of the cost of any plan that contains the state (ARCHITECTURE 7.4).
         double LowerBound(SolverState s)
         {
@@ -380,16 +386,15 @@ public sealed class PassiveSolver : IPassiveSolver
             {
                 if (s.From == null) return s.Eggs;
                 var r = s.From;
-                return ParentsEggs(r) + 1.0 / (r.Probability * (q.TargetGender == GenderReq.Any ? 1.0 : r.GenderFactor));
+                if (IsSolution(s.Species, s.Have, s.Start, s.Preferred))
+                    return ParentsEggs(r) + 1.0 / (r.Probability * (q.TargetGender == GenderReq.Any ? 1.0 : r.GenderFactor));
+                return s.Eggs + emin;
             }
 
             if (speciesSteps[s.Species] < 0) speciesSteps[s.Species] = _breeding.MinStepsToTarget(pals[s.Species].Id, targetId);
             var steps = speciesSteps[s.Species];
             return steps == int.MaxValue ? double.PositiveInfinity : s.Eggs - FlexSaving(s) + (steps - 1) + emin;
         }
-
-        bool IsSolution(int species, int sub, bool start, bool pref) =>
-            species == target && sub == fullMask && (!needStart || start) && (!needPreferred || pref);
 
         var flexQueue = new PriorityQueue<double, double>();
 
@@ -526,7 +531,7 @@ public sealed class PassiveSolver : IPassiveSolver
 
             foreach (var alt in altList)
             {
-                if (alt.From != null || alt.Start) continue;
+                if (alt.From != null) continue;
                 // One Pal of unknown gender sits in both gender groups: it cannot be its own backup (T110).
                 if (p.Leaf != null && alt.Leaf != null && p.Leaf.Pals.Count > 0 && alt.Leaf.Pals.Count > 0 &&
                     !p.Leaf.Pals.Any(x => alt.Leaf.Pals.Any(y => y.Uid != x.Uid))) continue;
@@ -542,8 +547,8 @@ public sealed class PassiveSolver : IPassiveSolver
                 var kAlt = BitOperations.PopCount((uint)unionAlt);
                 var uMain = UnwantedOf2(f, p);
                 var uAlt = UnwantedOf2(f, alt);
-                var start = f.Start || p.Start;
-                var pref = f.Preferred || p.Preferred;
+                var start = f.Start || (p.Start && alt.Start);
+                var pref = f.Preferred || (p.Preferred && alt.Preferred);
                 altInfo ??= fromS ? InfoOf(p.Species, f.Species) : InfoOf(f.Species, p.Species);
                 if (altInfo.MinRemaining == int.MaxValue) return;
 
@@ -558,14 +563,15 @@ public sealed class PassiveSolver : IPassiveSolver
 
                     for (var g = 0; g < 2; g++)
                     {
-                        if (child == target && q.TargetGender != GenderReq.Any && (q.TargetGender == GenderReq.Male) != (g == 0)) continue;
                         var pg = childGender[child, g];
                         if (pg <= 0) continue;
-                        var factor = child == target && q.TargetGender == GenderReq.Any ? 1.0 : pg;
 
                         foreach (var sub in phase2 ? AllSubsets(common) : [common])
                         {
                             if (sub == 0) continue;
+                            var solution = IsSolution(child, sub, start, pref);
+                            if (solution && q.TargetGender != GenderReq.Any && (q.TargetGender == GenderReq.Male) != (g == 0)) continue;
+                            var factor = solution && q.TargetGender == GenderReq.Any ? 1.0 : pg;
                             var h = BitOperations.PopCount((uint)sub);
                             for (var w = 0; w <= maxUnwanted; w++)
                             {
@@ -583,7 +589,7 @@ public sealed class PassiveSolver : IPassiveSolver
                                 }
 
                                 if (pMain <= 0 || pAlt <= 0) continue;
-                                if (!IsSolution(child, sub, start, pref) &&
+                                if (!solution &&
                                     buckets.TryGetValue(((child * 2 + g) * 2 + (start ? 1 : 0)) * 2 + (pref ? 1 : 0), out var settledBucket) &&
                                     (settledBucket.IsFull(sub, w) || settledBucket.IsDominated(sub, w, steps, wild))) continue;
                                 var perEgg = wMain / pMain + wAlt / pAlt;     // expected eggs per success, before the child's gender
@@ -603,6 +609,13 @@ public sealed class PassiveSolver : IPassiveSolver
             }
         }
 
+        static bool HasDistinctOwnedPair(SolverState a, SolverState b)
+        {
+            if (a.From != null || b.From != null || a.Leaf == null || b.Leaf == null ||
+                a.Leaf.Pals.Count == 0 || b.Leaf.Pals.Count == 0) return true;
+            return a.Leaf.Pals.Any(x => b.Leaf.Pals.Any(y => y.Uid != x.Uid));
+        }
+
         // The candidate states of a set of pairs (T119). Combine and CombineFlex only READ the search state (settled buckets and states, caches that
         // fill with the same values whoever fills them, the cheapest known cost per kind) and add what they make to the chunk; the main loop pushes the
         // chunks in order, so the result is the same whatever the number of threads.
@@ -610,6 +623,7 @@ public sealed class PassiveSolver : IPassiveSolver
         {
             if ((++chunk.Combos & 1023) == 0 && ct.IsCancellationRequested) return;   // the loop that called us throws after the join
             CombineFlex(s, t, chunk);
+            if (!HasDistinctOwnedPair(s, t)) return;
             var wild = s.Wild + t.Wild;
             if (wild > wildLimit) return;
             var steps = s.Steps + t.Steps + 1;
@@ -627,10 +641,8 @@ public sealed class PassiveSolver : IPassiveSolver
 
                 for (var g = 0; g < 2; g++)
                 {
-                    if (child == target && q.TargetGender != GenderReq.Any && (q.TargetGender == GenderReq.Male) != (g == 0)) continue;
                     var pg = childGender[child, g];
                     if (pg <= 0) continue;
-                    var factor = child == target && q.TargetGender == GenderReq.Any ? 1.0 : pg;
 
                     // The child's bucket does not change while the pair is combined (states settle in the main loop only).
                     buckets.TryGetValue(((child * 2 + g) * 2 + (start ? 1 : 0)) * 2 + (pref ? 1 : 0), out var settledBucket);
@@ -639,6 +651,9 @@ public sealed class PassiveSolver : IPassiveSolver
                     // Candidate sets: everything the pool holds, or what one parent holds (the useful partial targets).
                     foreach (var sub in phase2 ? AllSubsets(union) : Candidates(union, s.Have, t.Have))
                     {
+                        var solution = IsSolution(child, sub, start, pref);
+                        if (solution && q.TargetGender != GenderReq.Any && (q.TargetGender == GenderReq.Male) != (g == 0)) continue;
+                        var factor = solution && q.TargetGender == GenderReq.Any ? 1.0 : pg;
                         var h = BitOperations.PopCount((uint)sub);
                         // A child without wanted passives is only a partner: assume the loosest acceptance (w = maximum),
                         // which keeps the search small and can only underestimate the later odds.
@@ -654,11 +669,11 @@ public sealed class PassiveSolver : IPassiveSolver
                             var p = useCake ? cake : normal;
                             if (p <= 0) continue;
                             // Already beaten by a cheaper settled state of the same kind: not worth creating (complete target solutions are kept per path).
-                            if (!IsSolution(child, sub, start, pref) && settledBucket != null &&
+                            if (!solution && settledBucket != null &&
                                 ((!phase2 && sub == 0 && settledBucket.HasLeaf) || settledBucket.IsFull(sub, w) || settledBucket.IsDominated(sub, w, steps, wild))) continue;
                             var eggs = s.Eggs + t.Eggs + 1.0 / (p * factor);
                             // Cheaper or equal states of the same kind already exist: TryPush would drop this one (the cheapest known cost only goes down).
-                            if (!IsSolution(child, sub, start, pref) &&
+                            if (!solution &&
                                 best.TryGetValue(KeyOfFields(child, g, sub, w, start, pref, steps, wild), out var known) && known <= eggs) continue;
                             var state = new SolverState
                             {
@@ -860,45 +875,92 @@ public sealed class PassiveSolver : IPassiveSolver
 
         BreedingPlan? BuildPlan(SolverState root)
         {
-            var used = new HashSet<string>(StringComparer.Ordinal);
             var notes = new List<string>();
-            var node = Expand(root, used, notes, isRoot: true);
+            var node = Expand(root, notes, isRoot: true);
             if (node == null) return null;
             if (!PlanTreeValidator.IsValid(node)) return null;
             var leaves = PlanTreeValidator.Leaves(node).ToList();
             var eggs = TotalEggs(node);
             var preferredUsed = leaves.OfType<OwnedLeaf>().Select(l => l.Pal.Uid).Where(preferred.Contains).Distinct().ToList();
-            return new BreedingPlan(node, PlanTreeValidator.CountSteps(node), eggs, leaves.Count(l => l is WildLeaf), root.Start,
+            return new BreedingPlan(node, PlanTreeValidator.CountSteps(node), eggs, PlanTreeValidator.CountWild(node), root.Start,
                 preferredUsed, notes.Distinct().ToList());
         }
 
-        PlanNode? Expand(SolverState s, HashSet<string> used, List<string> notes, bool isRoot, bool flexible = false)
+        static (OwnedPal A, OwnedPal B)? PickDistinctPair(IReadOnlyList<OwnedPal> aPals, IReadOnlyList<OwnedPal> bPals)
         {
-            if (s.From == null)
-            {
-                var leaf = s.Leaf!;
-                var gender = leaf.Gender == Gender.Male ? GenderReq.Male : GenderReq.Female;
-                if (leaf.Pals.Count == 0)
-                {
-                    var species = _data.Pal(leaf.SpeciesId);
-                    if (species.BreedingFlags.SameSpeciesOnly) notes.Add($"{PlanNotes.SameSpeciesWild}|{species.Id}");
-                    if (leaf.Start) notes.Add($"{PlanNotes.StartAssumed}|{species.Id}");
-                    return new WildLeaf(leaf.SpeciesId, gender, Math.Max(0, Math.Max(q.WildAssumedUnwanted, leaf.GuaranteedUnwanted)), leaf.ObtainMethod ?? "Wild");
-                }
+            if (aPals.Count == 0 || bPals.Count == 0) return null;
+            var firstA = aPals[0];
+            foreach (var b in bPals)
+                if (b.Uid != firstA.Uid) return (firstA, b);
+            var firstB = bPals[0];
+            foreach (var a in aPals)
+                if (a.Uid != firstB.Uid) return (a, firstB);
+            return null;
+        }
 
-                // Breeding does not consume a parent and the steps run in order: the same Pal may serve several steps (T106).
-                return new OwnedLeaf(leaf.Pals[0]);
+        static bool IsOwnedLeaf(SolverState s) => s.From == null && s.Leaf != null && s.Leaf.Pals.Count > 0;
+
+        PlanNode ExpandLeaf(LeafGroup leaf, List<string> notes, OwnedPal? chosen = null)
+        {
+            var gender = leaf.Gender == Gender.Male ? GenderReq.Male : GenderReq.Female;
+            if (leaf.Pals.Count == 0)
+            {
+                var species = _data.Pal(leaf.SpeciesId);
+                if (species.BreedingFlags.SameSpeciesOnly) notes.Add($"{PlanNotes.SameSpeciesWild}|{species.Id}");
+                if (leaf.Start) notes.Add($"{PlanNotes.StartAssumed}|{species.Id}");
+                return new WildLeaf(leaf.SpeciesId, gender, Math.Max(0, Math.Max(q.WildAssumedUnwanted, leaf.GuaranteedUnwanted)), leaf.ObtainMethod ?? "Wild");
             }
 
+            // Breeding does not consume a parent and the steps run in order: the same Pal may serve several steps (T106).
+            return new OwnedLeaf(chosen ?? leaf.Pals[0]);
+        }
+
+        PlanNode? Expand(SolverState s, List<string> notes, bool isRoot, bool flexible = false, OwnedPal? forcedOwned = null)
+        {
+            if (s.From == null) return ExpandLeaf(s.Leaf!, notes, forcedOwned);
+
             var r = s.From;
-            var a = Expand(r.A, used, notes, false, r.Flex is { FlexIsA: true });
+            OwnedPal? forcedA = null;
+            OwnedPal? forcedB = null;
+            OwnedPal? forcedAlt = null;
+
+            if (IsOwnedLeaf(r.A) && IsOwnedLeaf(r.B))
+            {
+                if (PickDistinctPair(r.A.Leaf!.Pals, r.B.Leaf!.Pals) is not { } pair) return null;
+                forcedA = pair.A;
+                forcedB = pair.B;
+            }
+
+            var a = Expand(r.A, notes, false, r.Flex is { FlexIsA: true }, forcedA);
             if (a == null) return null;
-            var b = Expand(r.B, used, notes, false, r.Flex is { FlexIsA: false });
+            var b = Expand(r.B, notes, false, r.Flex is { FlexIsA: false }, forcedB);
             if (b == null) return null;
+
             PlanNode? altPartner = null;
             if (r.Flex != null)
             {
-                altPartner = Expand(r.Flex.Alt, used, notes, false);
+                var mainLeafState = r.Flex.FlexIsA ? r.B : r.A;
+                if (IsOwnedLeaf(mainLeafState) && IsOwnedLeaf(r.Flex.Alt))
+                {
+                    var mainPal = r.Flex.FlexIsA ? (b as OwnedLeaf)?.Pal : (a as OwnedLeaf)?.Pal;
+                    if (mainPal != null)
+                    {
+                        var distinctAlt = r.Flex.Alt.Leaf!.Pals.FirstOrDefault(p => p.Uid != mainPal.Uid);
+                        if (distinctAlt != null)
+                        {
+                            forcedAlt = distinctAlt;
+                        }
+                        else if (PickDistinctPair(mainLeafState.Leaf!.Pals, r.Flex.Alt.Leaf.Pals) is { } altPair)
+                        {
+                            if (r.Flex.FlexIsA) b = ExpandLeaf(mainLeafState.Leaf, notes, altPair.A);
+                            else a = ExpandLeaf(mainLeafState.Leaf, notes, altPair.A);
+                            forcedAlt = altPair.B;
+                        }
+                        else return null;
+                    }
+                }
+
+                altPartner = Expand(r.Flex.Alt, notes, false, false, forcedAlt);
                 if (altPartner == null) return null;
                 var flexible2 = r.Flex.FlexIsA ? a : b;
                 notes.Add($"{PlanNotes.FlexGender}|{flexible2.SpeciesId}|{altPartner.SpeciesId}|{(altPartner.Gender == GenderReq.Male ? "Male" : "Female")}");

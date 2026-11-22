@@ -1,10 +1,10 @@
--- PaldiumBridge (T27 prototype): exports the local player's Palbox to
+-- PaldiumBridge: exports the local player's Palbox to
 -- %LOCALAPPDATA%\Paldium\bridge\palbox.json so Paldium can read it while the player is a client in a
 -- friend's co-op world (their save is not on this PC).
 --
 -- Automatic: the replicated Pal Box / Dimensional Pal Storage pages (and the party and bases, best effort) are read in small jobs (one per
---            tick, T118) and palbox.json is rewritten when the content changed. Only reads: nothing is sent to the server.
--- scan key (F9)  scan all: turn the pages of the open Pal Box / Dimensional Pal Storage UI and read every one (T38)
+--            tick) and palbox.json is rewritten when the content changed. Only reads: nothing is sent to the server.
+-- scan key (F9)  scan all: turn the pages of the open Pal Box / Dimensional Pal Storage UI and read every one
 -- clear key (F11)  clear the session cache (start over)
 -- probe key (F10)  probe: log the members of the Pal storage objects (what can be read) to UE4SS.log (at most 300 lines)
 --
@@ -15,7 +15,7 @@ local MOD = "PaldiumBridge"
 local SCHEMA_VERSION = 1
 local MAX_PAGES, log, unwrap, valid, text, number, member, length
 local items, jsonValue, array, outputFolder, ensureFolder, writeAtomically, controllerCache, utilityCache
-local lastControllerLookup, localController, palStorage, guidText, parameterOf, readPal
+local lastControllerLookup, localController, palStorage, guidText, parameterOf, readPal, isDefaultObject, classNameOf
 do -- section: helpers
 local SLOTS_PER_PAGE = 30
 MAX_PAGES = 64
@@ -75,10 +75,10 @@ end
 function member(object, name)
     if not valid(object) then return nil, nil end
     local ok, value = pcall(function() return object[name] end)
-    value = ok and unwrap(value) or nil
+    if ok then value = unwrap(value) else value = nil end
     if value ~= nil and type(value) ~= "function" then return value, "property" end
     ok, value = pcall(function() return object["Get" .. name](object) end)
-    value = ok and unwrap(value) or nil
+    if ok then value = unwrap(value) else value = nil end
     if value ~= nil then return value, "getter" end
     return nil, nil
 end
@@ -126,7 +126,7 @@ end
 ---------------------------------------------------------------------------------------------------------------
 
 local function jsonString(s)
-    s = tostring(s):gsub('[%c"\\]', function(c)
+    s = tostring(s):gsub('[\x00-\x1f"\\]', function(c)
         local map = { ['"'] = '\\"', ['\\'] = '\\\\', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t' }
         return map[c] or string.format("\\u%04x", c:byte())
     end)
@@ -137,7 +137,10 @@ function jsonValue(v)
     local t = type(v)
     if v == nil then return "null" end
     if t == "boolean" then return v and "true" or "false" end
-    if t == "number" then return tostring(math.floor(v) == v and math.floor(v) or v) end
+    if t == "number" then
+        if v ~= v or v == math.huge or v == -math.huge then return "null" end
+        return tostring(math.floor(v) == v and math.floor(v) or v)
+    end
     if t == "string" then return jsonString(v) end
     if t == "table" then
         if v.__array then
@@ -171,12 +174,16 @@ function outputFolder()
     return base .. "\\Paldium\\bridge"
 end
 
+local ensuredFolders = {}
+
 function ensureFolder(folder)
+    if type(folder) ~= "string" or folder == "" or folder:find('["&|<>\r\n]') then return false end
+    if ensuredFolders[folder] then return true end
     local probe = io.open(folder .. "\\.probe", "w")
-    if probe then probe:close() os.remove(folder .. "\\.probe") return true end
+    if probe then probe:close() os.remove(folder .. "\\.probe") ensuredFolders[folder] = true return true end
     os.execute('mkdir "' .. folder .. '" >nul 2>&1')
     probe = io.open(folder .. "\\.probe", "w")
-    if probe then probe:close() os.remove(folder .. "\\.probe") return true end
+    if probe then probe:close() os.remove(folder .. "\\.probe") ensuredFolders[folder] = true return true end
     return false
 end
 
@@ -184,7 +191,11 @@ end
 function writeAtomically(path, content)
     local temp = path .. ".tmp"
     local file, err = io.open(temp, "wb")
-    if not file then return false, "cannot open " .. temp .. ": " .. tostring(err) end
+    if not file then
+        local dir = path:match("^(.*)[\\/][^\\/]+$")
+        if dir then ensuredFolders[dir] = nil end
+        return false, "cannot open " .. temp .. ": " .. tostring(err)
+    end
     file:write(content)
     file:close()
     os.remove(path)
@@ -206,15 +217,81 @@ end
 -- The controller and the utility object are kept and checked with IsValid on each use; they are only searched again when they are gone
 -- (and then at most once a second).
 controllerCache, utilityCache, lastControllerLookup = nil, nil, -100
+local lastControllerLog = nil
+
+local function pickLocalController(list, isLocalFn, playerClassFn)
+    for _, c in ipairs(list) do
+        if isLocalFn(c) == true then return c, "a" end
+    end
+    for _, c in ipairs(list) do
+        local cls = playerClassFn(c)
+        if type(cls) == "string" and cls:find("LocalPlayer", 1, true) then return c, "b" end
+    end
+    if #list == 1 then
+        local only = list[1]
+        local cls = playerClassFn(only)
+        local isRemote = isLocalFn(only) == false or (type(cls) == "string" and cls:find("NetConnection", 1, true) ~= nil)
+        if not isRemote then return only, "c" end
+    end
+    return nil, nil
+end
+
+local function controllerIsLocal(controller)
+    local ok, res = pcall(function() return controller:IsLocalController() end)
+    if ok and type(res) == "boolean" then return res end
+    ok, res = pcall(function() return controller:IsLocalPlayerController() end)
+    if ok and type(res) == "boolean" then return res end
+    return nil
+end
+
+local function controllerPlayerClass(controller)
+    local player = member(controller, "Player")
+    if player == nil or not valid(player) then return nil end
+    return classNameOf(player)
+end
 
 function localController()
-    if controllerCache ~= nil and valid(controllerCache) then return controllerCache end
+    if controllerCache ~= nil and valid(controllerCache) then
+        local cls = controllerPlayerClass(controllerCache)
+        if controllerIsLocal(controllerCache) ~= false and not (type(cls) == "string" and cls:find("NetConnection", 1, true)) then
+            return controllerCache
+        end
+        controllerCache = nil
+    end
     controllerCache = nil
     local now = os.clock()
     if now - lastControllerLookup < 1 then return nil end
     lastControllerLookup = now
-    local ok, controller = pcall(FindFirstOf, "PalPlayerController")
-    if ok and valid(controller) then controllerCache = unwrap(controller) end
+
+    local candidates = {}
+    local ok, found = pcall(FindAllOf, "PalPlayerController")
+    if ok and found ~= nil then
+        for _, entry in ipairs(found) do
+            local controller = unwrap(entry)
+            if controller ~= nil and valid(controller) and not isDefaultObject(controller) then
+                candidates[#candidates + 1] = controller
+            end
+        end
+    end
+
+    local picked, method = pickLocalController(candidates, controllerIsLocal, controllerPlayerClass)
+    if picked ~= nil then
+        controllerCache = picked
+        local state = member(picked, "PlayerState")
+        local uid = (state ~= nil and valid(state)) and guidText(member(state, "PlayerUId")) or nil
+        uid = uid or "no-uid"
+        local key = string.format("ok|%d|%s|%s", #candidates, uid, method)
+        if key ~= lastControllerLog then
+            lastControllerLog = key
+            log("own controller: %d controller(s), local = %s (method %s)", #candidates, uid, method)
+        end
+    elseif #candidates > 0 then
+        local key = "none|" .. #candidates
+        if key ~= lastControllerLog then
+            lastControllerLog = key
+            log("own controller: %d controller(s), could not determine local controller", #candidates)
+        end
+    end
     return controllerCache
 end
 
@@ -368,11 +445,12 @@ end -- section: helpers
 
 -- Slots of one page; the array comes back either as the return value or through an out parameter.
 local partyPage, basePages, baseNames, dpsBoxes, resetCache, nowUtc, dirty, lastActivity
-local storePage, readPalboxPage, beginPagesSweep, sweepPagesStep, fingerprintPagesStep, isZeroGuid, isDefaultObject, dimensionObjects, pageNumValue, dpsPageCount
+local storePage, readPalboxPage, beginPagesSweep, sweepPagesStep, fingerprintPagesStep, isZeroGuid, dimensionObjects, pageNumValue, dpsPageCount
 local cacheEpoch = 0
 local objectName, resolveWeak, uiMenus, storageTexts, structureOwner, activeMenuName, menuTitleOwnerName, captureDimension
 local dimensionStorage, lastFingerprint, pollDimension, worldIdCache, worldId, lastContent, export, AUTO_SECONDS
-local POLL_MS, currentOpening, trackOpening, playersList
+local POLL_MS, currentOpening, trackOpening, playersList, relicsData, captureData
+local resetCaptureState, resetOpeningState, resetPlayersState, resetScanState
 do -- section: page cache and export
 local function slotsOfPage(storage, page)
     local out = {}
@@ -397,10 +475,17 @@ dpsBoxes = {}           -- boxOwnerUid -> { pageCount, pages = { page -> { pals,
 
 -- T118: the number of occupied slots (not IsEmpty) each Pal Box page had when it was last read: the cheap fingerprint of an idle box.
 local pageCounts = {}
+local lastWorldLookup = -100
 
 function resetCache()
-    seqCounter, palboxPages, palboxPageCount, partyPage, dpsBoxes, basePages = 0, {}, nil, nil, {}, {}
+    seqCounter, palboxPages, palboxPageCount, partyPage, dpsBoxes, basePages, baseNames = 0, {}, nil, nil, {}, {}, {}
     pageCounts = {}
+    relicsData, captureData = nil, nil
+    worldIdCache, lastWorldLookup, lastContent = nil, -100, nil
+    if resetCaptureState ~= nil then resetCaptureState() end
+    if resetOpeningState ~= nil then resetOpeningState() end
+    if resetPlayersState ~= nil then resetPlayersState() end
+    if resetScanState ~= nil then resetScanState() end
     cacheEpoch = cacheEpoch + 1   -- the loop sees this and reads the whole box again (budgeted, over the next ticks)
 end
 
@@ -624,7 +709,11 @@ local function ownerNameFromTitle(title)
     if type(title) ~= "string" then return nil end
     local lower = title:lower()
     if not (lower:find("dimension", 1, true) or lower:find("boyutsal", 1, true)) then return nil end
-    local name = title:match("^%s*(.-)%s*['\226\128\153]")
+    local a = title:find("'", 1, true)
+    local b = title:find("\226\128\153", 1, true)
+    local pos = a and b and math.min(a, b) or (a or b)
+    if not pos then return nil end
+    local name = title:sub(1, pos - 1):match("^%s*(.-)%s*$")
     return name ~= nil and name ~= "" and name or nil
 end
 
@@ -912,20 +1001,25 @@ local function collect(controller)
         local la, lb = a.location, b.location
         local ka, kb = KIND_ORDER[la.kind] or 9, KIND_ORDER[lb.kind] or 9
         if ka ~= kb then return ka < kb end
-        local oa, ob = la.boxOwnerUid or "", lb.boxOwnerUid or ""
-        if oa ~= ob then return oa < ob end
-        if la.page ~= lb.page then return (la.page or 0) < (lb.page or 0) end
-        return (la.slot or 0) < (lb.slot or 0)
+        local ba, bb = la.boxId or la.boxOwnerUid or la.baseId or "", lb.boxId or lb.boxOwnerUid or lb.baseId or ""
+        if ba ~= bb then return ba < bb end
+        local pa, pb = la.page or 0, lb.page or 0
+        if pa ~= pb then return pa < pb end
+        local sa, sb = la.slot or 0, lb.slot or 0
+        if sa ~= sb then return sa < sb end
+        local ia, ib = a.instanceId or "", b.instanceId or ""
+        if ia ~= ib then return ia < ib end
+        return (a.characterId or "") < (b.characterId or "")
     end)
     return pals, coverage
 end
 
 -- The world the file was read in (T41: the app keeps pages of earlier sessions per world). Looked for in the game state; the properties tried are
 -- guesses, the probe lists the game state's scalar values so the right one can be named. nil: the app uses the player uid.
-local lastWorldLookup
-worldIdCache, lastWorldLookup = nil, -100
+worldIdCache = nil
 
-function worldId()
+function worldId(force)
+    if force then worldIdCache, lastWorldLookup = nil, -100 end
     if worldIdCache ~= nil then return worldIdCache end
     local now = os.clock()
     if now - lastWorldLookup < 5 then return nil end
@@ -960,7 +1054,6 @@ local function write(controller, pals, coverage)
     local name, uid = playerInfo(controller)
     local document = {
         schemaVersion = SCHEMA_VERSION,
-        exportedAtUtc = "@@TIME@@",
         gameBuild = nil,
         playerName = name,
         playerUid = uid,
@@ -976,8 +1069,8 @@ local function write(controller, pals, coverage)
 
     local folder = outputFolder()
     if folder == nil or not ensureFolder(folder) then return false, "cannot create the output folder " .. tostring(folder) end
-    local stamped = content:gsub("@@TIME@@", os.date("!%Y-%m-%dT%H:%M:%SZ"), 1)
-    local ok, err = writeAtomically(folder .. "\\palbox.json", stamped .. "\n")
+    document.exportedAtUtc = nowUtc()
+    local ok, err = writeAtomically(folder .. "\\palbox.json", jsonValue(document) .. "\n")
     if not ok then return false, "write failed: " .. tostring(err) end
     lastContent = content
     return true
@@ -988,11 +1081,12 @@ function export()
     local controller = localController()
     if controller == nil then return false end
     local pals, coverage = collect(controller)
-    if #pals == 0 then return false end
+    if #pals == 0 and #coverage == 0 and captureData == nil and relicsData == nil then return false end
 
     local written, why = write(controller, pals, coverage)
     if not written then
-        if why ~= "unchanged" then log("%s", tostring(why)) end
+        if why == "unchanged" then return true end
+        log("%s", tostring(why))
         return false
     end
     log("exported %d Pals from %d box(es) to %s\\palbox.json", #pals, #coverage, tostring(outputFolder()))
@@ -1010,7 +1104,7 @@ end -- section: page cache and export
 -- Trigger: the scan shortcut in the game (F9 by default, see bridge\settings.json). Progress goes to bridge\status.json.
 ---------------------------------------------------------------------------------------------------------------
 
-local FIND_INTERVAL, scanMode, scan, bridgeFile, classNameOf, functionNamesOf, hasFunction, currentPageOf
+local FIND_INTERVAL, scanMode, scan, bridgeFile, functionNamesOf, hasFunction, currentPageOf
 local allWidgets, isShown, findControl, uiCache, refreshUi, startScan, scanTick
 do -- section: scanner
 local PAGE_TIMEOUT = 1.5      -- seconds to wait for the data of one page
@@ -1031,16 +1125,18 @@ local function writeStatus(state, extra)
     extra = extra or {}
     local document = {
         state = state, kind = extra.kind, boxOwnerUid = extra.boxOwnerUid,
-        page = extra.page, pageCount = extra.pageCount, message = extra.message, updatedAtUtc = "@@TIME@@",
+        page = extra.page, pageCount = extra.pageCount, message = extra.message,
     }
     local content = jsonValue(document)
     if content == lastStatusKey then return end
     local folder = outputFolder()
     local path = bridgeFile("status.json")
     if path == nil or not ensureFolder(folder) then return end
-    lastStatusKey = content
-    writeAtomically(path, (content:gsub("@@TIME@@", nowUtc(), 1)) .. "\n")
+    document.updatedAtUtc = nowUtc()
+    if writeAtomically(path, jsonValue(document) .. "\n") then lastStatusKey = content end
 end
+
+resetScanState = function() scan = nil end
 
 function classNameOf(object)
     local ok, name = pcall(function() return object:GetClass():GetFullName() end)
@@ -1269,6 +1365,7 @@ end
 -- two storages apart is the resolved WeakLockerControl of the storage object (its full name is the storage's identity): when it changes inside an
 -- activated menu a new opening starts. The owner is decided once per opening.
 local opening, openingSeq = nil, 0
+resetOpeningState = function() opening = nil end
 
 local function storageMenuShown()
     for _, menu in ipairs(uiMenus) do
@@ -1370,13 +1467,13 @@ end
 
 -- One page change: SetCurrentPage, or ToNextPage when SetCurrentPage does not make the storage send the page (scan.useNext).
 local function goToPage(control, page)
-    if scan ~= nil and scan.useNext and page > 0 then return pcall(function() control:ToNextPage() end) end
+    if scan ~= nil and scan.useNext then return pcall(function() control:ToNextPage() end) end
     return pcall(function() control:SetCurrentPage(page) end)
 end
 
 -- Goes back to the page the player was on (after a failure in the middle of a scan too).
 local function restorePage()
-    if scan ~= nil and scan.control ~= nil and scan.startPage ~= nil and scan.page > 0 then requestPage(scan.control, scan.startPage) end
+    if scan ~= nil and not scan.useNext and scan.control ~= nil and scan.startPage ~= nil and scan.page > 0 then requestPage(scan.control, scan.startPage) end
 end
 
 -- The page index the storage object has replicated right now (nil: none).
@@ -1487,12 +1584,17 @@ function scanTick()
         if dpsShowing(scan.verifyPage) ~= nil then
             scan.useNext = scan.verifyViaNext
             log("scan: the list %s turns the storage page via %s (confirmed)", classNameOf(scan.control), scan.useNext and "ToNextPage" or "SetCurrentPage")
-            scan.page, scan.phase = 0, "request"
+            if scan.useNext then
+                scan.page, scan.nextStart, scan.stepsDone, scan.stepStart, scan.phase = scan.verifyPage, scan.verifyPage, 0, now, "wait"
+            else
+                scan.page, scan.phase = 0, "request"
+            end
         elseif not scan.useNextTried and now - scan.stepStart > PAGE_TIMEOUT and hasFunction(scan.control, "ToNextPage") then
             -- SetCurrentPage may only change the list, not ask the storage for the page: ToNextPage is the same as the player's "next page" button.
             scan.useNextTried = true
             requestPage(scan.control, scan.startPage)
-            scan.verifyPage = (dpsReplicatedPage() or scan.startPage) + 1
+            local cur = dpsReplicatedPage() or scan.startPage
+            scan.verifyPage = (scan.pageCount and scan.pageCount > 0) and ((cur + 1) % scan.pageCount) or (cur + 1)
             if pcall(function() scan.control:ToNextPage() end) then
                 scan.verifyViaNext, scan.stepStart = true, now
             else
@@ -1514,7 +1616,8 @@ function scanTick()
 
     if scan.phase == "request" then
         local limit = scan.pageCount or MAX_PAGES
-        if scan.page >= limit or scan.page >= MAX_PAGES then
+        local done = scan.useNext and ((scan.stepsDone or 0) >= math.min(limit, MAX_PAGES)) or (scan.page >= limit or scan.page >= MAX_PAGES)
+        if done then
             scan.phase = "finish"
         elseif not goToPage(scan.control, scan.page) then
             restorePage()
@@ -1528,7 +1631,7 @@ function scanTick()
 
     if scan.phase == "wait" then
         local shown = currentPageOf(scan.control)
-        if now - scan.stepStart > 0.4 and shown ~= nil and shown ~= scan.page then
+        if not scan.useNext and now - scan.stepStart > 0.4 and shown ~= nil and shown ~= scan.page then
             finishScan("cancelled", "The page was changed by hand")
             return
         end
@@ -1556,10 +1659,19 @@ function scanTick()
 
         if ready or now - scan.stepStart > PAGE_TIMEOUT then
             if (count or 0) == 0 then scan.emptyRun = scan.emptyRun + 1 else scan.emptyRun = 0 end
-            scan.page = scan.page + 1
-            if scan.mode == "smart" and scan.emptyRun >= SMART_EMPTY_STOP then scan.phase = "finish" else scan.phase = "request" end
-            -- The next page is requested in this tick (a confirmed empty page costs one loop period, not two).
-            if scan.phase == "request" and (scan.page < (scan.pageCount or MAX_PAGES)) then return scanTick() end
+            scan.stepsDone = (scan.stepsDone or 0) + 1
+            if scan.useNext then
+                local limit = math.min(scan.pageCount or MAX_PAGES, MAX_PAGES)
+                scan.page = (scan.pageCount and scan.pageCount > 0) and ((scan.page + 1) % scan.pageCount) or (scan.page + 1)
+                if scan.stepsDone >= limit or (scan.nextStart ~= nil and scan.page == scan.nextStart) or (scan.mode == "smart" and scan.emptyRun >= SMART_EMPTY_STOP) then
+                    scan.phase = "finish"
+                else
+                    scan.phase = "request"
+                end
+            else
+                scan.page = scan.page + 1
+                if scan.mode == "smart" and scan.emptyRun >= SMART_EMPTY_STOP then scan.phase = "finish" else scan.phase = "request" end
+            end
         end
     end
 
@@ -1772,13 +1884,8 @@ local function readParty()
 
     -- The party is replaced as a whole: a Pal that left it must disappear.
     partyPage = partyPage or {}
-    if #pals > 0 then
-        if storePage(partyPage, 0, pals) then log("party: %d Pal(s) via %s", #pals, via) end
-    elseif partyPage[0] ~= nil then
-        partyPage[0] = nil
-        dirty = true
-        lastActivity = os.clock()
-        log("party: empty")
+    if storePage(partyPage, 0, pals) then
+        if #pals > 0 then log("party: %d Pal(s) via %s", #pals, via) else log("party: empty") end
     end
 end
 
@@ -1935,6 +2042,17 @@ end
 -- most every BASE_FIND_INTERVAL seconds (a new base shows up a little later; a list that is still cached is checked with IsValid on use).
 local BASE_FIND_INTERVAL = 30
 
+local function containerHasAnyPal(container)
+    local slots = containerSlots(container)
+    if slots == nil then return false end
+    for _, slot in ipairs(slots) do
+        if slot and valid(slot) and not isDefaultObject(slot) then
+            if parameterOf(slot) ~= nil then return true end
+        end
+    end
+    return false
+end
+
 -- Starts a pass over the bases: the lists are fetched here, the Pals are read by baseSweepStep, one director at a time.
 local function beginBaseSweep()
     local models = liveObjects("PalBaseCampModel", BASE_FIND_INTERVAL)
@@ -1947,8 +2065,7 @@ local function beginBaseSweep()
             filledCount, filledSet = 0, {}
             for position, other in ipairs(directors) do
                 local otherContainer = valid(other) and baseContainerOf(other) or nil
-                local otherPals = otherContainer ~= nil and palsOfContainer(otherContainer, function(slot) return { kind = "Base", page = 0, slot = slot } end) or nil
-                if otherPals ~= nil and #otherPals > 0 then filledCount, filledSet[position] = filledCount + 1, true end
+                if otherContainer ~= nil and containerHasAnyPal(otherContainer) then filledCount, filledSet[position] = filledCount + 1, true end
             end
         end
         return filledCount, filledSet
@@ -2064,6 +2181,7 @@ end
 -- The players the game state knows ({ uid, name }, newest read of playerNames, refreshed every 10 s): the "players" array of the JSON; the app
 -- offers these names when the owner of a storage is unknown (T59/T60).
 local playersCache, lastPlayersRead = {}, -100
+resetPlayersState = function() playersCache, lastPlayersRead = {}, -100 end
 playersList = function()
     local now = os.clock()
     if now - lastPlayersRead >= 10 then
@@ -2206,12 +2324,12 @@ end
 -- Key presses only set a flag; the loop acts on it at its next tick, so there is one owner of the game-thread work (the probe used to run in a
 -- separate ExecuteInGameThread job next to the loop).
 pendingProbe, pendingScan, pendingClear = false, false, false
-lastTickAt, tickCount = os.time(), 0
+lastTickAt, tickCount = os.clock(), 0
 -- probeAction (declared above) -- set after the probe is defined
 
 local lastExport = -100
 local ownDimension, lastDimensionLookup = nil, -100
-local lastIdentityCheck, identity = -100, nil
+local lastIdentityCheck, identity, lastIdentityController, wasInTitle = -100, nil, nil, false
 
 ---------------------------------------------------------------------------------------------------------------
 -- T118: the game thread must never be held for long. Every job below is measured (os.clock): a summary line per minute goes to the log (and one
@@ -2294,22 +2412,27 @@ local function dropObjectCaches()
     lastHolderSearch, lastControllerLookup = -100, -100
 end
 
--- A different controller or pawn (joined another world, respawned): everything cached is thrown away, also the pages (they belong to the old session).
+-- A different controller, player uid or world (joined another world): everything cached is thrown away, also the pages (death/respawn keeps the same controller, uid and world).
 local function checkIdentity(now)
     if now - lastIdentityCheck < 1 then return end
     lastIdentityCheck = now
     local controller = localController()
     local key = "none"
     if controller ~= nil then
-        local pawn = member(controller, "Pawn")
-        key = objectName(controller) .. "|" .. ((pawn ~= nil and valid(pawn)) and objectName(pawn) or "no pawn")
+        local cname = objectName(controller)
+        local forceWorld = wasInTitle or (lastIdentityController ~= nil and cname ~= lastIdentityController)
+        wasInTitle, lastIdentityController = false, cname
+        local wid = worldId(forceWorld) or "no-world"
+        local state = member(controller, "PlayerState")
+        local uid = (state ~= nil and valid(state)) and guidText(member(state, "PlayerUId")) or "no-uid"
+        key = cname .. "|" .. uid .. "|" .. wid
+    elseif identity ~= nil then
+        wasInTitle = true
     end
     if identity ~= nil and key ~= identity and key ~= "none" then
-        log("controller or character changed: every cache is cleared")
+        log("controller or world changed: every cache is cleared")
         dropObjectCaches()
         resetCache()
-        worldIdCache = nil
-        lastContent = nil
         dirty = true
     end
     if key ~= "none" then identity = key end
@@ -2434,7 +2557,7 @@ end
 local function readRelics(record)
     local result, found = {}, false
     local entries = items(member(member(record, "RelicPossessNumArray"), "Entries"))
-    if entries ~= nil then
+    if entries ~= nil and #entries > 0 then
         found = true
         for _, element in ipairs(entries) do
             local kind, num = relicTypeName(member(element, "Type")), number(member(element, "Num"))
@@ -2445,8 +2568,8 @@ local function readRelics(record)
         end
     end
     for _, kind in pairs(RELIC_TYPES) do
-        -- A readable array that does not list a type means none in hand (the save's map does the same).
-        if entries ~= nil then
+        -- A readable non-empty array that does not list a type means none in hand (the save's map does the same).
+        if entries ~= nil and #entries > 0 then
             result[kind] = result[kind] or {}
             result[kind].have = result[kind].have or 0
         end
@@ -2492,6 +2615,7 @@ local function relicLevel(kind, spent)
 end
 
 local captureEmpty = 0
+resetCaptureState = function() captureEmpty, lastCapture = 0, -100 end
 
 local function captureStep(controller)
     local state = member(controller, "PlayerState")
@@ -2499,6 +2623,15 @@ local function captureStep(controller)
     if record == nil then
         noteOnce("capture-record", "capture: the player state has no readable RecordData (client without the record data?); capture progress is skipped")
         return false
+    end
+    local relics, relicsFound = readRelics(record)
+    local relicData = relicsFound and relics or nil
+    if relicData == nil then
+        noteOnce("relics-none", "relics: RecordData has no readable RelicPossessNumArray / RelicObtainForInstanceFlag_*; effigy progress is skipped")
+    end
+    if (relicData == nil) ~= (relicsData == nil) or (relicData ~= nil and jsonValue(relicData) ~= jsonValue(relicsData)) then
+        relicsData = relicData
+        dirty = true
     end
     local bonus, bonusSize = readCountMap(record, "PalCaptureBonusCount")
     local count, countSize = readCountMap(record, "PalCaptureCount")
@@ -2512,18 +2645,9 @@ local function captureStep(controller)
         noteOnce("capture-empty", "capture: the capture arrays are empty (the data may not have arrived yet); trying again")
         return false
     end
-    local relics, relicsFound = readRelics(record)
     local data = { bonus = bonus or {}, count = count or {} }
     if captureData == nil or jsonValue(captureData) ~= jsonValue(data) then
         captureData = data
-        dirty = true
-    end
-    local relicData = relicsFound and relics or nil
-    if relicData == nil then
-        noteOnce("relics-none", "relics: RecordData has no readable RelicPossessNumArray / RelicObtainForInstanceFlag_*; effigy progress is skipped")
-    end
-    if (relicData == nil) ~= (relicsData == nil) or (relicData ~= nil and jsonValue(relicData) ~= jsonValue(relicsData)) then
-        relicsData = relicData
         dirty = true
     end
     return true
@@ -2608,13 +2732,12 @@ local function fastTick()
 end
 
 local function gameTickBody(now)
-    lastTickAt, tickCount = os.time(), tickCount + 1
+    lastTickAt, tickCount = now, tickCount + 1
     checkIdentity(now)
     trackOpening()
     if pendingClear then
         pendingClear = false
         resetCache()
-        lastContent = nil
         dirty = true
         lastFingerprint = {}
         log("cache cleared")
@@ -2628,7 +2751,7 @@ local function gameTickBody(now)
         local ok, err = pcall(probeAction)
         if not ok then log("probe error: %s", tostring(err)) end
     end
-    scanTick()
+    timed("scan", scanTick)
     if ownDimension ~= nil and valid(ownDimension) then
         -- A page of the own storage arrived (or its capture was refused for want of an active menu): the storage UI is probably open, so its menus
         -- are looked for at once (at most once a second) and the opening starts in this tick.
@@ -2661,8 +2784,7 @@ local function gameTickBody(now)
     slowStep(now, menuOpen)
     if dirty and now - lastExport >= AUTO_SECONDS then
         lastExport = now
-        dirty = false
-        timed("export", export)
+        if timed("export", export) == true then dirty = false end
     end
     return menuOpen
 end
@@ -2767,8 +2889,13 @@ function probe()
     plog("probe step: controller")
     local controller = localController()
     if controller == nil then plog("probe: no local player controller") return end
+    do
+        local st = member(controller, "PlayerState")
+        local uid = (st ~= nil and valid(st)) and guidText(member(st, "PlayerUId")) or nil
+        plog("probe local controller: %s uid=%s", tostring(objectName and objectName(controller) or classNameOf(controller)), tostring(uid or "no-uid"))
+    end
 
-    plog("probe step: record data (T132, T133, read only)")
+    plog("probe step: record data (read only)")
     do
         local state = member(controller, "PlayerState")
         local record = state ~= nil and member(state, "RecordData") or nil
@@ -2792,8 +2919,9 @@ function probe()
             local entries = items(member(member(record, "RelicPossessNumArray"), "Entries"))
             plog("probe record RelicPossessNumArray.Entries: %s", entries == nil and "not readable (not synchronised to this client?)" or (#entries .. " entrie(s)"))
             local relics, found = readRelics(record)
-            local mimog = 0
+            local mimog = nil
             if captureData ~= nil then
+                mimog = 0
                 for _, bonus in pairs(captureData.bonus) do if bonus >= 5 then mimog = mimog + 1 end end
             end
             if not found then plog("probe record relics: nothing readable") end
@@ -2886,7 +3014,7 @@ function probe()
         end
     end
 
-    plog("probe step: owner discovery (T59, read only)")
+    plog("probe step: owner discovery (read only)")
     do
         local function objectValue(value)
             if type(value) ~= "userdata" then return nil end
@@ -3195,11 +3323,15 @@ local modifierByName = { CTRL = ModifierKey.CONTROL, CONTROL = ModifierKey.CONTR
 
 -- "Ctrl+F9" -> { key = Key.F9, modifiers = { ModifierKey.CONTROL } }, or nil for an unknown name.
 function parseShortcut(text)
-    local shortcut = { modifiers = {} }
+    local shortcut, seen = { modifiers = {} }, {}
     for part in tostring(text):gmatch("[^%+%s]+") do
         local upper = part:upper()
-        if modifierByName[upper] then
-            shortcut.modifiers[#shortcut.modifiers + 1] = modifierByName[upper]
+        local mod = modifierByName[upper]
+        if mod ~= nil then
+            if not seen[mod] then
+                seen[mod] = true
+                shortcut.modifiers[#shortcut.modifiers + 1] = mod
+            end
         elseif keyByName[upper] ~= nil and shortcut.key == nil then
             shortcut.key = keyByName[upper]
         else
@@ -3229,7 +3361,10 @@ local function bindShortcut(setting, text, handler)
         text = DEFAULT_SETTINGS[setting]
         shortcut = parseShortcut(text)
     end
-    local label = tostring(text):upper()
+    local modKeys = {}
+    for _, m in ipairs(shortcut.modifiers) do modKeys[#modKeys + 1] = tostring(m) end
+    table.sort(modKeys)
+    local label = table.concat(modKeys, "+") .. "+" .. tostring(shortcut.key)
     if boundShortcuts[label] then
         log("shortcut %s for %s is already used by %s: not bound", tostring(text), setting, boundShortcuts[label])
         return text
@@ -3258,10 +3393,10 @@ debugTiming = settings.debugTiming == "on"   -- T118: one log line per game-thre
 
 -- If the loop has not ticked for 2 s the action runs directly (and the loop is reported as not running).
 local function requestAction(name)
-    local idle = os.time() - lastTickAt
+    local idle = os.clock() - lastTickAt
     if idle > 2 then
         -- The flag stays set and the loop acts on it when it ticks again; the key thread never touches game objects.
-        log("loop is not running (no tick for %d s): %s is queued until it ticks again", idle, name)
+        log("loop is not running (no tick for %.1f s): %s is queued until it ticks again", idle, name)
     end
     if name == "scan" then pendingScan = true elseif name == "clear" then pendingClear = true else pendingProbe = true end
 end
@@ -3271,21 +3406,23 @@ local probeLabel = bindShortcut("probeKey", settings.probeKey, function() reques
 local clearLabel = bindShortcut("clearKey", settings.clearKey, function() requestAction("clear") end)
 
 -- The loop: LoopAsync runs on its own thread, so it only hands the work to the game thread (one job at a time). It also keeps a heartbeat
--- (every 60 s) and a watchdog: a job that has not finished after 5 s is reported and the flag is reset, so a lost job cannot stop the loop.
-local busy, busySince, lastLoopError = false, 0, nil
-local schedules, lastBeat, lastScheduleFailure = 0, os.time(), -100
+-- (every 60 s) and a watchdog: a job that has not finished after 10 s is reported and the flag is reset, so a lost job cannot stop the loop.
+local busy, busySince, busyToken, lastLoopError = false, 0, 0, nil
+local schedules, lastBeat, lastScheduleFailure = 0, os.clock(), -100
 local function schedule()
     schedules = schedules + 1
-    local nowSeconds = os.time()
+    local nowSeconds = os.clock()
     if nowSeconds - lastBeat >= 60 then
         lastBeat = nowSeconds
-        log("loop alive: %d schedules, %d ticks, last tick %d s ago, busy=%s", schedules, tickCount, nowSeconds - lastTickAt, tostring(busy))
+        log("loop alive: %d schedules, %d ticks, last tick %.1f s ago, busy=%s", schedules, tickCount, nowSeconds - lastTickAt, tostring(busy))
     end
     if busy then
-        if nowSeconds - busySince <= 5 then return end
-        log("loop: the last tick has not finished for %d s (its job never ran or never ended); resetting", nowSeconds - busySince)
+        if nowSeconds - busySince <= 10 then return end
+        log("loop: the last tick has not finished for %.1f s (its job never ran or never ended); resetting", nowSeconds - busySince)
         busy = false
     end
+    busyToken = busyToken + 1
+    local token = busyToken
     busy, busySince = true, nowSeconds
     local scheduled, err = pcall(ExecuteInGameThread, function()
         local ok, tickError = pcall(gameTick)
@@ -3293,10 +3430,10 @@ local function schedule()
             lastLoopError = tostring(tickError)
             log("loop error: %s", lastLoopError)
         end
-        busy = false
+        if busyToken == token then busy = false end
     end)
     if not scheduled then
-        busy = false
+        if busyToken == token then busy = false end
         if nowSeconds - lastScheduleFailure >= 10 then
             lastScheduleFailure = nowSeconds
             log("ExecuteInGameThread failed: %s", tostring(err))

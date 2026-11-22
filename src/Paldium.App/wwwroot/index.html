@@ -120,6 +120,14 @@
                             if (document.contains(entry.trigger)) entry.trigger.focus({ preventScroll: true });
                         });
                     }
+                },
+                ensureFocus: function (el) {
+                    if (!el || !document.contains(el)) return;
+                    if (!el.contains(document.activeElement)) {
+                        requestAnimationFrame(function () {
+                            if (document.contains(el) && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+                        });
+                    }
                 }
             };
         })();
@@ -130,8 +138,18 @@
         };
 
         // Technology page (T128): the level list's scroll position and the jump bar.
-        window.pbGetScrollTop = (el) => el ? el.scrollTop : 0;
-        window.pbSetScrollTop = (el, top) => { if (el && top > 0) requestAnimationFrame(() => { el.scrollTop = top; }); };
+        window.pbTrackScroll = (el) => {
+            if (!el || el.__pbScrollTracked) return;
+            el.__pbScrollTracked = true;
+            el.__pbLastScroll = el.scrollTop;
+            el.addEventListener('scroll', () => { el.__pbLastScroll = el.scrollTop; }, { passive: true });
+        };
+        window.pbGetScrollTop = (el) => !el ? null : (el.isConnected ? el.scrollTop : (typeof el.__pbLastScroll === 'number' ? el.__pbLastScroll : null));
+        window.pbSetScrollTop = (el, top) => {
+            if (!el) return;
+            window.pbTrackScroll(el);
+            if (top > 0) requestAnimationFrame(() => { el.scrollTop = top; el.__pbLastScroll = top; });
+        };
         window.pbScrollToLevel = (list, id) => {
             const el = document.getElementById(id);
             if (!list || !el) return;
@@ -307,17 +325,25 @@
                     const tag = active.tagName;
                     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active.isContentEditable) return;
                     if (tag === 'BUTTON' || tag === 'A') return;
-                    if (active.closest('.mud-popover, [role="dialog"], [role="listbox"], [role="menu"], .drawer')) return;
+                    if (active.closest('.mud-popover, [role="dialog"], dialog, [role="listbox"], [role="menu"], .drawer')) return;
                 }
-                if (document.querySelector('.mud-popover-open, .drawer')) return;
+                if (document.querySelector('.mud-popover-open, .drawer, dialog[open]')) return;
                 const top = entries[entries.length - 1];
                 e.preventDefault();
                 top.dotNet.invokeMethodAsync(top.method);
             }
             return {
                 attach: function (dotNet, method) {
-                    entries.push({ dotNet, method });
+                    const entry = { dotNet, method };
+                    entries.push(entry);
                     if (entries.length === 1) document.addEventListener('keydown', onKeyDown, false);
+                    return {
+                        dispose: function () {
+                            const idx = entries.indexOf(entry);
+                            if (idx >= 0) entries.splice(idx, 1);
+                            if (entries.length === 0) document.removeEventListener('keydown', onKeyDown, false);
+                        }
+                    };
                 },
                 detach: function (dotNet) {
                     const idx = entries.findIndex(x => x.dotNet === dotNet);
@@ -367,10 +393,10 @@
                         if (active) {
                             const tag = active.tagName;
                             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active.isContentEditable) return;
-                            if (active.closest('.mud-popover, [role="dialog"], .drawer')) return;
+                            if (active.closest('.mud-popover, [role="dialog"], dialog, .drawer')) return;
                             if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && active.closest('[role="radiogroup"]')) return;
                         }
-                        if (document.querySelector('.mud-popover-open, .drawer')) return;
+                        if (document.querySelector('.mud-popover-open, .drawer, dialog[open]')) return;
                         if (e.key === 'ArrowLeft') { e.preventDefault(); dotNet.invokeMethodAsync('OnShortcutPrev'); }
                         else if (e.key === 'ArrowRight') { e.preventDefault(); dotNet.invokeMethodAsync('OnShortcutNext'); }
                         else if (e.key === 'Escape') { e.preventDefault(); dotNet.invokeMethodAsync('OnShortcutClose'); }

@@ -260,9 +260,11 @@
         OutcomeDistribution dist;
         if (step.AltPartner != null)
         {
-            // A step with a backup partner (T105): the same model as its egg number; the hatched gender, when known, picks the branch.
-            var index = PlanText.StepsOf(Plan).ToList().FindIndex(s => ReferenceEquals(s, step));
-            Gender? hatched = FlexChoices != null && FlexChoices.TryGetValue(index, out var g) ? g : null;
+            // A step with a backup partner (T105): FlexChoices is keyed by the flexible child step's index.
+            var flexChild = step.ParentA is BreedStep { ChildGender: GenderReq.Any } fa ? fa
+                : step.ParentB is BreedStep { ChildGender: GenderReq.Any } fb ? fb : null;
+            var index = flexChild != null ? PlanText.StepsOf(Plan).ToList().FindIndex(s => ReferenceEquals(s, flexChild)) : -1;
+            Gender? hatched = index >= 0 && FlexChoices != null && FlexChoices.TryGetValue(index, out var g) ? g : null;
             dist = NodeAnalysis.StepOutcomesWithBackup(Odds, Breeding, step, Query.DesiredPassives, NodeAnalysis.GenderRight(Breeding, step), hatched, Data);
         }
         else dist = NodeAnalysis.StepOutcomes(Odds, step, Query.DesiredPassives, NodeAnalysis.GenderRight(Breeding, step), flexible, Data);

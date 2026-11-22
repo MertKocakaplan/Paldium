@@ -1,4 +1,7 @@
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
 @inherits LocalizedComponentBase
+@inject IJSRuntime JS
 
 @if (Open)
 {
@@ -7,9 +10,13 @@
         <div class="drawer-scrim" @onclick="RequestCloseAsync"></div>
     }
 
-    <aside class="@($"insp{(Drawer ? " drawer drawer-right" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
+    <aside @ref="_el"
+           class="@($"insp{(Drawer ? " drawer drawer-right" : "")}{(string.IsNullOrEmpty(Class) ? "" : " " + Class)}")"
            style="@($"--insp-w: {Width}px;")"
+           role="@(Drawer ? "dialog" : "complementary")"
+           aria-modal="@(Drawer ? "true" : null)"
            aria-label="@Title"
+           tabindex="-1"
            @onkeydown="OnKeyDownAsync">
         <div class="ih">
             <h2>@Title</h2>
@@ -34,6 +41,10 @@
 }
 
 @code {
+    private ElementReference _el;
+    private DotNetObjectReference<SidePanel>? _self;
+    private bool _attached;
+
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public bool Drawer { get; set; }
@@ -44,6 +55,34 @@
     [Parameter] public RenderFragment? Footer { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && Drawer && !_attached)
+        {
+            _attached = true;
+            _self ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("pbDrawer.attach", _el, _self); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+        else if (Open && Drawer && _attached)
+        {
+            try { await JS.InvokeVoidAsync("pbDrawer.ensureFocus", _el); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+        else if ((!Open || !Drawer) && _attached)
+        {
+            _attached = false;
+            try { await JS.InvokeVoidAsync("pbDrawer.detach", _el, true); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    [JSInvokable]
+    public Task RequestClose() => RequestCloseAsync();
+
     private Task RequestCloseAsync() =>
         OnClose.HasDelegate
             ? OnClose.InvokeAsync()
@@ -53,5 +92,17 @@
     {
         if (e.Key == "Escape")
             await RequestCloseAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_attached)
+        {
+            _attached = false;
+            try { await JS.InvokeVoidAsync("pbDrawer.detach", _el, true); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
     }
 }

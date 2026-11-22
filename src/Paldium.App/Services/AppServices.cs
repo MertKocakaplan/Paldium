@@ -91,9 +91,9 @@ public static class AppServices
             // Debug only: PALDIUM_FAKE_UPDATE=<version> answers the check with a made-up release (screenshots; no request leaves the PC).
             System.Net.Http.HttpMessageHandler handler = Environment.GetEnvironmentVariable("PALDIUM_FAKE_UPDATE") is { Length: > 0 } fake
                 ? new FakeReleaseHandler(fake)
-                : new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = true };
+                : new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(15) };
 #else
-            var handler = new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = true };
+            var handler = new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(15) };
 #endif
             return new UpdateService(handler, sp.GetRequiredService<SettingsStore>(), version,
                 Path.Combine(Paldium.Import.Migration.AppFolders.Local, "updates"), AppContext.BaseDirectory, autoAllowed,

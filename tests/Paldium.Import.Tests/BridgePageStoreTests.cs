@@ -417,4 +417,32 @@ public class BridgePageStoreTests : IDisposable
         Assert.Equal("Alice", Assert.Single(reader.Read(path, "s")).Location.BaseName);
         Assert.Equal("Alice", Assert.Single(store.Players("s")).Name);
     }
+
+    [Fact]
+    public void Merge_PreservesKnownBoxMetadata_AndConsolidatePrunesEmptiedBases()
+    {
+        var store = NewStore();
+        store.Merge("s", File("w", [Stored("A1", Alice)], Owned(Alice, Alice, "Alice", "structure", 0)) with
+        {
+            Coverage = [Owned(Alice, Alice, "Alice", "structure", 0), Read("Base", "B1", 0)],
+            Pals = [Stored("A1", Alice), Pal("P1", "Base", page: 0, slot: 0, boxId: null, baseId: "B1")],
+        });
+
+        // A partial coverage update knows OwnerName without repeating uid/ownerSource/pageCount: metadata stays intact.
+        store.Merge("s", File("w", [Stored("A1", Alice)], new BridgeCoverage { Kind = "DimensionalStorage", BoxId = Alice, OwnerName = "Alice", PagesRead = [0] }));
+        var box = Assert.Single(store.Coverage("s", "w"), c => c.Kind == "DimensionalStorage");
+        Assert.Equal(Alice, box.BoxOwnerUid);
+        Assert.Equal("structure", box.OwnerSource);
+        Assert.Equal(16, box.PageCount);
+
+        // Moving the only Pal from base B1 into Palbox later prunes dismantled base B1.
+        var later = new BridgeFile
+        {
+            SchemaVersion = 1, WorldId = "w", PlayerUid = "PLAYER", ExportedAtUtc = DateTimeOffset.Parse("2026-11-13T10:00:00Z"),
+            Pals = [Pal("P1", "Palbox", page: 0, slot: 0, boxId: null)],
+            Coverage = [Read("Palbox", null, 0)],
+        };
+        var afterMove = store.Merge("s", later);
+        Assert.DoesNotContain(afterMove.Coverage, c => c.Kind == "Base" && c.BoxId == "B1");
+    }
 }

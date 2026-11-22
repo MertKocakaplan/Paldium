@@ -93,7 +93,7 @@ public sealed class SourcesService
     /// <summary>The file the PaldiumBridge mod writes (it may not exist yet).</summary>
     public string BridgeFile => _bridgeFile;
 
-    public bool BridgeFileExists => File.Exists(_bridgeFile);
+    public bool BridgeFileExists => File.Exists(Import.Bridge.ModBridgeReader.EffectiveFile(_bridgeFile));
 
     /// <summary>True when the bridge file exists and is not a source (yet or any more): the panel offers to add it.</summary>
     public bool BridgeSuggested => BridgeFileExists && !IsKnown(SourceType.ModBridgeFile, _bridgeFile);

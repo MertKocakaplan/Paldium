@@ -548,4 +548,120 @@ public class PassiveSolverAdvancedTests
         Assert.Empty(result.Plans);
         Assert.Contains($"{PlanNotes.PassiveMissing}|PAL_FullStomach_Up_1", result.Diagnostics);
     }
+
+    // ---- QA v0.1.1 regressions (2.2.1 - 2.2.4) ------------------------------------------------------------------------
+
+    [Fact]
+    public void IntermediateTargetStep_AllowsOppositeGender_AndIncludesGenderProbability()
+    {
+        // QA 2.2.1: Female-targeted NightLady_Dark (sameSpeciesOnly, 10% male) must allow building a male intermediate
+        // target step, and that intermediate step must include the 10% child gender probability in ExpectedEggs.
+        var d = D;
+        var owned = new[]
+        {
+            Pal("m1", "NightLady_Dark", Gender.Male, [d[0]]),
+            Pal("f1", "NightLady_Dark", Gender.Female, [d[1]]),
+            Pal("f2", "NightLady_Dark", Gender.Female, d.Skip(2).ToList()),
+        };
+        var q = PassiveSolverTests.Goal("NightLady_Dark", d, wild: false, maxSteps: 3, limit: TimeSpan.FromSeconds(3)) with
+        {
+            TargetGender = GenderReq.Female,
+        };
+        var result = Solver().Solve(q, owned, CancellationToken.None);
+        Assert.NotEmpty(result.Plans);
+        var plan = result.Plans[0];
+        var root = Assert.IsType<BreedStep>(plan.Root);
+        Assert.Equal(GenderReq.Female, root.ChildGender);
+        var intermediate = Assert.IsType<BreedStep>(root.ParentA is BreedStep ? root.ParentA : root.ParentB);
+        Assert.Equal("NightLady_Dark", intermediate.ChildSpeciesId);
+        Assert.Equal(GenderReq.Male, intermediate.ChildGender);
+        // Expected eggs for intermediate step must reflect 10% male probability: 1 / (baseProb * 0.1).
+        Assert.Equal(1.0 / intermediate.SuccessProbabilityPerEgg, intermediate.ExpectedEggs, 6);
+        var maleChance = Breeding.Value.ChildGenderProbability("NightLady_Dark", Gender.Male);
+        Assert.Equal(0.1, maleChance, 6);
+        Assert.True(intermediate.SuccessProbabilityPerEgg <= 0.1 + 1e-9);
+    }
+
+    [Fact]
+    public async Task NoPlanBecauseOfAnExclusion_WithDefaultTimeLimit_PreservesBlockers()
+    {
+        // QA 2.2.2: Improve()/Merge() must preserve stage1.Blockers when merged plans are empty.
+        var d = D;
+        var owned = new[] { Pal("a", "LazyDragon", Gender.Male, d), Pal("b", "WhiteMoth_Neutral", Gender.Female) };
+        var closed = await Solver().SolveAsync(
+            Goal(d, wild: false) with { ExcludedUids = ["a"], TimeLimit = TimeSpan.FromSeconds(2) },
+            owned, CancellationToken.None);
+        Assert.Empty(closed.Plans);
+        Assert.NotNull(closed.Blockers);
+        var blocker = Assert.Single(closed.Blockers!);
+        Assert.Equal(new PlanExclusion(PlanExclusion.UidKind, "a"), blocker.Exclusion);
+    }
+
+    [Fact]
+    public void CombineFlex_ChecksStartAndPreferredOnBackup_AndLeavesCountAltPartner()
+    {
+        // QA 2.2.3: AltPartner cannot satisfy Preferred on its own unless both main and backup satisfy it.
+        var d = D;
+        var owned = new[]
+        {
+            Pal("ld1", "LazyDragon", Gender.Male, d.Take(2).ToList()),
+            Pal("ld2", "LazyDragon", Gender.Female, d.Skip(2).ToList()),
+            Pal("wm_pref", "WhiteMoth_Neutral", Gender.Male),
+            Pal("wm_plain", "WhiteMoth_Neutral", Gender.Female),
+        };
+        var q = Goal(d, wild: false, preferred: ["wm_pref"], mode: PreferredMode.AtLeastOne) with { TimeLimit = TimeSpan.FromSeconds(3) };
+        var result = Solver().Solve(q, owned, CancellationToken.None);
+        Assert.NotEmpty(result.Plans);
+        // No plan may claim flex using wm_plain as an unpreferred AltPartner.
+        Assert.All(result.Plans, p =>
+        {
+            var root = Assert.IsType<BreedStep>(p.Root);
+            if (root.AltPartner is OwnedLeaf alt) Assert.Equal("wm_pref", alt.Pal.Uid);
+        });
+
+        // PlanTreeValidator.Leaves & CountWild must traverse AltPartner.
+        var flexStep = new BreedStep(
+            new BreedStep(new OwnedLeaf(owned[0]), new OwnedLeaf(owned[1]), "LazyDragon", GenderReq.Any, d, 0, null, 0.1, 10),
+            new OwnedLeaf(owned[2]),
+            "Sekhmet", GenderReq.Any, d, 0, null, 0.1, 10,
+            new WildLeaf("WhiteMoth_Neutral", GenderReq.Female, 0, "Wild"));
+        var leaves = PlanTreeValidator.Leaves(flexStep).ToList();
+        Assert.Contains(leaves, l => l is WildLeaf { SpeciesId: "WhiteMoth_Neutral" });
+        Assert.Equal(1, PlanTreeValidator.CountWild(flexStep));
+    }
+
+    [Fact]
+    public void UnknownGenderOwnedPals_ExpandDistinctly_AndDoNotSuppressKnownGenderSibling()
+    {
+        // QA 2.2.4: Two unknown-gender Pals (highest level first) must expand to two distinct Uids, not (p1, p1).
+        var d = D.Take(2).ToList();
+        var twoUnknown = new[]
+        {
+            Pal("p1", "Sekhmet", null, d) with { Level = 50 },
+            Pal("p2", "Sekhmet", null, [d[1]]) with { Level = 10 },
+        };
+        var resTwo = Solver().Solve(PassiveSolverTests.Goal("Sekhmet", d, wild: false, limit: TimeSpan.FromSeconds(2)), twoUnknown, CancellationToken.None);
+        Assert.NotEmpty(resTwo.Plans);
+        Assert.All(resTwo.Plans, p => Assert.True(PlanTreeValidator.IsValid(p.Root)));
+        var step = Assert.IsType<BreedStep>(resTwo.Plans[0].Root);
+        Assert.NotEqual(((OwnedLeaf)step.ParentA).Pal.Uid, ((OwnedLeaf)step.ParentB).Pal.Uid);
+
+        // Single unknown-gender Pal holding [d0, d1] must not dominate known-gender sibling holding [d0].
+        var oneUnknownOneKnown = new[]
+        {
+            Pal("o", "Sekhmet", null, d) with { Level = 50 },
+            Pal("g", "Sekhmet", Gender.Male, [d[0]]) with { Level = 10 },
+        };
+        var resPair = Solver().Solve(PassiveSolverTests.Goal("Sekhmet", d, wild: false, limit: TimeSpan.FromSeconds(2)), oneUnknownOneKnown, CancellationToken.None);
+        Assert.NotEmpty(resPair.Plans);
+        Assert.All(resPair.Plans, p => Assert.True(PlanTreeValidator.IsValid(p.Root)));
+
+        // PlanTreeValidator must reject a step where AltPartner uses the same Pal as ParentA or ParentB.
+        var badStep = new BreedStep(
+            new BreedStep(new OwnedLeaf(twoUnknown[0]), new OwnedLeaf(twoUnknown[1]), "LazyDragon", GenderReq.Any, d, 0, null, 0.1, 10),
+            new OwnedLeaf(twoUnknown[0]),
+            "Sekhmet", GenderReq.Any, d, 0, null, 0.1, 10,
+            new OwnedLeaf(twoUnknown[0]));
+        Assert.False(PlanTreeValidator.IsValid(badStep));
+    }
 }

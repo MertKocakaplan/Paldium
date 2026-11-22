@@ -30,6 +30,10 @@ public interface IModBridgeReader
 
     /// <summary>The capture record the mod wrote for its own player (T121); empty when the file has none.</summary>
     IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCaptures(string file) => [];
+
+    /// <summary>Reads both owned Pals and capture/relic records from a single read of the bridge file.</summary>
+    (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures) ReadAll(string file, string sourceId) =>
+        (Read(file, sourceId), ReadCaptures(file));
 }
 
 /// <summary>Converts the mod's JSON file to owned Pals. Read-only; a half written or broken file is an error (the previous data stays).</summary>
@@ -85,7 +89,7 @@ public sealed class ModBridgeReader : IModBridgeReader
     {
         try
         {
-            var bridge = BridgeFile.Parse(File.ReadAllText(file));
+            var bridge = BridgeFile.Parse(BridgeFileIo.ReadAllText(file));
             var skipped = data == null
                 ? []
                 : bridge.Pals.Where(p => !data.TryNormalizePalId(p.CharacterId, out _)).Select(p => new BridgeSkipped(p.CharacterId, IsHumanId(p.CharacterId))).ToList();
@@ -101,9 +105,18 @@ public sealed class ModBridgeReader : IModBridgeReader
     {
         // A missing file is an error, not "no Pals": the mod deletes the old file for a moment while it renames the new one,
         // and the previous data must survive that.
-        var json = File.ReadAllText(file);
+        var bridge = BridgeFile.Parse(BridgeFileIo.ReadAllText(file));
+        return ReadCore(bridge, file, sourceId);
+    }
 
-        var bridge = BridgeFile.Parse(json);
+    public (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures) ReadAll(string file, string sourceId)
+    {
+        var bridge = BridgeFile.Parse(BridgeFileIo.ReadAllText(file));
+        return (ReadCore(bridge, file, sourceId), ReadCapturesCore(bridge, file));
+    }
+
+    private IReadOnlyList<OwnedPal> ReadCore(BridgeFile bridge, string file, string sourceId)
+    {
         // The Pals of every stored page of this world: pages of earlier sessions stay until they are read again.
         var boxNames = new Dictionary<string, string>(StringComparer.Ordinal);
         if (_pages != null)
@@ -118,7 +131,9 @@ public sealed class ModBridgeReader : IModBridgeReader
                 if (!string.IsNullOrEmpty(name)) boxNames[coverage.BoxId!] = name;
             }
         }
+        var utcNow = DateTimeOffset.UtcNow;
         var seen = bridge.ExportedAtUtc ?? new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
+        if (seen > utcNow) seen = utcNow;
         var owner = string.IsNullOrEmpty(bridge.PlayerUid) ? null : new PalOwner(bridge.PlayerUid, bridge.PlayerName, null, null);
         var result = new List<OwnedPal>();
         var uids = new HashSet<string>(StringComparer.Ordinal);
@@ -140,6 +155,9 @@ public sealed class ModBridgeReader : IModBridgeReader
                 : $"mod:{kind}:{(BoxOf(pal.Location) is { } box ? box + ":" : "")}{pal.Location?.Page ?? 0}:{pal.Location?.Slot ?? 0}";
             if (!uids.Add(uid)) continue;
 
+            var palSeen = pal.ReadAtUtc ?? seen;
+            if (palSeen > utcNow) palSeen = utcNow;
+
             result.Add(new OwnedPal(
                 Uid: uid,
                 InstanceId: string.IsNullOrEmpty(pal.InstanceId) ? null : pal.InstanceId,
@@ -159,7 +177,7 @@ public sealed class ModBridgeReader : IModBridgeReader
                         : kind == LocationKind.DimensionalStorage && BoxOf(pal.Location) is { } storageBox && boxNames.TryGetValue(storageBox, out var ownerName) ? ownerName : null),
                 Source: PalSourceKind.ModBridge,
                 SourceId: sourceId,
-                SeenAtUtc: pal.ReadAtUtc ?? seen,
+                SeenAtUtc: palSeen,
                 IsEdited: false,
                 IsExcluded: false));
         }
@@ -167,15 +185,30 @@ public sealed class ModBridgeReader : IModBridgeReader
         return result;
     }
 
-    public IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCaptures(string file)
+    public IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCaptures(string file) =>
+        ReadCapturesCore(BridgeFile.Parse(BridgeFileIo.ReadAllText(file)), file);
+
+    private IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCapturesCore(BridgeFile bridge, string file)
     {
-        var bridge = BridgeFile.Parse(File.ReadAllText(file));
         if ((bridge.Capture == null && bridge.Relics == null) || NormalizeOwner(bridge.PlayerUid) is not { } uid) return [];
-        var relics = bridge.Relics?.ToDictionary(r => PlayerCaptureReader.RelicTypeName(r.Key), r => new Paldium.Core.Owned.RelicCount(r.Value.Have, r.Value.Collected), StringComparer.Ordinal);
+        Dictionary<string, Paldium.Core.Owned.RelicCount>? relics = null;
+        if (bridge.Relics != null)
+        {
+            relics = new Dictionary<string, Paldium.Core.Owned.RelicCount>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (rawKey, val) in bridge.Relics)
+            {
+                if (val == null || string.IsNullOrWhiteSpace(rawKey)) continue;
+                var name = PlayerCaptureReader.RelicTypeName(rawKey);
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                relics[name] = new Paldium.Core.Owned.RelicCount(val.Have, val.Collected);
+            }
+        }
         var record = PlayerCaptureReader.Normalize(
             new Paldium.Core.Owned.CaptureRecord(bridge.Capture?.Bonus ?? new Dictionary<string, int>(), bridge.Capture?.Count ?? new Dictionary<string, int>()) { Relics = relics }, _data, _log);
-        if (record.IsEmpty) return [];
+        if (bridge.Capture == null && (relics == null || relics.Count == 0)) return [];
+        var utcNow = DateTimeOffset.UtcNow;
         var seen = bridge.ExportedAtUtc ?? new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
+        if (seen > utcNow) seen = utcNow;
         return [new Paldium.Core.Owned.PlayerCapture(uid, record, seen)];
     }
 

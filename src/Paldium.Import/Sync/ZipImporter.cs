@@ -21,8 +21,17 @@ public sealed class ZipImporter
         _importsRoot = importsRoot ?? DefaultRoot;
     }
 
-    public static string DefaultRoot { get; } = Path.Combine(
-        AppFolders.Local, "imports");
+    public static string DefaultRoot => Path.Combine(AppFolders.Local, "imports");
+
+    public const int MaxExtractedEntries = 10_000;
+    public const long MaxExtractedBytes = 4L * 1024 * 1024 * 1024;
+
+    private static readonly HashSet<string> ReservedDosNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
 
     public string ImportsRoot => _importsRoot;
 
@@ -72,13 +81,19 @@ public sealed class ZipImporter
 
     private static void Extract(string zipPath, string root)
     {
-        var rootFull = Path.GetFullPath(root);
+        var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
         using var archive = ZipFile.OpenRead(zipPath);
+        var entriesCount = 0;
+        long totalBytes = 0;
+        var buffer = new byte[81920];
         foreach (var entry in archive.Entries)
         {
+            if (++entriesCount > MaxExtractedEntries)
+                throw new InvalidDataException($"The zip archive has too many entries (more than {MaxExtractedEntries}).");
+
             // Zip-slip guard: an entry must stay inside the target folder.
             var target = Path.GetFullPath(Path.Combine(rootFull, entry.FullName));
-            if (!target.StartsWith(rootFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            if (!target.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             if (string.IsNullOrEmpty(entry.Name))
@@ -88,14 +103,27 @@ public sealed class ZipImporter
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            entry.ExtractToFile(target, overwrite: true);
+            using var src = entry.Open();
+            using var dst = File.Create(target);
+            int read;
+            while ((read = src.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                totalBytes += read;
+                if (totalBytes > MaxExtractedBytes)
+                    throw new InvalidDataException("The zip archive exceeds the maximum uncompressed size limit.");
+                dst.Write(buffer, 0, read);
+            }
         }
     }
 
     private string UniqueFolder(string name)
     {
-        var safe = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
-        if (safe.Length == 0) safe = "import";
+        var safe = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim().TrimEnd('.', ' ');
+        var stem = safe.Split('.')[0];
+        if (safe.Length == 0 || safe is "." or "..")
+            safe = "import";
+        else if (ReservedDosNames.Contains(safe) || ReservedDosNames.Contains(stem))
+            safe = "_" + safe;
 
         var candidate = Path.Combine(_importsRoot, safe);
         for (var i = 2; Directory.Exists(candidate); i++)
@@ -107,7 +135,7 @@ public sealed class ZipImporter
     public bool TryRemove(string path)
     {
         var full = Path.GetFullPath(path);
-        var root = Path.GetFullPath(_importsRoot) + Path.DirectorySeparatorChar;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_importsRoot)) + Path.DirectorySeparatorChar;
         if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
 
         // The world folder may be nested; remove the top-level import folder.

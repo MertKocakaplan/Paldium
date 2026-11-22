@@ -42,14 +42,14 @@
             </div>
         }
 
-        @if (Existing != null)
+        @if (CurrentPal != null)
         {
-            var loc = Existing.Location;
+            var loc = CurrentPal.Location;
             var hasBox = (Paldium.Core.Domain.PalLocation.IsPaged(loc.Kind) || loc.Kind == LocationKind.GlobalStorage)
                 && loc.SlotIndex is { } slotIdx && slotIdx >= 0 && slotIdx < Paldium.Core.Domain.PalLocation.PageSize;
-            var (container, pageText, slotText) = LocationText.ThreeLine(Existing, Terms, L);
+            var (container, pageText, slotText) = LocationText.ThreeLine(CurrentPal, Terms, L);
             var titleLine = string.IsNullOrEmpty(pageText) ? container : $"{container}, {pageText}";
-            var subLine = BuildLocationSubline(Existing, slotText);
+            var subLine = BuildLocationSubline(CurrentPal, slotText);
 
             <div class="locl">
                 @if (hasBox)
@@ -137,7 +137,7 @@
                        min="1"
                        max="100"
                        aria-label="@L["Editor.Level"].Value"
-                       value="@_level.ToString(CultureInfo.InvariantCulture)"
+                       value="@_levelText"
                        @oninput="OnLevelInput" />
                 @if (ChangedLevel)
                 {
@@ -289,23 +289,23 @@
                 <span>@L["Editor.Revert"]</span>
             </button>
         }
-        else if (_isManual && Existing != null)
+        else if (_isManual && CurrentPal != null)
         {
             <button type="button" class="danger" @onclick="OpenRemoveDialogAsync">
                 <Icon Name="x" Size="14" />
                 <span>@L["Common.Remove"]</span>
             </button>
         }
-        @if (Existing != null)
+        @if (CurrentPal is { } prefPal)
         {
-            <button type="button" class="ghostb" @onclick="() => PreferredActions.Toggle(Existing)">
-                <Icon Name="@(PreferredActions.IsPreferred(Existing) ? "x" : "pin")" Size="14" />
-                <span>@(PreferredActions.IsPreferred(Existing) ? L["MyPals.RemovePreferred"] : L["MyPals.AddPreferred"])</span>
+            <button type="button" class="ghostb" @onclick="() => PreferredActions.Toggle(prefPal)">
+                <Icon Name="@(PreferredActions.IsPreferred(prefPal) ? "x" : "pin")" Size="14" />
+                <span>@(PreferredActions.IsPreferred(prefPal) ? L["MyPals.RemovePreferred"] : L["MyPals.AddPreferred"])</span>
             </button>
         }
         <span class="sp"></span>
         <button type="button" class="ghostb" @onclick="DiscardAndCloseAsync">@L["Editor.Discard"]</button>
-        <button type="button" class="save" disabled="@(!CanSubmit)" @onclick="Submit">@L["Common.Save"]</button>
+        <button type="button" class="save" disabled="@(!CanSubmit)" @onclick="SubmitAsync">@L["Common.Save"]</button>
     </Footer>
 </SidePanel>
 
@@ -342,6 +342,8 @@
 
     private string? _loadedKey;
     private OwnedPal? _loadedSnapshotRef;
+    private OwnedPal? _savedPal;
+    private OwnedPal? CurrentPal => _savedPal ?? Existing;
     private bool _isNew;
     private bool _isManual;
     private bool _isSource;
@@ -350,6 +352,7 @@
     private PalSpecies? _species;
     private string _gender = string.Empty;
     private int _level = 1;
+    private string _levelText = "1";
     private int _rank = 1;
     private List<string> _passives = [];
     private string _ivHpText = string.Empty;
@@ -383,6 +386,7 @@
         {
             _loadedKey = null;
             _loadedSnapshotRef = null;
+            _savedPal = null;
             ReportDirtyIfChanged(false);
             return;
         }
@@ -392,11 +396,13 @@
         {
             _loadedKey = key;
             _loadedSnapshotRef = Existing;
+            _savedPal = null;
             LoadState();
         }
         else if (Existing != null && !ReferenceEquals(_loadedSnapshotRef, Existing))
         {
             _loadedSnapshotRef = Existing;
+            _savedPal = null;
             if (!_lastReportedDirty)
                 LoadState();
             else
@@ -410,8 +416,9 @@
     private void LoadState()
     {
         _error = null;
+        var current = CurrentPal;
 
-        if (Existing == null)
+        if (current == null)
         {
             _isNew = true;
             _isManual = true;
@@ -422,6 +429,7 @@
             _species = null;
             _gender = string.Empty;
             _level = 1;
+            _levelText = "1";
             _rank = 1;
             _passives = [];
             _ivHpText = string.Empty;
@@ -433,20 +441,21 @@
         else
         {
             _isNew = false;
-            _isManual = Existing.Source == PalSourceKind.Manual;
+            _isManual = current.Source == PalSourceKind.Manual;
             _isSource = !_isManual;
-            _species = TrySpecies(Existing.SpeciesId);
-            _gender = FormatGenderCode(Existing.Gender);
-            _level = Existing.Level;
-            _rank = Existing.Rank;
-            _passives = Existing.Passives.ToList();
-            _ivHpText = Existing.Ivs?.Hp.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-            _ivAtkText = Existing.Ivs?.Attack.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-            _ivDefText = Existing.Ivs?.Defense.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-            _nickname = Existing.Nickname ?? string.Empty;
-            _excluded = Existing.IsExcluded;
-            _hasCorrections = Repository.Current.Overrides.TryGetValue(Existing.Uid, out var patch) && patch.HasCorrections;
-            _raw = Repository.RawPal(Existing.Uid) ?? Existing;
+            _species = TrySpecies(current.SpeciesId);
+            _gender = FormatGenderCode(current.Gender);
+            _level = current.Level;
+            _levelText = _level.ToString(CultureInfo.InvariantCulture);
+            _rank = current.Rank;
+            _passives = current.Passives.ToList();
+            _ivHpText = current.Ivs?.Hp.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _ivAtkText = current.Ivs?.Attack.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _ivDefText = current.Ivs?.Defense.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            _nickname = current.Nickname ?? string.Empty;
+            _excluded = current.IsExcluded;
+            _hasCorrections = Repository.Current.Overrides.TryGetValue(current.Uid, out var patch) && patch.HasCorrections;
+            _raw = Repository.RawPal(current.Uid) ?? current;
         }
 
         _initialSpeciesId = _species?.Id;
@@ -467,7 +476,7 @@
     {
         if (!string.Equals(_species?.Id, _initialSpeciesId, StringComparison.Ordinal)) return true;
         if (!string.Equals(_gender, _initialGender, StringComparison.Ordinal)) return true;
-        if (_level != _initialLevel) return true;
+        if (!int.TryParse(_levelText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLevel) || parsedLevel != _initialLevel) return true;
         if (_rank != _initialRank) return true;
         if (!_passives.SequenceEqual(_initialPassives, StringComparer.Ordinal)) return true;
         if (!string.Equals(_ivHpText.Trim(), _initialIvHp.Trim(), StringComparison.Ordinal)) return true;
@@ -527,7 +536,8 @@
 
     private void OnLevelInput(ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var lv))
+        _levelText = e.Value?.ToString() ?? string.Empty;
+        if (int.TryParse(_levelText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var lv) && lv is >= 1 and <= 100)
             _level = lv;
         _error = null;
         NotifyDirty();
@@ -594,7 +604,7 @@
         return true;
     }
 
-    public bool TrySave()
+    public async Task<bool> TrySaveAsync()
     {
         _error = null;
         if (_species == null)
@@ -602,6 +612,14 @@
             _error = L["Editor.SpeciesRequired"].Value;
             return false;
         }
+
+        if (!int.TryParse(_levelText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLevel)
+            || parsedLevel is < 1 or > 100)
+        {
+            _error = L["Owned.Error.LevelRange"].Value;
+            return false;
+        }
+        _level = parsedLevel;
 
         if (!TryParseIvs(out var parsedIvs, out var ivError))
         {
@@ -612,9 +630,10 @@
         try
         {
             string savedUid;
+            var current = CurrentPal;
             if (_isSource)
             {
-                var pal = Existing!;
+                var pal = current!;
                 Repository.Current.Overrides.TryGetValue(pal.Uid, out var previous);
                 var diff = PalOverride.Diff(_raw ?? pal, ParsedGender, _level, _passives.ToList(), parsedIvs, previous) with
                 {
@@ -634,25 +653,25 @@
                     Passives = _passives.ToList(),
                     Ivs = parsedIvs,
                     Nickname = string.IsNullOrWhiteSpace(_nickname) ? null : _nickname.Trim(),
-                    EquippedAttacks = Existing?.EquippedAttacks ?? [],
-                    LearnedAttacks = Existing?.LearnedAttacks ?? [],
-                    Location = Existing?.Location ?? new Paldium.Core.Domain.PalLocation(LocationKind.Unknown, null, null, null),
+                    EquippedAttacks = current?.EquippedAttacks ?? [],
+                    LearnedAttacks = current?.LearnedAttacks ?? [],
+                    Location = current?.Location ?? new Paldium.Core.Domain.PalLocation(LocationKind.Unknown, null, null, null),
                     IsExcluded = _excluded,
                 };
 
-                if (Existing == null)
+                if (current == null)
                     savedUid = Repository.AddManual(draft).Uid;
                 else
                 {
-                    Repository.UpdateManual(Existing.Uid, draft);
-                    savedUid = Existing.Uid;
+                    Repository.UpdateManual(current.Uid, draft);
+                    savedUid = current.Uid;
                 }
             }
 
             _loadedKey = savedUid;
             if (Repository.Current.Find(savedUid) is { } updated)
             {
-                Existing = updated;
+                _savedPal = updated;
                 LoadState();
             }
             else
@@ -661,7 +680,7 @@
             }
 
             if (OnSaved.HasDelegate)
-                _ = OnSaved.InvokeAsync(savedUid);
+                await OnSaved.InvokeAsync(savedUid);
             return true;
         }
         catch (OwnedPalValidationException ex)
@@ -671,7 +690,7 @@
         }
     }
 
-    private void Submit() => _ = TrySave();
+    private Task SubmitAsync() => TrySaveAsync();
 
     public void ResetDraft()
     {
@@ -696,14 +715,14 @@
     private async Task ConfirmRevertAsync()
     {
         await CloseRevertDialogAsync();
-        var pal = Existing;
+        var pal = CurrentPal;
         if (pal == null) return;
         Repository.Current.Overrides.TryGetValue(pal.Uid, out var previous);
         Repository.SetOverride(pal.Uid, new PalOverride { IsExcluded = previous?.IsExcluded });
         _loadedKey = null;
         if (Repository.Current.Find(pal.Uid) is { } updated)
         {
-            Existing = updated;
+            _savedPal = updated;
             _loadedKey = updated.Uid;
             LoadState();
         }
@@ -720,8 +739,9 @@
     private async Task ConfirmRemoveAsync()
     {
         await CloseRemoveDialogAsync();
-        if (Existing == null) return;
-        Repository.RemoveManual(Existing.Uid);
+        var pal = CurrentPal;
+        if (pal == null) return;
+        Repository.RemoveManual(pal.Uid);
         ReportDirtyIfChanged(false);
         await OnRemoved.InvokeAsync();
     }

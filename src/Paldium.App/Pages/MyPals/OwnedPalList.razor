@@ -891,7 +891,7 @@
     private async Task SaveAndContinueAsync()
     {
         await JS.InvokeVoidAsync("pbCloseModal", _unsavedDialog);
-        if (_editor != null && !_editor.TrySave())
+        if (_editor != null && !await _editor.TrySaveAsync())
         {
             _pendingAction = null;
             return;

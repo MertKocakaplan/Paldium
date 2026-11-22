@@ -1,8 +1,7 @@
 # Paldium.GameExtractor
 
 Reads raw data tables from the Palworld game files with [CUE4Parse](https://github.com/FabianFG/CUE4Parse) and writes
-them as JSON. It is a developer tool: the app never needs the game files at run time (ARCHITECTURE K4). T20 is the
-discovery step; later tasks (T21, T22, T24) add normalized exporters on top of it.
+them as JSON. It is a developer tool: the app never needs the game files at run time.
 
 ## Safety rules
 
@@ -59,4 +58,4 @@ The current file is `Pal-5.1.1-0+++UE5+Release-5.1-2281fa31.usmap` (usmap versio
 
 `export` also writes `world-map.png` (the main world map, `Pal/Content/Pal/Texture/UI/Map/T_WorldMap`, a DXT1 8192x8192 texture, decoded and averaged down to 2048x2048 by the tool's own code, no imaging package) and `world-map.json` (its size and the world bounds of `DT_WorldMapUIData` row `MainMap`). The DataBuilder copies both to `data/map/` when they are in the `--extractor` folder.
 
-`export` also writes `ranch.json` (T108: what a Pal drops in the Ranch, by rank 1 to 10: `DT_PalBPClass` -> the Pal Blueprint's `SpawnItem.FieldLotteryNameByRank` -> `DT_ItemLotteryDataTable` rows `CharacterSpawnItem_*`) and the item icons `icons/items/*.png` (64 px, decoded by the tool's own DXT code). The DataBuilder merges `ranch.json` into `data/gamedata.json` (`pals[].ranch`) and copies the icons to `data/icons/items/`.
+`export` also writes `ranch.json` (what a Pal drops in the Ranch, by rank 1 to 10: `DT_PalBPClass` -> the Pal Blueprint's `SpawnItem.FieldLotteryNameByRank` -> `DT_ItemLotteryDataTable` rows `CharacterSpawnItem_*`) and the item icons `icons/items/*.png` (64 px, decoded by the tool's own DXT code). The DataBuilder merges `ranch.json` into `data/gamedata.json` (`pals[].ranch`) and copies the icons to `data/icons/items/`.

@@ -276,7 +276,8 @@ svg.egg { width: 14px; height: 18px; flex: none; }
   flex: none;
 }
 @keyframes pb-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .spin, .spin-icon { animation: none; } }
+.spin-icon { animation: pb-spin .9s linear infinite; }
 
 /* Buttons & icon buttons */
 .solve {
@@ -840,6 +841,12 @@ svg.egg { width: 14px; height: 18px; flex: none; }
 }
 .drawer-left { left: 0; border-right: 1px solid var(--line); }
 .drawer-right { right: 0; border-left: 1px solid var(--line); }
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: var(--overlay-bg);
+}
 
 /* Game data fatal error screen */
 .fatal {
@@ -2608,10 +2615,10 @@ dialog.pb-dlg .danger-fill:hover { opacity: .9; }
 .x table col.col-spno { width: 52px; }
 .x table col.col-sppal { width: 188px; }
 .x table col.col-shown { width: 80px; }
-.x table col.col-capt { width: 112px; }
+.x table col.col-capt { width: 124px; }
 .x table col.col-pwr { width: 60px; }
 .x table col.col-rar { width: 56px; }
-.x table col.col-works { width: 156px; }
+.x table col.col-works { width: 196px; }
 .x table col.col-stat { width: 46px; }
 
 .x .pdx-pal { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -2652,7 +2659,7 @@ dialog.pb-dlg .danger-fill:hover { opacity: .9; }
 @media (max-width: 1199px) {
   .x .head .tx { display: none; }
   .x table col.col-sppal { width: 184px; }
-  .x table col.col-works { width: 176px; }
+  .x table col.col-works { width: 196px; }
   .x .dbody { grid-template-columns: 264px minmax(0, 1fr); }
   .x .card.sp.big .art { height: 148px; }
   .x .card.sp.big .art img.pal { width: 112px; height: 112px; }
@@ -3913,7 +3920,7 @@ dialog.mview::backdrop { background: var(--ground); }
 .r td.c { text-align: center; padding: 4px 2px !important; font-family: var(--font-num); line-height: 15px; min-width: 38px; }
 .r td.c.on { background: var(--raised); }
 .r td.c .p { display: block; font-size: 12px; color: var(--ink); }
-.r td.c .a { display: block; font-size: 11.5px; color: var(--muted); }
+.r td.c .a { display: block; font-size: 12px; color: var(--muted); }
 .r td.c .no { color: var(--faint); font-size: 12px; }
 .r .mx9 { width: 100%; }
 .r .mx9 tbody tr { border-top: 1px solid var(--rule); }
@@ -3961,6 +3968,9 @@ dialog.mview::backdrop { background: var(--ground); }
 .r .mounts .mpick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
 .r .mounts .mpas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .r .mounts .mpas .l { color: var(--muted); font-size: 12.5px; margin-right: 2px; }
+.r .mounts .mpgrp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--rule); }
+.r .mounts .mpgrp:first-of-type { padding-left: 0; border-left: 0; }
+.r .mounts .mpgl { color: var(--muted); font-size: 12px; }
 .r .mounts .pt9 { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--control); background: none; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
 .r .mounts .pt9 b { font-weight: 500; font-size: 12px; color: var(--muted); }
 .r .mounts .pt9[aria-checked="true"] { background: var(--raised); border-color: var(--accent); }
@@ -3996,6 +4006,7 @@ dialog.mview::backdrop { background: var(--ground); }
 .r .mnt td.kd { white-space: nowrap; }
 .r .mnt td.kd .flag + .flag, .r .mnt td.kd > * + * { margin-left: 4px; }
 .r .mnt .smk { color: var(--card-star); margin-left: 4px; cursor: help; }
+.r .mnt .smk.cond { color: var(--muted); }
 .r .mnt .chg { color: var(--accent-text); }
 @media (max-width: 1199px) {
   .r .mnt th.mwk, .r .mnt td.mwk, .r .mnt th.msd, .r .mnt td.msd { display: none; }
@@ -4016,7 +4027,7 @@ dialog.mview::backdrop { background: var(--ground); }
 .tch .tcht p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; line-height: 18px; }
 .tch .tchf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .tch .tchf .field { width: 240px; }
-.tch .tcpill { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--control); background: none; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.tch .tcpill { height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--control); background: none; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .tch .tcpill:hover { background: var(--raised); }
 .tch .tcpill[aria-checked="true"] { background: var(--raised); border-color: var(--accent); color: var(--accent-text); }
 .tch .tcw { flex: 1; min-height: 0; display: flex; }
@@ -4072,7 +4083,7 @@ dialog.mview::backdrop { background: var(--ground); }
 .updnote { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 20px; background: var(--raised); border-bottom: 1px solid var(--line); font-size: 13px; }
 .updnote .ib2 { margin-left: auto; }
 .updnote .lnk { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.updscrim { position: fixed; inset: 0; z-index: 80; background: var(--menu-scrim); display: grid; place-items: center; padding: 16px; }
+.updscrim { position: fixed; inset: 0; z-index: var(--mud-zindex-dialog); background: var(--menu-scrim); display: grid; place-items: center; padding: 16px; }
 .upd { width: min(520px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); box-sizing: border-box; outline: none; }
 .upd h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .upd .m { margin: 0; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
@@ -4090,3 +4101,12 @@ dialog.mview::backdrop { background: var(--ground); }
   .tb .updbadge .pre { display: none; }
   .tb .updbadge { padding: 0 8px; margin: 0 2px; }
 }
+
+.lic-scroll { max-height: 55vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--control) transparent; padding: 8px 10px; margin: 8px 0; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; line-height: 1.5; }
+.lic-scroll h1, .lic-scroll h2, .lic-scroll h3 { font-size: 13.5px; margin: 12px 0 4px; color: var(--ink); }
+.lic-scroll h1:first-child { margin-top: 0; }
+.lic-scroll p { margin: 4px 0; }
+.lic-scroll blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted); }
+.lic-scroll table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+.lic-scroll th, .lic-scroll td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.lic-scroll a { color: var(--accent-text); }

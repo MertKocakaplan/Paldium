@@ -18,19 +18,19 @@ Paldium, Pal'larını Palworld kayıt dosyalarından okur; yalnızca katıldığ
 - **Dedicated sunucu:** `Pal\Saved\SaveGames\0\<WorldId>\`. Kiralık sunucuda klasörü SFTP veya panelden indir.
 
 ## Kaynak ekleme
-**Pal'larım → Kaynaklar**'ı aç (Ayarlar'da değil), bir kayıt kaynağı ekle ve dünya klasörünü seç. Sonra eşitle. Uygulama önce dosyaları kopyalar ve oyun klasörüne asla yazmaz. Pal'ların konumlarıyla (takım, sayfa ve yuvasıyla Pal Kutusu, üs, kafes) Pal'larım sayfasında görünür.
+**Ayarlar → Kaynaklar**'ı aç, bir kayıt kaynağı ekle ve dünya klasörünü seç. Sonra eşitle. Uygulama önce dosyaları kopyalar ve oyun klasörüne asla yazmaz. Pal'ların konumlarıyla (takım, sayfa ve yuvasıyla Pal Kutusu, üs, kafes) Pal'larım sayfasında görünür.
 
 ## Katıldığın dünyalar, seçenek 1: host dünya klasörünü paylaşır
 Host, dünya klasörünün bir kopyasını senkronize bir klasöre (örneğin bir bulut sürücüsü) koyar ve sen o klasörü kaynak olarak eklersin. Host'un kaydındaki her şey, bütün oyuncuların Pal'ları dahil, okunur. Kopya, host'un son kaydı kadar günceldir.
 
 ## Katıldığın dünyalar, seçenek 2: asistan mod
 Mod, oynarken oyunun kendi istemcine gönderdiği bilgiyi okur.
-1. **Pal'larım → Kaynaklar**'da **Modu kur**'a bas (ya da `PaldiumBridge` klasörünü oyunun `Mods\NativeMods\UE4SS\Mods` klasörüne kopyala) ve Palworld'u yeniden başlat.
+1. **Ayarlar → Kaynaklar**'da **Modu kur**'a bas (ya da `PaldiumBridge` klasörünü oyunun `Mods\NativeMods\UE4SS\Mods` klasörüne kopyala) ve Palworld'u yeniden başlat.
 2. Dünyaya gir, Pal Kutusu'nu ya da bir Boyutsal Pal Deposu'nu aç. Baktığın her sayfa kısa sürede okunur.
 3. Kutu açıkken **F9**'a basarsan mod sayfaları senin yerine çevirir. **F10** UE4SS günlüğüne tanı bilgisi yazar (bir şey yanlış görünürse bunu gönder). **F11** modun kendi oturum önbelleğini temizler. Tuşlar Ayarlar'daki Mod kısayolları'ndan değiştirilir.
 4. Kaynaklar paneli her kutu için hangi sayfaların ne zaman okunduğunu gösterir. Henüz açmadığın sayfa eksik görünür.
 
-Uygulama önceki oyun oturumlarının sayfalarını (dünya başına) saklar; bu yüzden oyunu yeniden başlatınca liste küçülmez, yeniden okunan sayfa eski içeriğin yerine geçer. Pal'larım → Kaynaklar'daki "Sayfa önbelleğini temizle" hepsini unutturur.
+Uygulama önceki oyun oturumlarının sayfalarını (dünya başına) saklar; bu yüzden oyunu yeniden başlatınca liste küçülmez, yeniden okunan sayfa eski içeriğin yerine geçer. Ayarlar → Kaynaklar'daki "Sayfa önbelleğini temizle" hepsini unutturur.
 
 ### Sınırlar
 - Yalnızca oyunun sana gönderdiği okunabilir: kendi Pal Kutun ve takımın, açtığın depolar ve oyunun sana ilettiği üsler. Arkadaşının takımı ve kimsenin açmadığı depolar okunamaz.

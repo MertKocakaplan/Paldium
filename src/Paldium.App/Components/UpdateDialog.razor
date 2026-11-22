@@ -1,16 +1,23 @@
-@implements IDisposable
+@using System.Globalization
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
 @inherits LocalizedComponentBase
 @inject UpdateService Updates
+@inject IJSRuntime JS
 
 @* The update box (screens/update.md): the new version, its notes, and the buttons; while an update is prepared it shows the progress. *@
-@if (Updates.DialogOpen && Updates.Available is { } release)
+@{
+    var release = Updates.DialogOpen ? (Updates.Available ?? Updates.Latest) : null;
+}
+@if (release != null)
 {
     var progress = Updates.Progress;
     var busy = progress.Phase != UpdatePhase.Idle;
+    var culture = CultureInfo.GetCultureInfo(Lang);
     <div class="updscrim" @onclick="Close">
-        <div class="upd" role="dialog" aria-modal="true" aria-labelledby="upd-title" @onclick:stopPropagation="true" @onkeydown="OnKeyDown" tabindex="-1">
+        <div @ref="_dialogEl" class="upd" role="dialog" aria-modal="true" aria-labelledby="upd-title" @onclick:stopPropagation="true" @onkeydown="OnKeyDown" tabindex="-1">
             <h2 id="upd-title">@L["Update.Title", release.Version]</h2>
-            <p class="m">@L["Update.Sub", Updates.CurrentVersion, Ago(release.PublishedAt), SizeText(release.AssetSize)]</p>
+            <p class="m">@SubtitleText(release, culture)</p>
             @if (!string.IsNullOrWhiteSpace(release.Notes))
             {
                 <div class="updnotes">@((MarkupString)UpdateNotes.ToHtml(release.Notes))</div>
@@ -26,8 +33,11 @@
                 <div class="updprog" role="status">
                     @if (progress.Phase == UpdatePhase.Downloading)
                     {
+                        var dlText = progress.TotalBytes > 0
+                            ? FormatBytes(progress.BytesRead, culture) + " / " + FormatBytes(progress.TotalBytes, culture)
+                            : FormatBytes(progress.BytesRead, culture);
                         <div class="updbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@progress.Percent"><i style="@("width:" + progress.Percent + "%")"></i></div>
-                        <span class="m num">@L["Update.Downloading", SizeText(progress.BytesRead) + " / " + SizeText(progress.TotalBytes)]</span>
+                        <span class="m num">@L["Update.Downloading", dlText]</span>
                     }
                     else
                     {
@@ -44,16 +54,19 @@
             else
             {
                 <div class="updact">
-                    @if (release.AssetUrl == null || _errorKey == UpdateException.NotWritable)
+                    @if (release.AssetUrl == null || _errorKey is UpdateException.NotWritable or UpdateException.UnsafeFolder)
                     {
                         <a class="btn2 acc" href="@release.PageUrl" target="_blank" rel="noopener">@L["Update.OpenRelease"]</a>
                     }
                     else
                     {
-                        <button type="button" class="btn2 acc" @onclick="InstallAsync">@L[_errorKey == UpdateException.DownloadFailed ? "Update.Retry" : "Update.Install"]</button>
+                        <button type="button" class="btn2 acc" @onclick="() => InstallAsync(release)">@L[_errorKey == UpdateException.DownloadFailed ? "Update.Retry" : "Update.Install"]</button>
                     }
                     <button type="button" class="btn2" @onclick="Close">@L["Update.Later"]</button>
-                    <button type="button" class="btn2" @onclick="() => Skip(release.Version)">@L["Update.Skip"]</button>
+                    @if (!Updates.IsSkipped(release.Version))
+                    {
+                        <button type="button" class="btn2" @onclick="() => Skip(release.Version)">@L["Update.Skip"]</button>
+                    }
                 </div>
             }
         </div>
@@ -62,6 +75,11 @@
 
 @code {
     private string? _errorKey;
+    private string? _releaseTag;
+    private bool _installing;
+    private ElementReference _dialogEl;
+    private bool _attached;
+    private DotNetObjectReference<UpdateDialog>? _self;
 
     protected override void OnInitialized()
     {
@@ -69,24 +87,63 @@
         Updates.Changed += OnChanged;
     }
 
-    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+    private void OnChanged(object? sender, EventArgs e) => InvokeAsync(() =>
+    {
+        var currentTag = (Updates.Available ?? Updates.Latest)?.Tag;
+        if (!Updates.DialogOpen || !string.Equals(_releaseTag, currentTag, StringComparison.Ordinal))
+        {
+            if (!Updates.DialogOpen) _errorKey = null;
+            else if (!string.Equals(_releaseTag, currentTag, StringComparison.Ordinal)) _errorKey = null;
+        }
+        _releaseTag = currentTag;
+        StateHasChanged();
+    });
 
-    private void Close() => Updates.CloseDialog();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var open = Updates.DialogOpen && (Updates.Available ?? Updates.Latest) != null;
+        if (open && !_attached)
+        {
+            _attached = true;
+            _self ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("pbDrawer.attach", _dialogEl, _self);
+        }
+        else if (!open && _attached)
+        {
+            _attached = false;
+            await JS.InvokeVoidAsync("pbDrawer.detach", _dialogEl, true);
+        }
+    }
+
+    [JSInvokable]
+    public void RequestClose() => Close();
+
+    private bool CanClose => Updates.Progress.Phase is UpdatePhase.Idle or UpdatePhase.Downloading;
+
+    private void Close()
+    {
+        if (!CanClose) return;
+        _errorKey = null;
+        Updates.CloseDialog();
+    }
 
     private void Skip(string version)
     {
+        if (!CanClose) return;
+        _errorKey = null;
         Updates.Skip(version);
         Updates.CloseDialog();
     }
 
     private void OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Escape" && Updates.Progress.Phase == UpdatePhase.Idle) Close();
+        if (e.Key == "Escape") Close();
     }
 
-    private async Task InstallAsync()
+    private async Task InstallAsync(ReleaseInfo release)
     {
-        if (Updates.Available is not { } release) return;
+        if (_installing || Updates.Progress.Phase != UpdatePhase.Idle) return;
+        _installing = true;
         _errorKey = null;
         try
         {
@@ -104,24 +161,50 @@
         {
             // "Cancel": the partial file is already gone.
         }
+        finally
+        {
+            _installing = false;
+        }
         StateHasChanged();
     }
 
-    private string Ago(DateTimeOffset? at)
+    private string SubtitleText(ReleaseInfo release, CultureInfo culture)
     {
-        if (at == null) return "";
-        var span = DateTimeOffset.UtcNow - at.Value;
+        var parts = new List<string> { L["Update.SubVersion", Updates.CurrentVersion].Value };
+        if (release.PublishedAt is { } published)
+            parts.Add(L["Update.SubReleased", Ago(published)].Value);
+        if (release.AssetSize > 0)
+            parts.Add(SizeText(release.AssetSize, culture));
+        return string.Join(" · ", parts);
+    }
+
+    private string Ago(DateTimeOffset at)
+    {
+        var span = DateTimeOffset.UtcNow - at;
         if (span < TimeSpan.FromMinutes(1)) return L["Sources.AgoNow"].Value;
         if (span < TimeSpan.FromHours(1)) return L["Sources.AgoMinutes", (int)span.TotalMinutes].Value;
         if (span < TimeSpan.FromDays(1)) return L["Sources.AgoHours", (int)span.TotalHours].Value;
         return L["Sources.AgoDays", (int)span.TotalDays].Value;
     }
 
-    public static string SizeText(long bytes) => bytes <= 0 ? "" : (bytes / 1048576.0).ToString(bytes >= 10485760 ? "0" : "0.#", System.Globalization.CultureInfo.InvariantCulture) + " MB";
+    public static string SizeText(long bytes, CultureInfo? culture = null) =>
+        bytes <= 0 ? "" : FormatBytes(bytes, culture ?? CultureInfo.InvariantCulture);
 
-    public override void Dispose()
+    private static string FormatBytes(long bytes, CultureInfo culture)
+    {
+        var clamped = Math.Max(0, bytes);
+        return (clamped / 1048576.0).ToString(clamped >= 10485760 ? "0" : "0.#", culture) + " MB";
+    }
+
+    public async ValueTask DisposeAsync()
     {
         Updates.Changed -= OnChanged;
-        base.Dispose();
+        if (_attached)
+        {
+            _attached = false;
+            try { await JS.InvokeVoidAsync("pbDrawer.detach", _dialogEl, false); } catch { }
+        }
+        _self?.Dispose();
+        Dispose();
     }
 }

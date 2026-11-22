@@ -55,4 +55,11 @@ public sealed class GuideStateService
     }
 
     public string EffectiveLang(string uiLang) => GuideLang ?? uiLang;
+
+    /// <summary>True when a <c>/guides/&lt;slug&gt;</c> route renders one of the interactive reference tables rather than a Markdown article.</summary>
+    public static bool IsReferenceSlug(string? slug) =>
+        slug != null && (slug.Equals("agil", StringComparison.OrdinalIgnoreCase)
+                         || slug.Equals("tasima", StringComparison.OrdinalIgnoreCase)
+                         || slug.Equals("binekler", StringComparison.OrdinalIgnoreCase)
+                         || slug.Equals("heykeller", StringComparison.OrdinalIgnoreCase));
 }

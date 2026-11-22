@@ -12,11 +12,15 @@
 <div class="b r tch" @onkeydown="OnKeyDown">
     <div class="tchh">
         <div class="tcht">
-            <h1>@L["Tech.Title"]</h1>
+            <h1 tabindex="-1">@L["Tech.Title"]</h1>
             <p>@L["Tech.Note"]</p>
         </div>
         <div class="tchf">
-            <SearchField Value="@State.Query" ValueChanged="SetQuery" Placeholder="@L["Tech.Search"].Value" />
+            <SearchField Value="@State.Query"
+                         ValueChanged="SetQuery"
+                         Placeholder="@L["Tech.Search"].Value"
+                         AriaLabel="@L["Tech.Search"].Value"
+                         OnEscape="() => SetQuery(string.Empty)" />
             <button type="button" class="tcpill" role="checkbox" aria-checked="@(State.AncientOnly ? "true" : "false")" @onclick="ToggleAncient">@L["Tech.Filter.Ancient"]</button>
             <button type="button" class="tcpill" role="checkbox" aria-checked="@(State.PrerequisiteOnly ? "true" : "false")" @onclick="TogglePrerequisite">@L["Tech.Filter.Prereq"]</button>
         </div>
@@ -40,7 +44,7 @@
                 }
                 @foreach (var row in levels)
                 {
-                    <TechLevelRow @key="row.Level" Row="@row" SelectedId="@_selectedId" ById="@_byId" OnSelect="Select" />
+                    <TechLevelRow @key="row.Level" Row="@row" SelectedId="@_selectedId" ShowNormalPoints="@(!State.AncientOnly)" ById="@_byId" OnSelect="SelectAsync" />
                 }
             </div>
             <nav class="tcj" aria-label="@L["Tech.Jump"].Value">
@@ -53,7 +57,7 @@
         </div>
     }
 
-    <TechDetail Tech="@Selected" All="@_all" ById="@_byId" OnSelect="Select" OnClose="CloseDetail" />
+    <TechDetail Tech="@Selected" All="@_all" ById="@_byId" OnSelect="SelectAsync" OnClose="CloseDetail" />
 </div>
 
 @code {
@@ -62,6 +66,7 @@
     private IReadOnlyDictionary<string, TechnologyInfo> _byId = new Dictionary<string, TechnologyInfo>();
     private string? _selectedId;
     private bool _restored;
+    private readonly OnceParameter _qOnce = new();
     private (TechFilter Filter, string Lang)? _levelsKey;
     private IReadOnlyList<TechLevel> _levels = [];
 
@@ -81,7 +86,8 @@
 
     protected override void OnParametersSet()
     {
-        if (Q != null && Q != State.Query) State.Query = Q;
+        base.OnParametersSet();
+        if (_qOnce.IsNew(Q) && Q != null) State.Query = Q;
     }
 
     private IReadOnlyList<TechLevel> Levels()
@@ -109,7 +115,16 @@
         State.PrerequisiteOnly = false;
     }
 
-    private void Select(string id) => _selectedId = id;
+    private async Task SelectAsync(string id)
+    {
+        _selectedId = id;
+        if (_byId.TryGetValue(id, out var t) && Levels().Any(l => l.Level == t.Level))
+        {
+            try { await JS.InvokeVoidAsync("pbScrollToLevel", _list, "tech-level-" + t.Level); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
 
     private void CloseDetail() => _selectedId = null;
 
@@ -128,17 +143,24 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_restored || _all.Count == 0) return;
-        _restored = true;
-        try { await JS.InvokeVoidAsync("pbSetScrollTop", _list, State.ScrollTop); }
-        catch (JSException) { }
-        catch (JSDisconnectedException) { }
+        if (_all.Count == 0) return;
+        if (!_restored)
+        {
+            _restored = true;
+            try { await JS.InvokeVoidAsync("pbSetScrollTop", _list, State.ScrollTop); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         // The scroll position is kept for the next visit (not written to disk).
-        try { State.ScrollTop = await JS.InvokeAsync<double>("pbGetScrollTop", _list); }
+        try
+        {
+            if (await JS.InvokeAsync<double?>("pbGetScrollTop", _list) is { } top)
+                State.ScrollTop = top;
+        }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or ObjectDisposedException) { }
         Dispose();
     }

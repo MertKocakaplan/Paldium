@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using Paldium.Updater;
 
@@ -15,9 +16,9 @@ var outcome = UpdateApplier.Apply(
             using var process = Process.GetProcessById(id);
             return process.WaitForExit(timeout);
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
         {
-            return true;   // already gone
+            return true;   // already gone or exited
         }
     },
     start: exe =>

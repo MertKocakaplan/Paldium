@@ -27,9 +27,15 @@ public partial class App : Application
 #endif
 
         // T129: the data of the former name is moved first, before anything creates the new folders (the log goes into one of them).
-        var migration = Paldium.Import.Migration.LegacyDataMigration.Run();
+        var migrationLog = new List<(string Message, Exception? Error)>();
+        var migration = Paldium.Import.Migration.LegacyDataMigration.Run((m, ex) => migrationLog.Add((m, ex)));
         Services.AppServices.ConfigureLogging();
         Log.Information("Paldium starting");
+        foreach (var (message, error) in migrationLog)
+        {
+            if (error == null) Log.Information("{Message}", message);
+            else Log.Warning(error, "{Message}", message);
+        }
         if (migration.Roaming.Copied || migration.Local.Copied || migration.Roaming.Failed || migration.Local.Failed)
             Log.Information("Data move: settings copied {Roaming}, local data copied {Local}, paths changed {Paths}, errors: {Errors}",
                 migration.Roaming.Copied, migration.Local.Copied, migration.RewrittenPaths, new[] { migration.Roaming.Error, migration.Local.Error }.Where(e => e != null));

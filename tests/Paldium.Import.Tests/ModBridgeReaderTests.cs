@@ -245,4 +245,15 @@ public class ModBridgeReaderTests : IDisposable
         Assert.Equal(3, pal.Location.SlotIndex);
         Assert.Equal("0123456789ABCDEF0123456789ABCDEF", pal.Location.ContainerId);
         Assert.Null(pal.Location.Page); // a base has no pages
-    }}
+    }
+
+    [Fact]
+    public void ReadAll_AllowsDeleteSharingWhileFileIsOpen()
+    {
+        var path = Write("""{ "schemaVersion": 1, "playerUid": "AAAA", "pals": [ { "characterId": "CowPal" } ] }""");
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var (pals, captures) = NewReader().ReadAll(path, "s");
+        Assert.Single(pals);
+        Assert.Empty(captures);
+    }
+}

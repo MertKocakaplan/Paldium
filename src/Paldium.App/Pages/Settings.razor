@@ -1,5 +1,6 @@
 @page "/settings"
 @implements IAsyncDisposable
+@using Markdig
 @using Microsoft.JSInterop
 @using Paldium.App.Pages.SettingsParts
 @using Paldium.Import.Bridge
@@ -345,14 +346,44 @@
         }
     }
 
-    // The fonts and data sources the app ships with and their licences.
+    // Paldium's own GPL-3.0 notice, bundled third-party notices, fonts and data sources.
     private async Task ShowLicensesAsync()
     {
-        var lines = new List<string> { "<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.LicensesFonts"].Value) + "</b><br>IBM Plex Sans, IBM Plex Mono · SIL Open Font License 1.1</p>" };
-        lines.Add("<p><b>PalCalc</b> (Tyler Camp) · MIT<br><a href=\"https://github.com/tylercamp/palcalc\" target=\"_blank\" rel=\"noopener\">github.com/tylercamp/palcalc</a></p>");
-        lines.Add("<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.Sources"].Value) + "</b><br>" +
-                  string.Join("<br>", Data.Meta.Sources.Select(s => System.Net.WebUtility.HtmlEncode($"{s.Name} {s.DbVersion}"))) + "</p>");
-        await Dialogs.ShowMessageBoxAsync(L["Settings.Licenses"].Value, new MarkupString(string.Concat(lines)), yesText: L["Common.Close"].Value);
+        var html = new List<string>
+        {
+            "<p><b>Paldium</b> · <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\" target=\"_blank\" rel=\"noopener\">GNU General Public License v3.0 (GPL-3.0-or-later)</a><br>"
+            + System.Net.WebUtility.HtmlEncode(L["Settings.LicensesApp"].Value) + "</p>",
+        };
+
+        var noticesPath = System.IO.Path.Combine(AppContext.BaseDirectory, "THIRD-PARTY-NOTICES.md");
+        if (System.IO.File.Exists(noticesPath))
+        {
+            var pipeline = new Markdig.MarkdownPipelineBuilder().UsePipeTables().Build();
+            var rendered = Markdig.Markdown.ToHtml(System.IO.File.ReadAllText(noticesPath), pipeline);
+            rendered = System.Text.RegularExpressions.Regex.Replace(
+                rendered,
+                @"href=""LICENSE""",
+                "href=\"https://www.gnu.org/licenses/gpl-3.0.html\"",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            rendered = System.Text.RegularExpressions.Regex.Replace(
+                rendered,
+                @"<a\b(?![^>]*\btarget=)",
+                "<a target=\"_blank\" rel=\"noopener\" ",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            html.Add("<div class=\"lic-scroll\">" + rendered + "</div>");
+        }
+        else
+        {
+            html.Add("<p><b>ooz / libooz</b> (Powzix, 2016) · GPL-3.0</p>");
+            html.Add("<p><b>PalCalc</b> (Tyler Camp) · MIT · <a href=\"https://github.com/tylercamp/palcalc\" target=\"_blank\" rel=\"noopener\">github.com/tylercamp/palcalc</a></p>");
+            html.Add("<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.LicensesFonts"].Value) + "</b><br>IBM Plex Sans, IBM Plex Mono · SIL Open Font License 1.1</p>");
+            html.Add("<p><b>Microsoft Edge WebView2</b> · Microsoft WebView2 License (system library)</p>");
+        }
+
+        html.Add("<p><b>" + System.Net.WebUtility.HtmlEncode(L["Settings.Sources"].Value) + "</b><br>"
+                 + string.Join("<br>", Data.Meta.Sources.Select(s => System.Net.WebUtility.HtmlEncode($"{s.Name} {s.DbVersion}"))) + "</p>");
+
+        await Dialogs.ShowMessageBoxAsync(L["Settings.Licenses"].Value, new MarkupString(string.Concat(html)), yesText: L["Common.Close"].Value);
     }
 
     private static void OpenLogs()

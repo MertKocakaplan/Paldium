@@ -186,18 +186,7 @@ public sealed class SyncService : ISyncService
             case SourceType.ModBridgeFile:
                 if (_bridge == null) throw new InvalidOperationException("No mod bridge reader is configured.");
                 var bridgeFile = Bridge.ModBridgeReader.EffectiveFile(config.Path);
-                var palList = _bridge.Read(bridgeFile, config.Id);
-                IReadOnlyList<PlayerCapture> bridgeCaptures = [];
-                try
-                {
-                    bridgeCaptures = _bridge.ReadCaptures(bridgeFile);
-                }
-                catch (Exception ex) when (ex is IOException or InvalidDataException)
-                {
-                    _log?.Invoke($"Could not read the capture record of {config.Path}.", ex);
-                }
-
-                return (palList, bridgeCaptures);
+                return _bridge.ReadAll(bridgeFile, config.Id);
 
             default:
                 var snapshot = _reader.ReadWorld(config.Path);

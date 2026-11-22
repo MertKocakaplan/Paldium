@@ -21,7 +21,7 @@
     <span class="tcp num" title="@(Tech.Ancient ? L["Tech.AncientTip", Tech.Cost].Value : null)">@(Tech.Ancient ? "◆ " : "")@Tech.Cost</span>
     @if (requirement != null)
     {
-        <span class="tck" aria-label="@requirement"><Icon Name="lock" Size="14" /></span>
+        <span class="tck" aria-hidden="true" title="@requirement"><Icon Name="lock" Size="14" /></span>
     }
 </button>
 

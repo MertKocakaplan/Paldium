@@ -4,7 +4,7 @@
 .PARAMETER WorldFolder
   Optional Palworld world folder; when given, the published exe reads it (--selfcheck) to prove libooz works.
 .EXAMPLE
-  pwsh build/publish.ps1 -WorldFolder "$env:LOCALAPPDATA\Pal\Saved\SaveGames\<SteamID>\<WorldId>"
+  powershell -File build/publish.ps1 -WorldFolder "$env:LOCALAPPDATA\Pal\Saved\SaveGames\<SteamID>\<WorldId>"
 #>
 param([string]$WorldFolder)
 
@@ -30,13 +30,16 @@ if (Test-Path $sha) { Remove-Item $sha -Force }
 # A build that already exists would be reused with the old, unmapped paths: start from a clean state.
 dotnet clean src/Paldium.App -c Release -r win-x64 -v q | Out-Null
 dotnet clean tools/Paldium.Updater -c Release -r win-x64 -v q | Out-Null
-$pathMap = @('-p:ContinuousIntegrationBuild=true', "-p:PathMap=$($root.TrimEnd('\'))\=/_/")
+$pathMap = @('-p:ContinuousIntegrationBuild=true', "-p:PathMap=$($root.TrimEnd('\'))\=/_/", '-p:IncludeSourceRevisionInInformationalVersion=false', '-p:EnableSourceLink=false')
 dotnet publish src/Paldium.App -c Release -r win-x64 --self-contained false -o $out @pathMap
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
 # The updater (T131) goes next to the exe: the app copies it out of the app folder and runs it from there while it replaces the app folder.
 dotnet publish tools/Paldium.Updater -c Release -r win-x64 --self-contained false -o (Join-Path $out 'updater') @pathMap
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish of the updater failed.' }
+
+# Strip SDK XML docs for WebView2 and JS source maps before manifest generation and zipping (keep .pdb).
+Get-ChildItem $out -Recurse -File -Include 'Microsoft.Web.WebView2.*.xml', '*.js.map' | Remove-Item -Force
 
 # Fody (Costura in PalCalc.SaveReader) rewrites its assembly after the compiler ran, and the pdb path in the debug directory keeps the build folder. The path is
 # a NUL-terminated string, so it is replaced in place: "<root>\x\y.pdb" becomes "/_/x/y.pdb" followed by NULs up to the old length (the file keeps its size).
@@ -56,7 +59,7 @@ foreach ($dll in Get-ChildItem $out -Recurse -Filter *.dll) {
 }
 
 # Required content next to the exe.
-foreach ($needed in 'Paldium.exe', 'data/gamedata.json', 'data/breeding-rules.json', 'content/guides/en', 'content/guides/tr', 'wwwroot/gamedata', 'updater/Paldium.Updater.exe') {
+foreach ($needed in 'Paldium.exe', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'data/gamedata.json', 'data/breeding-rules.json', 'content/guides/en', 'content/guides/tr', 'wwwroot/gamedata', 'updater/Paldium.Updater.exe') {
     if (-not (Test-Path (Join-Path $out $needed))) { throw "Published output is missing $needed" }
 }
 
@@ -69,7 +72,21 @@ Get-Content $report
 Remove-Item $report
 if ($proc.ExitCode -ne 0) { throw "Self check failed (exit code $($proc.ExitCode))." }
 
-# Written with .NET, entry names with "/" (Compress-Archive of Windows PowerShell 5.1 writes "\\", which other tools and the updater would have to guess about).
+# Record all packaged files in app-files.txt (relative "/" paths) so the updater only touches Paldium's own files.
+$manifestPath = Join-Path $out 'app-files.txt'
+$manifestBase = (Resolve-Path $out).Path.TrimEnd('\') + '\'
+$manifestFiles = New-Object System.Collections.Generic.List[string]
+foreach ($file in Get-ChildItem $out -Recurse -File) {
+    $rel = $file.FullName.Substring($manifestBase.Length).Replace('\', '/')
+    if (-not [string]::Equals($rel, 'app-files.txt', [StringComparison]::OrdinalIgnoreCase)) {
+        $manifestFiles.Add($rel)
+    }
+}
+$manifestFiles.Add('app-files.txt')
+$manifestFiles.Sort([StringComparer]::Ordinal)
+[System.IO.File]::WriteAllLines($manifestPath, $manifestFiles, (New-Object System.Text.UTF8Encoding($false)))
+
+# Written with .NET, entry names with "/" under a top-level Paldium/ folder so extracting directly into Downloads/Desktop stays isolated.
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $stream = [System.IO.File]::Create($zip)
@@ -77,7 +94,7 @@ $archive = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compr
 try {
     $base = (Resolve-Path $out).Path.TrimEnd('\') + '\'
     foreach ($file in Get-ChildItem $out -Recurse -File) {
-        $name = $file.FullName.Substring($base.Length).Replace('\', '/')
+        $name = 'Paldium/' + $file.FullName.Substring($base.Length).Replace('\', '/')
         [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $name, [System.IO.Compression.CompressionLevel]::Optimal)
     }
 }
@@ -87,7 +104,7 @@ finally {
 }
 
 # Scan the finished package for what must not be in a release: the build folder, user folders, the local private patterns (ASCII and UTF-16).
-$needles = @('C:\Users\', 'Documents\Code', $root)
+$needles = @('C:\Users\', 'C:/Users/', $root, $root.Replace('\', '/'))
 $patternFile = Join-Path $PSScriptRoot 'private-patterns.local.txt'
 $patterns = @()
 if (Test-Path $patternFile) { $patterns = @(Get-Content $patternFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') }) }

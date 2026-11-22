@@ -87,9 +87,20 @@ public static class EffigyModel
     /// </summary>
     public static RelicCount? CountFor(CaptureRecord? record, string type)
     {
-        if (record?.Relics is not { Count: > 0 } relics) return null;
-        if (relics.TryGetValue(type, out var count)) return count;
-        return new RelicCount(relics.Values.Any(r => r.Have != null) ? 0 : null, relics.Values.Any(r => r.Collected != null) ? 0 : null);
+        if (record == null) return null;
+        if (record.Relics is { Count: > 0 } relics)
+        {
+            if (relics.TryGetValue(type, out var count)) return count;
+            foreach (var (key, value) in relics)
+                if (string.Equals(key, type, StringComparison.OrdinalIgnoreCase)) return value;
+            return new RelicCount(relics.Values.Any(r => r.Have != null) ? 0 : null, relics.Values.Any(r => r.Collected != null) ? 0 : null);
+        }
+
+        if (string.Equals(type, "MoveSpeed", StringComparison.OrdinalIgnoreCase)
+            && (record.Bonus.Count > 0 || record.Count.Count > 0 || record.Relics != null))
+            return new RelicCount(null, null);
+
+        return null;
     }
 
     /// <summary>The effect (percent) of a rank (0 = none yet), or null when the game table has no value.</summary>
