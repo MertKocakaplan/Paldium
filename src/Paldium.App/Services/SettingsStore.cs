@@ -21,6 +21,9 @@ public sealed record AppSettings
     /// <summary>Paldex view, filters and sort order, restored when the page is opened again.</summary>
     public PaldexSettings Paldex { get; init; } = new();
 
+    /// <summary>The Map page (T138): the shown map and the marker categories that are on.</summary>
+    public MapSettings Map { get; init; } = new();
+
     /// <summary>My Pals view mode ("table", "cards", or "dense"), persisted across sessions.</summary>
     public MyPalsSettings MyPals { get; init; } = new();
 
@@ -148,6 +151,42 @@ public sealed record PaldexSettings
     public PalFilter Filter { get; init; } = new();
 
     public PalSort Sort { get; init; } = new();
+}
+
+public sealed record MapSettings
+{
+    /// <summary>"MainMap" or "Tree".</summary>
+    public string LastMap { get; init; } = "MainMap";
+
+    /// <summary>The ids of the layers that are on (categories; effigies one per type); null until the user changes one (then the data's defaults apply).</summary>
+    public IReadOnlyList<string>? Categories { get; init; }
+
+    /// <summary>The layer set <see cref="Categories"/> was saved with: an older choice turns the newer default-on categories on.</summary>
+    public int LayerSet { get; init; }
+
+    /// <summary>The tab of the side panel: "layers", "pals" or "quests" (T146).</summary>
+    public string Tab { get; init; } = "layers";
+
+    /// <summary>The species whose spawn areas the map shows (T146), or null.</summary>
+    public string? Pal { get; init; }
+
+    /// <summary>
+    /// The effigies and ancient towers the user marked as collected (T144): world id (or "default") to marker ids. World ids stay in this local
+    /// file only.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Collected { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
+
+    public bool HideCollected { get; init; }
+
+    /// <summary>Hide the opened fast travel points and watchtowers, and the defeated tower bosses.</summary>
+    public bool HideOpened { get; init; }
+    public bool HideDefeated { get; init; }
+
+    /// <summary>The player's bases were switched off (they are on by default, T151).</summary>
+    public bool HideBases { get; init; }
+
+    /// <summary>Leave the finished quests out of the Quests tab (T150).</summary>
+    public bool HideDoneQuests { get; init; }
 }
 
 public sealed record MyPalsSettings

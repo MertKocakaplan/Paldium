@@ -12,12 +12,23 @@ public static class ObtainExporter
     private const string Spawner = "Pal/Content/Pal/DataTable/Spawner/";
     private const string Dungeon = "Pal/Content/Pal/DataTable/Dungeon/";
 
-    public static JObject Export(DefaultFileProvider provider, List<string> warnings)
+    /// <param name="worldActorsPath">The world scan (T135): without it the spawners the two tables miss are left out.</param>
+    public static JObject Export(DefaultFileProvider provider, List<string> warnings, string? worldActorsPath = null)
     {
+        var wildSpawner = WildSpawner(GameTables.LoadRows(provider, Spawner + "DT_PalWildSpawner"));
+        var placements = Placements(GameTables.LoadRows(provider, Spawner + "DT_PalSpawnerPlacement"));
+        if (worldActorsPath != null)
+        {
+            var bossSpawners = GameTables.LoadRows(provider, "Pal/Content/Pal/DataTable/UI/DT_BossSpawnerLoactionData").Properties()
+                .Select(r => r.Value["SpawnerID"]?.Value<string>()).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            SpawnerSupplement.Apply(provider, wildSpawner, placements, bossSpawners, worldActorsPath, warnings);
+        }
+        else warnings.Add("spawners: no world scan given (--world): spawners missing from the tables are not added.");
+
         var result = new JObject
         {
-            ["wildSpawner"] = WildSpawner(GameTables.LoadRows(provider, Spawner + "DT_PalWildSpawner")),
-            ["placements"] = Placements(GameTables.LoadRows(provider, Spawner + "DT_PalSpawnerPlacement")),
+            ["wildSpawner"] = wildSpawner,
+            ["placements"] = placements,
             ["dungeonEnemies"] = DungeonEnemies(GameTables.LoadRows(provider, Dungeon + "DT_DungeonEnemySpawnDataTable")),
             ["dungeonAreas"] = DungeonAreas(GameTables.LoadRows(provider, Dungeon + "DT_DungeonSpawnAreaDataTable")),
             ["cages"] = Cages(GameTables.LoadRows(provider, "Pal/Content/Pal/DataTable/Character/DT_CapturedCagePal")),

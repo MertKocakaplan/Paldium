@@ -59,7 +59,7 @@ foreach ($dll in Get-ChildItem $out -Recurse -Filter *.dll) {
 }
 
 # Required content next to the exe.
-foreach ($needed in 'Paldium.exe', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'data/gamedata.json', 'data/breeding-rules.json', 'content/guides/en', 'content/guides/tr', 'wwwroot/gamedata', 'updater/Paldium.Updater.exe') {
+foreach ($needed in 'Paldium.exe', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'data/gamedata.json', 'data/breeding-rules.json', 'data/map/map-points.json', 'data/map/tree-map.json', 'data/map/world-map.json', 'content/guides/en', 'content/guides/tr', 'wwwroot/gamedata', 'updater/Paldium.Updater.exe') {
     if (-not (Test-Path (Join-Path $out $needed))) { throw "Published output is missing $needed" }
 }
 

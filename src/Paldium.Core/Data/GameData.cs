@@ -19,6 +19,9 @@ public interface IGameData
     /// <summary>The technology tree (T128); empty for data without it.</summary>
     IReadOnlyList<TechnologyInfo> Technologies { get; }
 
+    /// <summary>Merchants and Pal shops (T137); empty for data without them.</summary>
+    IReadOnlyList<ShopInfo> Shops { get; }
+
     /// <summary>Unknown id throws <see cref="KeyNotFoundException"/>. Lookup is case-insensitive.</summary>
     PalSpecies Pal(string id);
     PassiveSkill Passive(string id);
@@ -83,6 +86,8 @@ public sealed class GameData : IGameData
     public IReadOnlyList<RelicInfo> Relics { get; init; } = [];
 
     public IReadOnlyList<TechnologyInfo> Technologies { get; init; } = [];
+
+    public IReadOnlyList<ShopInfo> Shops { get; init; } = [];
 
     public PalSpecies Pal(string id) =>
         _pals.TryGetValue(id, out var p) ? p : throw new KeyNotFoundException($"Unknown Pal id '{id}'.");

@@ -82,7 +82,14 @@ public static class SourceState
 }
 
 /// <summary>State of one Pal source (ARCHITECTURE 5). <see cref="State"/> is one of <see cref="SourceState"/>.</summary>
-public sealed record SourceStatus(string SourceId, string State, DateTimeOffset? LastSyncUtc, int PalCount, string? Error);
+public sealed record SourceStatus(string SourceId, string State, DateTimeOffset? LastSyncUtc, int PalCount, string? Error)
+{
+    /// <summary>The world's own name, for sources that carry one (a save); kept when a later read fails.</summary>
+    public string? WorldName { get; init; }
+
+    /// <summary>The world's id (its folder name), for sources that know it; it keys the personal map marks and is never exported (T144).</summary>
+    public string? WorldId { get; init; }
+}
 
 /// <summary>Immutable view of all owned Pals after merging every source and applying the corrections.</summary>
 public sealed record OwnedPalSnapshot(

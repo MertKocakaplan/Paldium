@@ -1,0 +1,56 @@
+@inherits LocalizedComponentBase
+@using Paldium.Core.Owned
+@inject IGameData Data
+
+@* The card of one of the player's bases (T151): where it is and the Pals that work there, in the game's slot order. *@
+<section class="wm-card" aria-label="@Title">
+    <div class="th">
+        <img class="gi" src="gamedata/icons/map/base.png" alt="" />
+        <div>
+            <h2>@Title</h2>
+            <div class="k">@L["Map.Cat.base"]</div>
+        </div>
+        <button type="button" class="btn2 x" @onclick="OnClose"><Icon Name="x" Size="14" /><span>@L["Map.Close"]</span></button>
+    </div>
+    @if (RegionName != null)
+    {
+        <div class="row"><span class="m">@L["Map.Region"]</span><span>@RegionName</span></div>
+    }
+    <div class="row">
+        <span class="m">@L["Map.Coordinates"]</span>
+        <span class="num">@(WorldMapModel.Coordinates(Point.MapX, Point.MapY, Lang) ?? L["Map.NoCoords"].Value)</span>
+    </div>
+    <div class="row">
+        <span class="num">@(Capacity is { } capacity ? L["Map.Base.CountOf", Workers.Count, capacity] : L["Map.Base.Count", Workers.Count])</span>
+    </div>
+    @if (Workers.Count > 0)
+    {
+        <ul class="wm-workers">
+            @foreach (var worker in Workers)
+            {
+                var tip = Tip(worker);
+                <li><a href="@Links.OwnedPal(worker.SelectionKey)" title="@tip" aria-label="@tip"><PalIcon PalId="@worker.SpeciesId" Size="40" /></a></li>
+            }
+        </ul>
+    }
+    <div class="row">
+        <a class="lnk" href="@("mypals?base=" + Uri.EscapeDataString(SiteId))">@L["Map.Base.Filter"]<Icon Name="arrow-right" Size="14" /></a>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public MapMarker Point { get; set; } = default!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string SiteId { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<OwnedPal> Workers { get; set; } = [];
+    [Parameter] public int? Capacity { get; set; }
+    [Parameter] public string? RegionName { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    // "Nickname · Species" (or the species) and the level on a second line.
+    private string Tip(OwnedPal pal)
+    {
+        var species = Data.Pals.FirstOrDefault(p => string.Equals(p.Id, pal.SpeciesId, StringComparison.OrdinalIgnoreCase))?.DisplayName(Lang) ?? pal.SpeciesId;
+        return (pal.Nickname == null ? species : pal.Nickname + " · " + species) + "\n" + L["Map.Level", pal.Level].Value;
+    }
+}

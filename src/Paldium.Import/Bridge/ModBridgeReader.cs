@@ -31,9 +31,9 @@ public interface IModBridgeReader
     /// <summary>The capture record the mod wrote for its own player (T121); empty when the file has none.</summary>
     IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCaptures(string file) => [];
 
-    /// <summary>Reads both owned Pals and capture/relic records from a single read of the bridge file.</summary>
-    (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures) ReadAll(string file, string sourceId) =>
-        (Read(file, sourceId), ReadCaptures(file));
+    /// <summary>Reads the owned Pals, the player's record and the bases from a single read of the bridge file.</summary>
+    (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures, IReadOnlyList<Paldium.Core.Owned.BaseSite> Bases) ReadAll(
+        string file, string sourceId) => (Read(file, sourceId), ReadCaptures(file), []);
 }
 
 /// <summary>Converts the mod's JSON file to owned Pals. Read-only; a half written or broken file is an error (the previous data stays).</summary>
@@ -109,13 +109,24 @@ public sealed class ModBridgeReader : IModBridgeReader
         return ReadCore(bridge, file, sourceId);
     }
 
-    public (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures) ReadAll(string file, string sourceId)
+    public (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures, IReadOnlyList<Paldium.Core.Owned.BaseSite> Bases) ReadAll(
+        string file, string sourceId)
     {
         var bridge = BridgeFile.Parse(BridgeFileIo.ReadAllText(file));
-        return (ReadCore(bridge, file, sourceId), ReadCapturesCore(bridge, file));
+        var bases = new List<Paldium.Core.Owned.BaseSite>();
+        if (_pages == null) bases.AddRange(BasesOf(bridge.Coverage));
+        var pals = ReadCore(bridge, file, sourceId, bases);
+        return (pals, ReadCapturesCore(bridge, file), bases);
     }
 
-    private IReadOnlyList<OwnedPal> ReadCore(BridgeFile bridge, string file, string sourceId)
+    /// <summary>The bases of a file (T151): the base entries of the coverage that carry a place.</summary>
+    public static IReadOnlyList<Paldium.Core.Owned.BaseSite> BasesOf(IEnumerable<BridgeCoverage> coverage) => coverage
+        .Where(c => c.Kind == "Base" && !string.IsNullOrEmpty(c.BoxId) && c.X != null && c.Y != null)
+        .Select(c => new Paldium.Core.Owned.BaseSite(c.BoxId!, c.X!.Value, c.Y!.Value, c.Range,
+            string.IsNullOrWhiteSpace(c.OwnerName) || IsPlaceholderBaseName(c.OwnerName) ? null : c.OwnerName, c.Capacity))
+        .ToList();
+
+    private IReadOnlyList<OwnedPal> ReadCore(BridgeFile bridge, string file, string sourceId, List<Paldium.Core.Owned.BaseSite>? bases = null)
     {
         // The Pals of every stored page of this world: pages of earlier sessions stay until they are read again.
         var boxNames = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -123,6 +134,7 @@ public sealed class ModBridgeReader : IModBridgeReader
         {
             var merged = _pages.Merge(sourceId, bridge);
             bridge = bridge with { Pals = merged.Pals };
+            bases?.AddRange(BasesOf(merged.Coverage));
             // The name of the owner of every Dimensional Pal Storage: read from the game, or chosen by the user, or the name of the player with that uid.
             foreach (var coverage in merged.Coverage.Where(c => c.Kind == "DimensionalStorage" && !string.IsNullOrEmpty(c.BoxId)))
             {
@@ -140,6 +152,7 @@ public sealed class ModBridgeReader : IModBridgeReader
 
         foreach (var pal in bridge.Pals)
         {
+            var isAlpha = pal.CharacterId.TrimStart().StartsWith("BOSS_", StringComparison.OrdinalIgnoreCase);
             // The game's row names ("BOSS_Anubis") map to the species.
             if (!_data.TryNormalizePalId(pal.CharacterId, out var species))
             {
@@ -179,7 +192,8 @@ public sealed class ModBridgeReader : IModBridgeReader
                 SourceId: sourceId,
                 SeenAtUtc: palSeen,
                 IsEdited: false,
-                IsExcluded: false));
+                IsExcluded: false,
+                IsAlpha: isAlpha));
         }
 
         return result;
@@ -190,7 +204,7 @@ public sealed class ModBridgeReader : IModBridgeReader
 
     private IReadOnlyList<Paldium.Core.Owned.PlayerCapture> ReadCapturesCore(BridgeFile bridge, string file)
     {
-        if ((bridge.Capture == null && bridge.Relics == null) || NormalizeOwner(bridge.PlayerUid) is not { } uid) return [];
+        if ((bridge.Capture == null && bridge.Relics == null && bridge.Obtained == null) || NormalizeOwner(bridge.PlayerUid) is not { } uid) return [];
         Dictionary<string, Paldium.Core.Owned.RelicCount>? relics = null;
         if (bridge.Relics != null)
         {
@@ -204,12 +218,36 @@ public sealed class ModBridgeReader : IModBridgeReader
             }
         }
         var record = PlayerCaptureReader.Normalize(
-            new Paldium.Core.Owned.CaptureRecord(bridge.Capture?.Bonus ?? new Dictionary<string, int>(), bridge.Capture?.Count ?? new Dictionary<string, int>()) { Relics = relics }, _data, _log);
-        if (bridge.Capture == null && (relics == null || relics.Count == 0)) return [];
+            new Paldium.Core.Owned.CaptureRecord(bridge.Capture?.Bonus ?? new Dictionary<string, int>(), bridge.Capture?.Count ?? new Dictionary<string, int>())
+            {
+                Relics = relics,
+                Progress = ProgressOf(bridge.Obtained),
+            }, _data, _log);
+        if (bridge.Capture == null && (relics == null || relics.Count == 0) && record.Progress == null) return [];
         var utcNow = DateTimeOffset.UtcNow;
         var seen = bridge.ExportedAtUtc ?? new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
         if (seen > utcNow) seen = utcNow;
-        return [new Paldium.Core.Owned.PlayerCapture(uid, record, seen)];
+        // The mod runs on this computer: its player is "me" when nobody said otherwise.
+        return [new Paldium.Core.Owned.PlayerCapture(uid, record, seen, IsLocal: true)];
+    }
+
+    private static Paldium.Core.Owned.WorldProgress? ProgressOf(BridgeObtained? obtained)
+    {
+        if (obtained == null) return null;
+        static IEnumerable<string> Values(IReadOnlyList<string>? list) => (list ?? []).Where(v => !string.IsNullOrWhiteSpace(v));
+        var progress = new Paldium.Core.Owned.WorldProgress
+        {
+            Objects = Paldium.Core.Owned.WorldProgress.Set(Values(obtained.Relic).Concat(Values(obtained.Pickup)).Concat(Values(obtained.FastTravel))
+                .Select(Paldium.Core.Owned.CaptureRecord.ObjectKey)),
+            Notes = Paldium.Core.Owned.WorldProgress.Set(Values(obtained.Note)),
+            Towers = Paldium.Core.Owned.WorldProgress.Set(Values(obtained.TowerBoss)),
+            Quests = obtained.QuestsActive == null && obtained.QuestsDone == null ? null : new Paldium.Core.Owned.QuestProgress(
+                (obtained.QuestsActive ?? []).Where(q => !string.IsNullOrWhiteSpace(q.Id)).GroupBy(q => q.Id!, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => Math.Max(0, g.Last().Block ?? 0), StringComparer.OrdinalIgnoreCase),
+                Paldium.Core.Owned.WorldProgress.Set(Values(obtained.QuestsDone))),
+            PredatorDefeats = obtained.PredatorDefeats,
+        };
+        return progress.IsEmpty ? null : progress;
     }
 
     /// <summary>The box a bridge location is in: the storage box id or owner (several Dimensional Pal Storages), or the base id; null for the Pal Box and the party.</summary>

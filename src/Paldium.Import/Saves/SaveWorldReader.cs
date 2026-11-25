@@ -149,7 +149,8 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
         {
             var worldName = TryReadMetaName(save);
             var levelData = save.Level.ReadCharacterData(PalDB.LoadEmbedded(), GameSettings.Defaults, save.Players, null);
-            snapshot = MapWorld(worldId, worldName, seenAt, levelData);
+            var alphaIds = SaveAlphaReader.ReadWorldAlphaIds(save, _log);
+            snapshot = MapWorld(worldId, worldName, seenAt, levelData, alphaIds);
             snapshot = snapshot with { Captures = ReadCaptures(copy, snapshot.Players, save.Players) };
         }
 
@@ -233,7 +234,7 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
     public static string? StorageOwnerId(string? containerId) =>
         containerId != null && containerId.EndsWith("_DPS", StringComparison.OrdinalIgnoreCase) && containerId.Length > 4 ? containerId[..^4] : null;
 
-    private WorldSnapshot MapWorld(string worldId, string? worldName, DateTimeOffset seenAt, LevelSaveData data)
+    private WorldSnapshot MapWorld(string worldId, string? worldName, DateTimeOffset seenAt, LevelSaveData data, IReadOnlySet<string> alphaIds)
     {
         var mapping = new PalCalcMapping(_data);
         var players = data.Players.Select(p => new PlayerInfo(p.PlayerId, p.Name, p.Level)).ToList();
@@ -276,12 +277,21 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
             // The owner of a Dimensional Pal Storage is in its container id ("<player id>_DPS"), not in the Pal's own owner (the player who caught it).
             if (pal.Location.Kind == LocationKind.DimensionalStorage && StorageOwnerId(pal.Location.ContainerId) is { } storageOwner)
                 pal = pal with { Location = pal.Location with { BaseName = playerNames.GetValueOrDefault(storageOwner) } };
-            pals.Add(pal with { IsOnExpedition = instance.IsOnExpedition });
+            var isAlpha = !string.IsNullOrEmpty(pal.InstanceId) && alphaIds.Contains(pal.InstanceId);
+            pals.Add(pal with { IsOnExpedition = instance.IsOnExpedition, IsAlpha = isAlpha });
             if (instance.IsOnExpedition) expedition.Add(uid);
         }
 
+        // A save knows where each base is (its radius and name are not read by the save library).
+        var bases = (data.Bases ?? []).Where(b => b.Position != null && !string.IsNullOrEmpty(b.Id)).Select(b =>
+            new Paldium.Core.Owned.BaseSite(b.Id, b.Position.X, b.Position.Y)
+            {
+                Members = data.Guilds.FirstOrDefault(g => string.Equals(g.Id, b.OwnerGuildId, StringComparison.OrdinalIgnoreCase))?.MemberIds ?? [],
+            }).ToList();
+
         return new WorldSnapshot(worldId, worldName, players, guilds, pals, DateTimeOffset.UtcNow)
         {
+            Bases = bases,
             ExpeditionPalUids = expedition,
             SkippedUnknownSpecies = mapping.SkippedUnknownSpecies,
             DroppedUnknownPassives = mapping.DroppedUnknownPassives,
@@ -301,8 +311,10 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
         var copy = Path.Combine(temp.Path, GlobalStorageFileName);
         CopyFile(path, copy);
 
-        var storage = new GlobalPalStorageSaveFile(new SingleFileSource(copy)).ReadPals("GLOBAL_PAL_STORAGE");
+        var gpsFile = new GlobalPalStorageSaveFile(new SingleFileSource(copy));
+        var storage = gpsFile.ReadPals("GLOBAL_PAL_STORAGE");
         if (storage == null) return [];
+        var alphaIds = SaveAlphaReader.ReadGlobalStorageAlphaIds(gpsFile, _log);
 
         // The Global Palbox belongs to the account, not to a world: no owner, so it counts in every ownership scope.
         var mapping = new PalCalcMapping(_data);
@@ -311,7 +323,11 @@ public sealed partial class SaveWorldReader : ISaveWorldReader
         {
             var pal = mapping.Map(instance, $"gps:{instance.InstanceId}", PalSourceKind.GlobalStorage,
                 "gps:" + Path.GetFileName(Path.TrimEndingDirectorySeparator(accountFolderPath)), seenAt, owner: null, baseId: null);
-            if (pal != null) pals.Add(pal);
+            if (pal != null)
+            {
+                var isAlpha = !string.IsNullOrEmpty(pal.InstanceId) && alphaIds.Contains(pal.InstanceId);
+                pals.Add(pal with { IsAlpha = isAlpha });
+            }
         }
 
         _log?.Invoke($"Read Global Palbox: {pals.Count} Pals in {stopwatch.ElapsedMilliseconds} ms" +

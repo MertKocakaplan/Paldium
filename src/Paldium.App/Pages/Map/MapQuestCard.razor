@@ -1,0 +1,118 @@
+@using Microsoft.JSInterop
+@inherits LocalizedComponentBase
+@inject IJSRuntime JS
+@inject MudBlazor.ISnackbar Snackbar
+
+@* The card of a quest (T145): name, description, giver, steps, rewards and where it is; with the player's record its state and step (T150). *@
+<section class="wm-card" aria-label="@Quest.Names.Get(Lang)">
+    <div class="th">
+        <img class="gi" src="gamedata/icons/map/quest_giver.png" alt="" />
+        <div>
+            <h2>@Quest.Names.Get(Lang)</h2>
+            <div class="k">@L["Map.Quest." + (Quest.IsMain ? "Main" : "Sub")]</div>
+        </div>
+        <button type="button" class="btn2 x" @onclick="OnClose"><Icon Name="x" Size="14" /><span>@L["Map.Close"]</span></button>
+    </div>
+
+    @if (Quest.Description is { } description)
+    {
+        <p class="wm-desc">@description.Get(Lang)</p>
+    }
+
+    @if (WorldMapModel.Giver(Quest, Lang) is { } giver)
+    {
+        <div class="row"><span class="m">@L["Map.Quest.Giver"]</span><span>@giver</span></div>
+    }
+    else if (!Quest.IsMain)
+    {
+        <div class="row"><span class="m">@L["Map.Quest.GiverUnknown"]</span></div>
+    }
+
+    @if (WorldMapModel.Status(Quest.Id, Progress) is var status && status == QuestStatus.Done)
+    {
+        <div class="row"><span class="wm-done"><Icon Name="check" Size="14" />@L["Map.Quest.Done"]</span></div>
+    }
+    else if (status == QuestStatus.Active)
+    {
+        <div class="row"><span class="wm-tag on">@L["Map.Quest.Active", WorldMapModel.Step(Quest, Progress), Math.Max(1, Quest.Blocks)]</span></div>
+    }
+
+    @if (Quest.Steps.Count > 0)
+    {
+        var current = WorldMapModel.CurrentStep(Quest, Progress);
+        <div class="wm-sec">
+            <span class="m">@L["Map.Quest.Steps"]</span>
+            <ol class="wm-steps">
+                @foreach (var step in Quest.Steps)
+                {
+                    <li class="@(step == current ? "cur" : "")" aria-current="@(step == current ? "step" : null)">@step.Names.Get(Lang)</li>
+                }
+            </ol>
+        </div>
+    }
+
+    @if (Quest.Rewards.Count > 0 || Quest.Exp > 0)
+    {
+        <div class="wm-sec">
+            <span class="m">@L["Map.Quest.Rewards"]</span>
+            <ul class="wm-items">
+                @foreach (var stack in Quest.Rewards)
+                {
+                    var item = Data.TryGetItem(stack.ItemId);
+                    <li>
+                        @if (item?.Icon is { } icon) { <img src="@("gamedata/" + icon)" alt="" /> }
+                        <span>@(item?.Names.Get(Lang) ?? stack.ItemId)</span>
+                        <span class="num">× @Number(stack.Count)</span>
+                    </li>
+                }
+                @if (Quest.Exp > 0)
+                {
+                    <li><span class="xp" aria-hidden="true">XP</span><span>@L["Map.Quest.Exp"]</span><span class="num">@Number(Quest.Exp)</span></li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (Places.Count == 0)
+    {
+        <div class="row"><span class="m">@L["Map.Quest.NoPlace"]</span></div>
+    }
+    @foreach (var place in Places)
+    {
+        <div class="row">
+            @if (place.RegionId != null && Data.TryGetRegion(place.RegionId) is { } region) { <span>@region.Names.Get(Lang)</span> }
+            else { <span>@Term(place.Map == WorldMapModel.Tree ? "Map.Tree" : "Map.MainMap")</span> }
+            @if (WorldMapModel.Coordinates(place.MapX, place.MapY, Lang) is { } coordinates)
+            {
+                <span class="num">@coordinates</span>
+                <button type="button" class="lnk" @onclick="() => CopyAsync(coordinates)">@L["Map.Copy"]</button>
+            }
+            <button type="button" class="lnk" @onclick="() => OnGo.InvokeAsync(place.Id)">@L[place.Category == "quest_giver" ? "Map.Quest.ShowGiver" : "Map.Quest.Show"]</button>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public MapQuest Quest { get; set; } = default!;
+    [Parameter, EditorRequired] public MapData Data { get; set; } = default!;
+    [Parameter] public Paldium.Core.Owned.QuestProgress? Progress { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Shows one of the quest's markers on the map.</summary>
+    [Parameter] public EventCallback<string> OnGo { get; set; }
+
+    // One row per place: the giver often stands where the quest's own marker is (the giver comes first and is kept).
+    private IReadOnlyList<MapMarker> Places => WorldMapModel.QuestPlaces(Quest, Data);
+
+    private string Number(int value) => value.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo(Lang));
+
+    private async Task CopyAsync(string text)
+    {
+        try
+        {
+            if (await JS.InvokeAsync<bool>("pbCopyText", text)) Snackbar.Add(L["Map.Copied"].Value, MudBlazor.Severity.Normal);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+}

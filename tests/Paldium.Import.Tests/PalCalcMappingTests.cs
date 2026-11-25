@@ -151,4 +151,15 @@ public class PalCalcMappingTests
             CultureInfo.CurrentCulture = previous;
         }
     }
+
+    [Theory]
+    [InlineData("BOSS_Anubis", true)]
+    [InlineData("boss_CowPal", true)]
+    [InlineData("Anubis", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void SaveAlphaReader_DetectsBossPrefix(string? characterId, bool expected)
+    {
+        Assert.Equal(expected, SaveAlphaReader.IsBossCharacterId(characterId));
+    }
 }

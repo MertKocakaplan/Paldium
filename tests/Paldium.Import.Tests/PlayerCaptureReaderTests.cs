@@ -132,12 +132,114 @@ public class PlayerCaptureReaderTests : IDisposable
               "relics": { "CapturePower": null, "EPalRelicType::JumpPower": { "collected": 4 }, "JumpPower": { "have": 1, "collected": 5 } } }
             """);
 
-        var (pals, captures) = new ModBridgeReader(TestSupport.GameData).ReadAll(file, "s");
+        var (pals, captures, _) = new ModBridgeReader(TestSupport.GameData).ReadAll(file, "s");
         Assert.Empty(pals);
         var capture = Assert.Single(captures);
         Assert.True(capture.ReadAtUtc <= DateTimeOffset.UtcNow.AddSeconds(1));
         Assert.Equal(new RelicCount(1, 5), capture.Record.Relics!["JumpPower"]);
         Assert.False(capture.Record.Relics.ContainsKey("CapturePower"));
+    }
+
+    // ---- collected objects (T144) -----------------------------------------------------------------------------
+
+    private static PlayerCapture Player(string id, WorldProgress progress, int minutes = 0, bool local = false) =>
+        new(id, CaptureRecord.Empty with { Progress = progress }, DateTimeOffset.UnixEpoch.AddMinutes(minutes), local);
+
+    private static WorldProgress Taken(params string[] ids) => new() { Objects = WorldProgress.Set(ids.Select(CaptureRecord.ObjectKey)) };
+
+    [Fact]
+    public void Progress_IsThatOfTheChosenSourcesAndPlayer()
+    {
+        var store = new CaptureProgressStore();
+        store.Publish("save", [Player("p1", Taken("aaaa-bbbb")), Player("p2", Taken("CCCC"))]);
+        store.Publish("older", [Player("p1", Taken("DDDD"))]);
+        store.Publish("elsewhere", [Player("p1", Taken("EEEE"))]);
+
+        Assert.Equal(["AAAABBBB", "DDDD"], store.Progress(["save", "older"], "p1")!.Objects.Order());
+        Assert.Null(store.Progress(["save"], null)); // several players and nobody said which one they are
+        Assert.Equal(["DDDD"], store.Progress(["older"], null)!.Objects);
+        Assert.Null(store.Progress([], "p1"));
+        Assert.Equal(["AAAABBBB", "DDDD", "EEEE"], store.Resolve("p1").Record!.Progress!.Objects.Order());
+    }
+
+    [Fact]
+    public void WithoutAChosenPlayer_TheModsPlayerIsMe()
+    {
+        var store = new CaptureProgressStore();
+        store.Publish("save", [Player("host", Taken("AAAA")), Player("me", Taken("BBBB"))]);
+        store.Publish("mod", [Player("ME", Taken("CCCC"), minutes: 5, local: true)]);
+
+        Assert.Equal(["BBBB", "CCCC"], store.Progress(["save", "mod"], null)!.Objects.Order());
+        Assert.Equal(["AAAA"], store.Progress(["save", "mod"], "host")!.Objects);
+    }
+
+    [Fact]
+    public void Quests_AreTheNewestSources_AndAQuestDoneAnywhereIsNotActive()
+    {
+        static WorldProgress Quests(string[] done, params (string Id, int Block)[] active) => new()
+        {
+            Quests = new QuestProgress(active.ToDictionary(a => a.Id, a => a.Block), WorldProgress.Set(done)),
+        };
+        var store = new CaptureProgressStore();
+        store.Publish("save", [Player("p", Quests(["Sub_A"], ("Sub_B", 0), ("Sub_C", 1)))]);
+        store.Publish("mod", [Player("p", Quests(["Sub_B"], ("Sub_C", 2), ("Sub_A", 0)), minutes: 5)]);
+
+        var quests = store.Progress(["save", "mod"], null)!.Quests!;
+
+        Assert.Equal(["Sub_A", "Sub_B"], quests.Done.Order());
+        var active = Assert.Single(quests.Active);
+        Assert.Equal(("Sub_C", 2), (active.Key, active.Value));
+    }
+
+    [Fact]
+    public void Bases_AreOneEach_TheModsPlaceWins_AndOtherGuildsAreLeftOut()
+    {
+        var store = new CaptureProgressStore();
+        store.Publish("save", [Player("me", Taken("AAAA")), Player("other", Taken("BBBB"))]);
+        store.PublishBases("save", [new BaseSite("aaaa-0001", 10, 20) { Members = ["me"] }, new BaseSite("aaaa-0002", 5, 5) { Members = ["other"] }]);
+        store.PublishBases("mod", [new BaseSite("AAAA0001", 11, 21, 3500, "Home", 15)]);
+
+        var site = Assert.Single(store.Bases(["save", "mod"], "me"));
+
+        Assert.Equal("AAAA0001", site.Id);
+        Assert.Equal((11.0, 21.0, 3500.0), (site.X, site.Y, site.Range!.Value));
+        Assert.Equal(("Home", 15), (site.Name, site.Capacity!.Value));
+        Assert.Equal(2, store.Bases(["save"], null).Count); // nobody knows who "me" is: every base of the world
+        store.Remove("mod");
+        Assert.Null(Assert.Single(store.Bases(["save", "mod"], "me")).Range);
+    }
+
+    [RealSaveFact(TestSupport.WorldVariable)]
+    public void RealPlayers_QuestsJournalsAndBossKeys_AreTheOnesOfTheMap()
+    {
+        var map = Paldium.Core.Map.MapDataLoader.Load(Path.Combine(TestSupport.RepoRoot, "data"));
+        var progress = Directory.GetFiles(Path.Combine(TestSupport.WorldFolder!, "Players"), "*.sav")
+            .Where(f => !f.EndsWith("_dps.sav", StringComparison.OrdinalIgnoreCase))
+            .Select(f => PlayerCaptureReader.Read(f, TestSupport.GameData)?.Progress).OfType<WorldProgress>().ToList();
+        var quests = progress.Where(p => p.Quests != null).SelectMany(p => p.Quests!.Done.Concat(p.Quests.Active.Keys)).ToList();
+        var notes = progress.SelectMany(p => p.Notes).ToList();
+
+        Assert.Contains(quests, q => map.TryGetQuest(q) != null);
+        var rows = map.Points.Where(p => p.Category == "journal").Select(p => p.Extra!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.True(notes.Count(rows.Contains) >= notes.Count * 0.5, $"{notes.Count(rows.Contains)} of {notes.Count} journal keys are markers");
+        var keys = map.Points.Where(p => p.Category == "boss_tower").Select(p => p.RefId!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.All(progress.SelectMany(p => p.Towers), t => Assert.Contains(t, keys));
+    }
+
+    [RealSaveFact(TestSupport.WorldVariable)]
+    public void RealPlayers_CollectedObjects_MatchTheEffigyAndTowerMarkers()
+    {
+        var map = Paldium.Core.Map.MapDataLoader.Load(Path.Combine(TestSupport.RepoRoot, "data"));
+        var markers = map.Points.Where(p => p.Category is "effigy" or "pickup_tower" or "fast_travel" or "watchtower")
+            .SelectMany(p => new[] { p.Id, p.Category == "pickup_tower" ? p.Extra! : p.Id })
+            .Select(CaptureRecord.ObjectKey).ToHashSet();
+        var files = Directory.GetFiles(Path.Combine(TestSupport.WorldFolder!, "Players"), "*.sav")
+            .Where(f => !f.EndsWith("_dps.sav", StringComparison.OrdinalIgnoreCase)).ToList();
+        var taken = files.SelectMany(f => PlayerCaptureReader.Read(f, TestSupport.GameData)?.Progress?.Objects ?? WorldProgress.Set([])).ToList();
+
+        Assert.NotEmpty(taken);
+        // Objects of a later game build may be missing; most keys must be markers, else the save spells them differently.
+        Assert.True(taken.Count(markers.Contains) >= taken.Count * 0.9, $"{taken.Count(markers.Contains)} of {taken.Count} keys are markers");
     }
 
     // ---- real saves (skipped unless PALDIUM_TEST_WORLD is set) ------------------------------------------------

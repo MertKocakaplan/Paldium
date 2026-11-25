@@ -41,18 +41,23 @@
     }
     else
     {
-        var hasPlot = _dots.Count > 0;
+        var dots = DotsOf(_map);
+        var hasPlot = dots.Count > 0;
+        @if (_maps.Count > 1)
+        {
+            <Segmented TValue="string" Mini="true" Class="mapsel" Items="@MapItems()" Value="@_map" ValueChanged="ChooseMap" AriaLabel="@L["Map.MapChoice"].Value" />
+        }
         <div class="where">
             @if (hasPlot)
             {
-                var frame = MapFraming.Compute(_dots);
-                <button type="button" class="mapv" @ref="_preview" aria-label="@L["Detail.Map.OpenAria", _dots.Count(d => !d.Alpha), _dots.Count(d => d.Alpha)].Value" @onclick="OpenViewer">
-                    @if (HasMapImage)
+                var frame = MapFraming.Compute(dots);
+                <button type="button" class="mapv" @ref="_preview" aria-label="@L["Detail.Map.OpenAria", dots.Count(d => !d.Alpha), dots.Count(d => d.Alpha)].Value" @onclick="OpenViewer">
+                    @if (HasPicture(_map))
                     {
-                        <img class="mimg" src="gamedata/map/world-map.png" alt="" style="@frame.ImageStyle" />
+                        <img class="mimg" src="@("gamedata/map/" + PictureFile(_map))" alt="" style="@frame.ImageStyle" />
                     }
                     <span class="pts">
-                        @foreach (var dot in _dots)
+                        @foreach (var dot in dots)
                         {
                             <i class="@(dot.Alpha ? "a" : dot.Night ? "w n" : "w")" style="@frame.PointStyle(dot)"></i>
                         }
@@ -68,17 +73,23 @@
                 @foreach (var group in _wild)
                 {
                     <li title="@WildTitle(group)">
-                        <span class="@(group.OnMain ? "mk w" : "mk o")" aria-hidden="true"></span>
+                        <span class="@(group.MapId != null ? "mk w" : "mk o")" aria-hidden="true"></span>
                         <span class="k">@Terms.ObtainMethod("Wild")</span>
-                        <span class="n">
-                            @(group.HasName ? new MarkupString(WebUtility.HtmlEncode(group.Region)) : Raw(group.Region))
-                            @if (group.Night)
+                        <span class="@(group.MapId == ObtainMaps.Tree ? "n tagged" : "n")">
+                            <span class="nm9">
+                                @(group.HasName ? new MarkupString(WebUtility.HtmlEncode(group.Region)) : Raw(group.Region))
+                                @if (group.Night)
+                                {
+                                    <text> · </text><span class="night"><img src="gamedata/icons/misc/Night.png" alt="" width="14" height="14" />@L["Obtain.Night"]</span>
+                                }
+                                @if (group.Aura)
+                                {
+                                    <text> · @L["Obtain.Aura"]</text>
+                                }
+                            </span>
+                            @if (group.MapId == ObtainMaps.Tree)
                             {
-                                <text> · </text><span class="night"><img src="gamedata/icons/misc/Night.png" alt="" width="14" height="14" />@L["Obtain.Night"]</span>
-                            }
-                            @if (group.Aura)
-                            {
-                                <text> · @L["Obtain.Aura"]</text>
+                                <span class="maptag">@Term("Map.Tree")</span>
                             }
                         </span>
                         <span class="m">@Levels(group.LevelMin, group.LevelMax) · @L["Obtain.AreaCount", group.Areas]</span>
@@ -88,7 +99,7 @@
                 @foreach (var boss in obtain.Bosses.OrderBy(b => b.Kind, StringComparer.Ordinal).ThenBy(b => b.Level))
                 {
                     <li title="@BossPosition(boss.Point)">
-                        <span class="@(boss.Point.Map == "MainMap" ? (boss.Kind == "Alpha" ? "mk a" : "mk w") : "mk o")" aria-hidden="true"></span>
+                        <span class="@(boss.Point.Map is ObtainMaps.Main or ObtainMaps.Tree ? (boss.Kind == "Alpha" ? "mk a" : "mk w") : "mk o")" aria-hidden="true"></span>
                         <span class="k">@(boss.Kind == "Alpha" ? Term("Alpha") : Terms.ObtainMethod("Imprisoned"))</span>
                         <span class="n">@BossPosition(boss.Point)</span>
                         <span class="m">@Levels(boss.Level, boss.Level)</span>
@@ -178,7 +189,7 @@
 
         @if (hasPlot)
         {
-            <p class="h">@L[HasMapImage ? "Detail.PlotHintMap" : "Detail.PlotHint"]</p>
+            <p class="h">@L[HasPicture(_map) ? "Detail.PlotHintMap" : "Detail.PlotHint"]</p>
         }
         @if (!obtain.Methods.Any(m => GameData.NonBreedingMethods.Contains(m)))
         {
@@ -189,25 +200,15 @@
 
 @if (_viewerOpen)
 {
-    <MapViewer Pal="@Pal" Places="@_places" HasImage="@HasMapImage" HasLargeImage="@HasLargeImage" OnClose="CloseViewerAsync" />
+    <MapViewer Pal="@Pal" Places="@_places" InitialMap="@_map" OnClose="CloseViewerAsync" />
 }
 
 @code {
-    // DT_WorldMapUIData landscape bounds used by Tools/Paldium.DataBuilder/MapTransform.cs.
-    // The picture of the main map (data/map/world-map.png) when the bundle has it; without it the preview and the viewer show the dots only.
-    private static readonly bool HasMapImage =
-        File.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot", "gamedata", "map", "world-map.png"));
-
-    // The 4096 px picture for the viewer above x2 (T104).
-    private static readonly bool HasLargeImage =
-        File.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot", "gamedata", "map", "world-map-large.png"));
-
-    private sealed record WildGroup(string Region, bool HasName, int LevelMin, int LevelMax, bool Night, bool Aura, int Areas, bool OnMain, IReadOnlyList<MapPoint> Points);
-
     private List<WildGroup> _wild = [];
-    private List<MapDot> _dots = [];
+    private readonly Dictionary<string, List<MapDot>> _dots = new(StringComparer.Ordinal);
     private List<MapPlace> _places = [];
-    private int _totalMainMapPoints;
+    private IReadOnlyList<string> _maps = [];
+    private string _map = ObtainMaps.Main;
     private string? _loadedFor;
     private string? _loadedLang;
     private bool _viewerOpen;
@@ -215,74 +216,65 @@
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    private ObtainPlaces Text => new(L, Terms, Lang);
+
+    private string Levels(int min, int max) => Text.Levels(min, max);
+
+    private string BossPosition(MapPoint point) => Text.BossPosition(point);
+
+    private static string Plain(MarkupString markup) => ObtainPlaces.Plain(markup);
+
     [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
 
     protected override void OnParametersSet()
     {
         if (_loadedFor == Pal.Id && _loadedLang == Lang) return;
-        if (_loadedFor != Pal.Id) _viewerOpen = false;
+        var newPal = _loadedFor != Pal.Id;
+        if (newPal) _viewerOpen = false;
         _loadedFor = Pal.Id;
         _loadedLang = Lang;
 
         var obtain = Pal.Obtain;
-        _wild = (obtain?.Wild ?? [])
-            .GroupBy(w => (Region: RegionName(w), HasName: w.RegionNames != null || L[$"Obtain.Region.{w.Region}"] is { ResourceNotFound: false }, w.LevelMin, w.LevelMax, w.Night, w.WorldTreeAura))
-            .Select(g => new WildGroup(g.Key.Region, g.Key.HasName, g.Key.LevelMin, g.Key.LevelMax, g.Key.Night, g.Key.WorldTreeAura,
-                g.Select(w => w.Spawner).Distinct(StringComparer.Ordinal).Count(),
-                g.Any(w => w.Points.Any(pt => string.Equals(pt.Map, "MainMap", StringComparison.Ordinal))),
-                g.SelectMany(w => w.Points).Where(pt => string.Equals(pt.Map, "MainMap", StringComparison.Ordinal)).ToList()))
-            .OrderBy(g => g.Region, StringComparer.Create(CultureInfo.GetCultureInfo(Lang), ignoreCase: true))
-            .ThenBy(g => g.LevelMin)
-            .ToList();
+        _wild = Text.Wild(obtain);
 
         BuildMapData(obtain);
+        // The choice is not remembered: another species starts on its own default map.
+        if (newPal || !_maps.Contains(_map)) _map = obtain == null ? ObtainMaps.Main : ObtainMaps.Default(obtain);
     }
 
     // Every wild spawn area of the species is a night-only one (obtain.wild[].night): the title says so (T116).
     private bool NightOnly => _wild.Count > 0 && _wild.All(g => g.Night);   // the same rule as WildDots.AllNight, on the grouped areas
 
-    private static MapDot DotOf(MapPoint pt, bool alpha, bool night = false)
-    {
-        var (left, top) = WorldMapProjection.ToFraction(pt.X, pt.Y);
-        return new MapDot(left, top, pt.Radius / (WorldMapProjection.MaxY - WorldMapProjection.MinY), alpha, pt.MapX, pt.MapY, night);
-    }
+    private static string PictureFile(string map) => map == ObtainMaps.Tree ? "tree-map.png" : "world-map.png";
 
-    // The preview shows every spawn area once (points close together share a dot); the viewer gets the places with all their points.
+    // The picture of a map when the bundle has it; without it the preview shows the dots only.
+    private static bool HasPicture(string map) =>
+        File.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot", "gamedata", "map", PictureFile(map)));
+
+    private List<MapDot> DotsOf(string map) => _dots.TryGetValue(map, out var dots) ? dots : [];
+
+    private IReadOnlyList<SegmentedItem<string>> MapItems() => _maps.Select(m => new SegmentedItem<string>(m,
+        L["Detail.MapAreas", Term(m == ObtainMaps.Tree ? "Map.Tree" : "Map.MainMap"), ObtainMaps.AreaCount(Pal.Obtain!, m)].Value, IsWord: true)).ToList();
+
+    private void ChooseMap(string map) => _map = map;
+
+    // The preview shows every spawn area of a map once (points close together share a dot); the viewer gets the places with all their points.
     private void BuildMapData(ObtainInfo? obtain)
     {
-        _dots = [];
+        _dots.Clear();
         _places = [];
-        _totalMainMapPoints = 0;
+        _maps = [];
         if (obtain == null) return;
+        _maps = ObtainMaps.Of(obtain);
 
-        _dots.AddRange(WildDots.Preview(obtain.Wild, (pt, night) => DotOf(pt, alpha: false, night: night), out var wildMainPoints));
-        _totalMainMapPoints += wildMainPoints;
-
-        foreach (var b in obtain.Bosses)
+        foreach (var map in _maps)
         {
-            if (!string.Equals(b.Point.Map, "MainMap", StringComparison.Ordinal)) continue;
-            _totalMainMapPoints++;
-            _dots.Add(DotOf(b.Point, alpha: true));
+            var dots = WildDots.Preview(obtain.Wild, (pt, night) => ObtainMaps.Dot(pt, alpha: false, night: night), out _, map);
+            dots.AddRange(obtain.Bosses.Where(b => b.Point.Map == map).Select(b => ObtainMaps.Dot(b.Point, alpha: true)));
+            _dots[map] = dots;
         }
 
-        foreach (var g in _wild)
-        {
-            var name = g.HasName ? g.Region : Plain(Raw(g.Region));
-            var title = name + (g.Night ? " · " + L["Obtain.Night"].Value : "") + (g.Aura ? " · " + L["Obtain.Aura"].Value : "");
-            var displayName = name + (g.Aura ? " · " + L["Obtain.Aura"].Value : "");
-            var meta = Levels(g.LevelMin, g.LevelMax) + " · " + L["Obtain.AreaCount", g.Areas].Value;
-            _places.Add(new MapPlace("wild", Terms.ObtainMethod("Wild"), displayName, meta, title, g.OnMain,
-                g.Points.Select(pt => DotOf(pt, alpha: false, night: g.Night)).ToList(), g.Night));
-        }
-
-        foreach (var b in obtain.Bosses.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Level))
-        {
-            var onMain = string.Equals(b.Point.Map, "MainMap", StringComparison.Ordinal);
-            var alpha = b.Kind == "Alpha";
-            var name = BossPosition(b.Point);
-            _places.Add(new MapPlace(alpha ? "alpha" : "wild", alpha ? Term("Alpha") : Terms.ObtainMethod("Imprisoned"), name, Levels(b.Level, b.Level), name, onMain,
-                onMain ? [DotOf(b.Point, alpha)] : []));
-        }
+        _places = Text.Places(obtain);
     }
 
     private async Task OpenViewer()
@@ -303,9 +295,6 @@
 
     private string WildTitle(WildGroup group) =>
         group.Region + (group.Night ? " · " + L["Obtain.Night"].Value : "") + (group.Aura ? " · " + L["Obtain.Aura"].Value : "");
-
-    private static string Plain(MarkupString markup) =>
-        WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(markup.Value, "<[^>]+>", ""));
 
     private MarkupString Named(string kind, string raw)
     {
@@ -328,24 +317,6 @@
 
     private static List<MerchantEntry> Merchants(ObtainInfo obtain) =>
         obtain.Merchants.Where(m => !m.Shop.StartsWith("Test_", StringComparison.Ordinal)).ToList();
-
-    private string RegionName(WildSpawn spawn) =>
-        spawn.RegionNames?.Get(Lang) ?? (L[$"Obtain.Region.{spawn.Region}"] is { ResourceNotFound: false } label ? label.Value : spawn.Region);
-
-    private string Levels(int min, int max) =>
-        min == 0 && max == 0
-            ? "-"
-            : min == max
-                ? L["Detail.WildLevelSingle", min].Value
-                : L["Detail.WildLevelRange", min, max].Value;
-
-    private string BossPosition(MapPoint point) => point.Map switch
-    {
-        "MainMap" when point.MapX is { } mx && point.MapY is { } my => L["Detail.MainMapCoords", mx, my].Value,
-        "MainMap" => L["Detail.MainMap"].Value,
-        "Tree" => L["Obtain.TreeMap"].Value,
-        _ => "-",
-    };
 
     private string RankName(string rank) => L["Obtain.Rank" + rank] is { ResourceNotFound: false } text ? text.Value : rank;
 }

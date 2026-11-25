@@ -198,3 +198,30 @@ public sealed record TechnologyUnlock(bool IsBuilding, string Id, LocalizedText 
 public sealed record TechnologyInfo(
     string Id, int Index, int Level, int Cost, bool Ancient, LocalizedText Names, LocalizedText Descriptions, string? IconPath,
     TechnologyRequirement? Requires, IReadOnlyList<TechnologyUnlock> Unlocks);
+
+public sealed record ShopMapPoint(double X, double Y, string? Map, int? MapX, int? MapY, LocalizedText? Names);
+
+public sealed record ShopPlace(string Kind, LocalizedText Names, IReadOnlyList<ShopMapPoint> MapPoints);
+
+public sealed record ShopCurrency(string ItemId, LocalizedText Names, string? IconPath);
+
+public sealed record ShopPoolEntry(string Group, double Weight, double Chance);
+
+public sealed record ShopProduct(
+    string ItemId, LocalizedText Names, string? IconPath, int Price, int PerPurchase, int Stock,
+    bool OncePerPlayer, string? PoolGroup = null, double Chance = 1.0);
+
+public sealed record ShopPal(string PalId, int LevelMin, int LevelMax);
+
+/// <summary>T137: one merchant shop (either an item vendor or a Pal merchant).</summary>
+public sealed record ShopInfo(
+    string Id,
+    string Kind,
+    LocalizedText VendorNames,
+    ShopPlace Place,
+    ShopCurrency Currency,
+    LocalizedText? Condition,
+    IReadOnlyList<ShopPoolEntry> Pool,
+    IReadOnlyList<ShopProduct> Products,
+    int CharacterNum,
+    IReadOnlyList<ShopPal> Pals);

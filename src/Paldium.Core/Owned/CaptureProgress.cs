@@ -11,9 +11,15 @@ public sealed record CaptureRecord(IReadOnlyDictionary<string, int> Bonus, IRead
     /// <summary>The effigies of the player by <c>EPalRelicType</c> name (T133); null when the source has none. A missing type means none known.</summary>
     public IReadOnlyDictionary<string, RelicCount>? Relics { get; init; }
 
+    /// <summary>What the player has taken, opened and done in the world (T144); null when the source says nothing about it.</summary>
+    public WorldProgress? Progress { get; init; }
+
+    /// <summary>One spelling of an object id: a level object instance id without dashes and in capitals.</summary>
+    public static string ObjectKey(string id) => id.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+
     public static CaptureRecord Empty { get; } = new(new Dictionary<string, int>(), new Dictionary<string, int>());
 
-    public bool IsEmpty => Bonus.Count == 0 && Count.Count == 0 && (Relics == null || Relics.Count == 0);
+    public bool IsEmpty => Bonus.Count == 0 && Count.Count == 0 && (Relics == null || Relics.Count == 0) && (Progress == null || Progress.IsEmpty);
 
     /// <summary>The bonus catches of a species, 0 to 5; 0 when the species is not in the record.</summary>
     public int BonusOf(string speciesId) => Bonus.TryGetValue(speciesId, out var n) ? Math.Clamp(n, 0, MaxBonus) : 0;
@@ -28,8 +34,8 @@ public sealed record CaptureRecord(IReadOnlyDictionary<string, int> Bonus, IRead
 /// </summary>
 public sealed record RelicCount(int? Have, int? Collected);
 
-/// <summary>The capture record of one player and when it was read.</summary>
-public sealed record PlayerCapture(string PlayerId, CaptureRecord Record, DateTimeOffset ReadAtUtc);
+/// <summary>The capture record of one player and when it was read. <paramref name="IsLocal"/>: read by the mod, so the player of this computer.</summary>
+public sealed record PlayerCapture(string PlayerId, CaptureRecord Record, DateTimeOffset ReadAtUtc, bool IsLocal = false);
 
 /// <summary>Why the capture column has nothing to show (the table shows "-" and a hint).</summary>
 public enum CaptureAvailability
@@ -45,13 +51,15 @@ public enum CaptureAvailability
 }
 
 /// <summary>
-/// The capture records of the sources (save files of a world, the mod's file), kept in memory: they are read again whenever a source is read.
+/// What the sources know about the players (save files of a world, the mod's file): the capture records and the bases, kept in memory and read
+/// again whenever a source is read.
 /// Raises <see cref="Changed"/> from any thread.
 /// </summary>
 public sealed class CaptureProgressStore
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, IReadOnlyList<PlayerCapture>> _bySource = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyList<BaseSite>> _bases = new(StringComparer.Ordinal);
     private long _version;
 
     public event EventHandler? Changed;
@@ -72,12 +80,26 @@ public sealed class CaptureProgressStore
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Replaces the bases a source gave.</summary>
+    public void PublishBases(string sourceId, IReadOnlyList<BaseSite> bases)
+    {
+        lock (_gate)
+        {
+            if (bases.Count == 0 && !_bases.ContainsKey(sourceId)) return;
+            if (bases.Count == 0) _bases.Remove(sourceId);
+            else _bases[sourceId] = bases;
+            _version++;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Remove(string sourceId)
     {
         bool had;
         lock (_gate)
         {
-            had = _bySource.Remove(sourceId);
+            had = _bySource.Remove(sourceId) | _bases.Remove(sourceId);
             if (had) _version++;
         }
 
@@ -86,6 +108,58 @@ public sealed class CaptureProgressStore
 
     /// <summary>Player ids are compared without dashes and letter case (a save file and the game may write them differently).</summary>
     public static string NormalizeId(string? id) => (id ?? "").Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
+
+    /// <summary>
+    /// The world progress of the player according to the given sources (T144): the named player, else the player the mod reads, else the only
+    /// player there is. Null when those sources say nothing about that player.
+    /// </summary>
+    public WorldProgress? Progress(IReadOnlyCollection<string> sourceIds, string? myPlayerId)
+    {
+        var all = Of(sourceIds);
+        var wanted = Me(all, myPlayerId);
+        return wanted == null ? null : WorldProgress.Merge(all.Where(p => NormalizeId(p.PlayerId) == wanted && p.Record.Progress != null)
+            .OrderByDescending(p => p.ReadAtUtc).Select(p => p.Record.Progress!).ToList());
+    }
+
+    /// <summary>
+    /// The player's bases according to the given sources (T151), one per base: a base of a guild the player is not in is left out. The mod's
+    /// place and range win over the save's.
+    /// </summary>
+    public IReadOnlyList<BaseSite> Bases(IReadOnlyCollection<string> sourceIds, string? myPlayerId)
+    {
+        var me = Me(Of(sourceIds), myPlayerId);
+        List<BaseSite> sites;
+        lock (_gate) sites = _bases.Where(s => sourceIds.Contains(s.Key)).SelectMany(s => s.Value).ToList();
+        return sites.GroupBy(s => CaptureRecord.ObjectKey(s.Id), StringComparer.Ordinal)
+            .Where(g => me == null || g.All(s => s.Members.Count == 0) || g.Any(s => s.Members.Any(m => NormalizeId(m) == me)))
+            .Select(g =>
+            {
+                var best = g.OrderByDescending(s => s.Range.HasValue).First();
+                return best with
+                {
+                    Id = g.Key,
+                    Name = g.Select(s => s.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
+                    Capacity = g.Select(s => s.Capacity).FirstOrDefault(c => c != null),
+                };
+            })
+            .OrderBy(s => s.Id, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private List<PlayerCapture> Of(IReadOnlyCollection<string> sourceIds)
+    {
+        lock (_gate) return _bySource.Where(s => sourceIds.Contains(s.Key)).SelectMany(s => s.Value).ToList();
+    }
+
+    /// <summary>The normalized id of "me" among the records, or null when it cannot be told.</summary>
+    private static string? Me(IReadOnlyList<PlayerCapture> all, string? myPlayerId)
+    {
+        var wanted = NormalizeId(myPlayerId);
+        if (wanted.Length > 0) return wanted;
+        if (all.Where(p => p.IsLocal).OrderByDescending(p => p.ReadAtUtc).FirstOrDefault() is { } local) return NormalizeId(local.PlayerId);
+        var players = all.Select(p => NormalizeId(p.PlayerId)).Distinct(StringComparer.Ordinal).ToList();
+        return players.Count == 1 ? players[0] : null;
+    }
 
     /// <summary>
     /// The record of the player. With <paramref name="myPlayerId"/> the record of that player (the newest when several sources have one); without it
@@ -141,6 +215,7 @@ public sealed class CaptureProgressStore
             }
         }
 
-        return (CaptureAvailability.Available, new CaptureRecord(bonus, count) { Relics = relics });
+        var progress = WorldProgress.Merge(matching.Select(m => m.Record.Progress).OfType<WorldProgress>().ToList());
+        return (CaptureAvailability.Available, new CaptureRecord(bonus, count) { Relics = relics, Progress = progress });
     }
 }

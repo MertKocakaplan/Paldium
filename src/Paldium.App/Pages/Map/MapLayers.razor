@@ -1,0 +1,116 @@
+@inherits LocalizedComponentBase
+
+@* The marker categories of the shown map (screens/map.md "Kategori listesi", T138): groups that fold, a switch per group and per category.
+   The effigy category opens into one switch per type (T142), the predators into one per species (T149). A group with markers that can be done
+   has its "hide" switches (collected, opened, defeated; T144, T148). *@
+<div class="wm-all">
+    <button type="button" class="lnk" @onclick="() => OnSet.InvokeAsync((Layers.Select(l => l.Id).ToList(), true))">@L["Map.ShowAll"]</button>
+    <button type="button" class="lnk" @onclick="() => OnSet.InvokeAsync((Layers.Select(l => l.Id).ToList(), false))">@L["Map.HideAll"]</button>
+</div>
+@foreach (var (group, categories) in WorldMapModel.Groups(Layers.Select(l => l.Category).Distinct()))
+{
+    var open = !Folded.Contains(group);
+    var shown = Layers.Where(l => l.Category.Group == group && Counts.GetValueOrDefault(l.Id) > 0).ToList();
+    var allOn = shown.Count > 0 && shown.All(l => Enabled.Contains(l.Id));
+    <section class="wm-grp">
+        <div class="gh">
+            <button type="button" class="fold" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleFold(group)">
+                <Icon Name="@(open ? "chevron-down" : "chevron-right")" Size="14" />@L["Map.Group." + group]
+            </button>
+            <button type="button" class="all" aria-pressed="@(allOn ? "true" : "false")" disabled="@(shown.Count == 0)"
+                    @onclick="() => OnSet.InvokeAsync((IdsOf(l => l.Category.Group == group), !allOn))">@L["Map.GroupAll"]</button>
+        </div>
+        @if (open)
+        {
+            @foreach (var kind in categories.Select(c => WorldMapModel.KindOf(c.Id)).Where(k => k != MarkKind.None).Distinct())
+            {
+                var hidden = Hidden.Contains(kind);
+                <button type="button" class="wm-switch" role="switch" aria-checked="@(hidden ? "true" : "false")" @onclick="() => OnHide.InvokeAsync((kind, !hidden))">
+                    <span class="sw" aria-hidden="true"></span><span>@L["Map.Hide." + kind]</span>
+                </button>
+            }
+            @foreach (var category in categories)
+            {
+                var name = NameOf(category);
+                var count = Counts.GetValueOrDefault(category.Id);
+                var types = Layers.Where(l => l.Category.Id == category.Id && (l.Relic != null || l.Predator != null)).ToList();
+                var expanded = OpenCategories.Contains(category.Id);
+                var on = count > 0 && Layers.Where(l => l.Category.Id == category.Id && Counts.GetValueOrDefault(l.Id) > 0).All(l => Enabled.Contains(l.Id));
+                <div class="wm-catrow">
+                    <button type="button" class="wm-cat" aria-pressed="@(on ? "true" : "false")" disabled="@(count == 0)"
+                            @onclick="() => OnSet.InvokeAsync((IdsOf(l => l.Category.Id == category.Id), !on))">
+                        <span class="gi" style="@Ring(category)" aria-hidden="true">
+                            @if (category.Icon != null) { <img src="@("gamedata/" + category.Icon)" alt="" /> }
+                            else { @WorldMapModel.Letter(name) }
+                        </span>
+                        <span>@name</span>
+                        <span class="n num">@CountText(category.Id, category.Id)</span>
+                    </button>
+                    @if (types.Count > 0)
+                    {
+                        var label = L[category.Id == WorldMapModel.Predator ? "Map.PredatorTypes" : "Map.EffigyTypes"].Value;
+                        <button type="button" class="wm-more" aria-expanded="@(expanded ? "true" : "false")" aria-label="@label" title="@label" @onclick="() => OnTypesOpen.InvokeAsync(category.Id)">
+                            <Icon Name="@(expanded ? "chevron-down" : "chevron-right")" Size="14" />
+                        </button>
+                    }
+                </div>
+                @if (category.Id == WorldMapModel.Predator && PredatorDefeats is { } defeats)
+                {
+                    <p class="wm-note">@L["Map.PredatorDefeats", defeats]</p>
+                }
+                @if (types.Count > 0 && expanded)
+                {
+                    <div class="wm-types">
+                        @foreach (var layer in types)
+                        {
+                            var number = Counts.GetValueOrDefault(layer.Id);
+                            var lit = number > 0 && Enabled.Contains(layer.Id);
+                            <button type="button" class="wm-cat" aria-pressed="@(lit ? "true" : "false")" disabled="@(number == 0)"
+                                    @onclick="() => OnSet.InvokeAsync((new List<string> { layer.Id }, !lit))">
+                                <span class="gi" style="@Ring(category)" aria-hidden="true">
+                                    @if (layer.Relic?.IconPath is { } icon) { <img src="@("gamedata/" + icon)" alt="" /> }
+                                    else if (layer.Predator != null) { <PalIcon PalId="@layer.Predator.PalId" Size="20" /> }
+                                </span>
+                                <span>@(layer.Relic?.ItemNames.Get(Lang) ?? layer.Predator?.Names.Get(Lang))</span>
+                                <span class="n num">@CountText(layer.Id, category.Id)</span>
+                            </button>
+                        }
+                    </div>
+                }
+            }
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MapLayer> Layers { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlySet<string> Enabled { get; set; } = new HashSet<string>();
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, int> Counts { get; set; } = new Dictionary<string, int>();
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, int> DoneCounts { get; set; } = new Dictionary<string, int>();
+    [Parameter, EditorRequired] public HashSet<string> Folded { get; set; } = [];
+    [Parameter, EditorRequired] public Func<MapCategory, string> NameOf { get; set; } = c => c.Id;
+    [Parameter] public IReadOnlySet<MarkKind> Hidden { get; set; } = new HashSet<MarkKind>();
+
+    /// <summary>The categories whose own switches are listed.</summary>
+    [Parameter] public IReadOnlySet<string> OpenCategories { get; set; } = new HashSet<string>();
+    [Parameter] public int? PredatorDefeats { get; set; }
+
+    /// <summary>Switches the given layers on or off.</summary>
+    [Parameter] public EventCallback<(List<string> Ids, bool On)> OnSet { get; set; }
+    [Parameter] public EventCallback<(MarkKind Kind, bool Hide)> OnHide { get; set; }
+    [Parameter] public EventCallback<string> OnTypesOpen { get; set; }
+
+    private List<string> IdsOf(Func<MapLayer, bool> match) => Layers.Where(match).Select(l => l.Id).ToList();
+
+    private static string Ring(MapCategory category) => "box-shadow: inset 0 0 0 1.5px " + WorldMapModel.Color(category.Group);
+
+    // "done/total" for the markers that can be done, the number of markers (or areas) for the rest.
+    private string CountText(string layerId, string categoryId) => WorldMapModel.KindOf(categoryId) != MarkKind.None
+        ? L["Map.CollectedCount", DoneCounts.GetValueOrDefault(layerId), Counts.GetValueOrDefault(layerId)].Value
+        : Counts.GetValueOrDefault(layerId).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private void ToggleFold(string group)
+    {
+        if (!Folded.Remove(group)) Folded.Add(group);
+    }
+}

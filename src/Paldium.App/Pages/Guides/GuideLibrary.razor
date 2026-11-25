@@ -18,7 +18,7 @@
 
     @{
         var refHits = BuildReferenceHits();
-        var anyRefMatch = refHits.ShowRanch || refHits.ShowTransport || refHits.ShowMounts || refHits.ShowEffigies;
+        var anyRefMatch = refHits.ShowRanch || refHits.ShowTransport || refHits.ShowMounts || refHits.ShowEffigies || refHits.ShowShops;
     }
 
     @if (Guides.Count == 0 && !anyRefMatch)
@@ -80,7 +80,11 @@
         bool ShowRanch,
         bool ShowTransport,
         bool ShowMounts,
-        bool ShowEffigies);
+        bool ShowEffigies,
+        int ShopCount,
+        int ShopItemCount,
+        IReadOnlyList<ShopItem> ShopHits,
+        bool ShowShops);
 
     private ReferenceHits BuildReferenceHits()
     {
@@ -89,8 +93,9 @@
         var transport = TransportModel.Rows(Data.Pals);
         var mounts = MountModel.Rows(Data.Pals);
         var effigies = EffigyModel.Rows(Data.Relics);
-        if (pals.Count == 0 && transport.Count == 0 && mounts.Count == 0 && effigies.Count == 0)
-            return new([], 0, [], [], [], [], [], [], false, false, false, false);
+        var shopItems = ShopModel.Items(Data.Shops, GuideLang);
+        if (pals.Count == 0 && transport.Count == 0 && mounts.Count == 0 && effigies.Count == 0 && Data.Shops.Count == 0)
+            return new([], 0, [], [], [], [], [], [], false, false, false, false, 0, 0, [], false);
 
         var q = Paldium.Core.Queries.TextFold.Fold(Query).Trim();
         var itemHits = q.Length == 0 ? [] : RanchModel.SearchItems(items, Query, GuideLang);
@@ -104,15 +109,20 @@
                                               Paldium.Core.Queries.TextFold.Fold(L["Mounts.Title"].Value + " " + L["Mounts.Summary"].Value).Contains(q, StringComparison.Ordinal));
         var showEffigies = effigies.Count > 0 && (q.Length == 0 ||
                                                   Paldium.Core.Queries.TextFold.Fold(L["Effigy.Title"].Value + " " + L["Effigy.Summary"].Value + " " + string.Join(" ", effigies.Select(r => r.Names.Get(GuideLang) + " " + r.ItemNames.Get(GuideLang)))).Contains(q, StringComparison.Ordinal));
-        return new(pals, items.Count, transport, mounts, effigies, itemHits, palHits, mountHits, showRanch, showTransport, showMounts, showEffigies);
+        var shopHits = q.Length == 0 ? [] : ShopModel.SearchItems(shopItems, Query);
+        var showShops = Data.Shops.Count > 0 && (q.Length == 0 || shopHits.Count > 0 || ShopModel.SearchShops(Data.Shops, Query).Count > 0 ||
+                                                 Paldium.Core.Queries.TextFold.Fold(L["Shop.Title"].Value + " " + L["Shop.Summary"].Value).Contains(q, StringComparison.Ordinal));
+        return new(pals, items.Count, transport, mounts, effigies, itemHits, palHits, mountHits, showRanch, showTransport, showMounts, showEffigies,
+            Data.Shops.Count, shopItems.Count, shopHits, showShops);
     }
 
     // The reference group (T109): tables built from the game data, not guides; it has no content files. It shows when the search is empty or
     // matches the Ranch table (an item or Pal name, or "ranch").
     private RenderFragment ReferenceGroup(ReferenceHits hits) => __builder =>
     {
-        var (pals, itemCount, transport, mounts, effigies, itemHits, palHits, mountHits, showRanch, showTransport, showMounts, showEffigies) = hits;
-        if (!showRanch && !showTransport && !showMounts && !showEffigies) return;
+        var (pals, itemCount, transport, mounts, effigies, itemHits, palHits, mountHits, showRanch, showTransport, showMounts, showEffigies,
+            shopCount, shopItemCount, shopHits, showShops) = hits;
+        if (!showRanch && !showTransport && !showMounts && !showEffigies && !showShops) return;
         var art = new[] { "Wool", "Egg", "Milk", "Money", "PalSphere_Mega" };
         <section class="gsec" aria-labelledby="g-reference">
             <div class="gh">
@@ -208,6 +218,29 @@
                             <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Effigy.Open"]</span>
                         </span>
                     </a>
+                }
+                @if (showShops)
+                {
+                    <a class="gcard2" href="guides/tuccarlar">
+                        <span class="art2 items" aria-hidden="true">
+                            @foreach (var id in new[] { "PalSphere", "FireOrgan", "Arrow", "Money", "DogCoin" })
+                            {
+                                <img class="ai" src="@("gamedata/icons/items/" + id + ".png")" alt="" />
+                            }
+                        </span>
+                        <span class="tt">@L["Shop.Title"]</span>
+                        <span class="ss">@L["Shop.Summary"]</span>
+                        <span class="ft">
+                            <span class="num">@L["Shop.Scope", shopCount, shopItemCount]</span>
+                            <span class="tool"><Icon Name="arrow-right" Size="14" />@L["Shop.SearchTool"]</span>
+                        </span>
+                    </a>
+                    @foreach (var hit in shopHits.Take(3))
+                    {
+                        <a class="gcard2 hit9" href="@("guides/tuccarlar?item=" + Uri.EscapeDataString(hit.ItemId))">
+                            <span class="tt">@L["Shop.InHit", hit.Names.Get(GuideLang), hit.Offers.Select(o => o.Shop.Id).Distinct().Count()]</span>
+                        </a>
+                    }
                 }
             </div>
         </section>

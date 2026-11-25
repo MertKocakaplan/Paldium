@@ -45,10 +45,12 @@ public class ModBridgeReaderTests : IDisposable
     }
 
     [Fact]
-    public void BossPrefix_IsMappedToTheSpecies()
+    public void BossPrefix_IsMappedToTheSpecies_AndSetsIsAlpha()
     {
         var pals = NewReader().Read(ExampleFile(), "s");
-        Assert.Contains(pals, p => p.SpeciesId == "Anubis");
+        var anubis = pals.First(p => p.SpeciesId == "Anubis");
+        Assert.True(anubis.IsAlpha);
+        Assert.False(pals[0].IsAlpha);
         Assert.DoesNotContain(pals, p => p.SpeciesId.StartsWith("BOSS_", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -248,11 +250,62 @@ public class ModBridgeReaderTests : IDisposable
     }
 
     [Fact]
+    public void TheObtainedBlock_BecomesTheLocalPlayersProgress_WithOneSpellingOfTheIds()
+    {
+        var file = Write("""
+            { "schemaVersion": 1, "playerUid": "AAAA", "pals": [],
+              "obtained": { "relic": ["0000aaaa-0000-0000-0000-000000000001"], "pickup": ["0000AAAA000000000000000000000002"],
+                "fastTravel": ["0000AAAA000000000000000000000003"], "note": ["Day1-1"], "towerBoss": ["BOSS_BATTLE_NAME_GrassBoss"],
+                "questsActive": [ { "id": "Sub_Zoe02", "block": 1 } ], "questsDone": ["Sub_Farmer01"], "predatorDefeats": 2 } }
+            """);
+
+        var capture = Assert.Single(NewReader().ReadAll(file, "s").Captures);
+
+        Assert.True(capture.IsLocal);
+        var progress = capture.Record.Progress!;
+        Assert.Equal(["0000AAAA000000000000000000000001", "0000AAAA000000000000000000000002", "0000AAAA000000000000000000000003"], progress.Objects.Order());
+        Assert.Contains("day1-1", progress.Notes);
+        Assert.Contains("BOSS_BATTLE_NAME_GrassBoss", progress.Towers);
+        Assert.Equal(1, progress.Quests!.Active["Sub_Zoe02"]);
+        Assert.Contains("Sub_Farmer01", progress.Quests.Done);
+        Assert.Equal(2, progress.PredatorDefeats);
+    }
+
+    [Fact]
+    public void WithoutQuestLists_TheQuestStateIsUnknown()
+    {
+        var file = Write("""{ "schemaVersion": 1, "playerUid": "AAAA", "pals": [], "obtained": { "pickup": [] , "relic": ["AA"] } }""");
+
+        var progress = Assert.Single(NewReader().ReadAll(file, "s").Captures).Record.Progress!;
+
+        Assert.Null(progress.Quests);
+        Assert.Null(progress.PredatorDefeats);
+    }
+
+    [Fact]
+    public void ABaseKeepsItsPlace_AcrossFilesThatDoNotCarryIt()
+    {
+        var reader = new ModBridgeReader(TestSupport.GameData, pages: new BridgePageStore(Path.Combine(_dir, "pages")));
+        static string File(string place) => $$"""
+            { "schemaVersion": 1, "worldId": "W", "playerUid": "AAAA",
+              "pals": [ { "characterId": "CowPal", "instanceId": "11", "location": { "kind": "Base", "page": 0, "slot": 0, "baseId": "B1" } } ],
+              "coverage": [ { "kind": "Base", "boxId": "B1", "pagesRead": [0]{{place}} } ] }
+            """;
+
+        var first = Assert.Single(reader.ReadAll(Write(File(", \"x\": 10, \"y\": 20, \"z\": 1, \"range\": 3500, \"capacity\": 15, \"ownerName\": \"Home\"")), "s").Bases);
+        var later = Assert.Single(reader.ReadAll(Write(File("")), "s").Bases);
+
+        Assert.Equal("B1", first.Id);
+        Assert.Equal((10.0, 20.0, 3500.0, 15, "Home"), (first.X, first.Y, first.Range!.Value, first.Capacity!.Value, first.Name));
+        Assert.Equal((first.X, first.Y, first.Range, first.Capacity, first.Name), (later.X, later.Y, later.Range, later.Capacity, later.Name));
+    }
+
+    [Fact]
     public void ReadAll_AllowsDeleteSharingWhileFileIsOpen()
     {
         var path = Write("""{ "schemaVersion": 1, "playerUid": "AAAA", "pals": [ { "characterId": "CowPal" } ] }""");
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        var (pals, captures) = NewReader().ReadAll(path, "s");
+        var (pals, captures, _) = NewReader().ReadAll(path, "s");
         Assert.Single(pals);
         Assert.Empty(captures);
     }

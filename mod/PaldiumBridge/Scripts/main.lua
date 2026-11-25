@@ -444,12 +444,12 @@ end
 end -- section: helpers
 
 -- Slots of one page; the array comes back either as the return value or through an out parameter.
-local partyPage, basePages, baseNames, dpsBoxes, resetCache, nowUtc, dirty, lastActivity
+local partyPage, basePages, baseNames, baseSites, dpsBoxes, resetCache, nowUtc, dirty, lastActivity
 local storePage, readPalboxPage, beginPagesSweep, sweepPagesStep, fingerprintPagesStep, isZeroGuid, dimensionObjects, pageNumValue, dpsPageCount
 local cacheEpoch = 0
 local objectName, resolveWeak, uiMenus, storageTexts, structureOwner, activeMenuName, menuTitleOwnerName, captureDimension
 local dimensionStorage, lastFingerprint, pollDimension, worldIdCache, worldId, lastContent, export, AUTO_SECONDS
-local POLL_MS, currentOpening, trackOpening, playersList, relicsData, captureData
+local POLL_MS, currentOpening, trackOpening, playersList, relicsData, captureData, obtainedData
 local resetCaptureState, resetOpeningState, resetPlayersState, resetScanState
 do -- section: page cache and export
 local function slotsOfPage(storage, page)
@@ -471,6 +471,7 @@ local palboxPageCount = nil
 partyPage = nil
 basePages = {}          -- baseId -> { [0] = page entry } (Pals that work at a base)
 baseNames = {}          -- baseId -> name (BaseCampName), for the coverage report
+baseSites = {}          -- T151: baseId -> { x, y, z, range, capacity } of the base's model and worker slots, for the coverage report
 dpsBoxes = {}           -- boxOwnerUid -> { pageCount, pages = { page -> { pals, seq, readAt, content } } }
 
 -- T118: the number of occupied slots (not IsEmpty) each Pal Box page had when it was last read: the cheap fingerprint of an idle box.
@@ -479,6 +480,7 @@ local lastWorldLookup = -100
 
 function resetCache()
     seqCounter, palboxPages, palboxPageCount, partyPage, dpsBoxes, basePages, baseNames = 0, {}, nil, nil, {}, {}, {}
+    baseSites, obtainedData = {}, nil
     pageCounts = {}
     relicsData, captureData = nil, nil
     worldIdCache, lastWorldLookup, lastContent = nil, -100, nil
@@ -977,7 +979,15 @@ local function collect(controller)
     local baseIds = {}
     for baseId in pairs(basePages) do baseIds[#baseIds + 1] = baseId end
     table.sort(baseIds)
-    for _, baseId in ipairs(baseIds) do addStore("Base", nil, basePages[baseId], nil, nil, baseId, baseNames[baseId]) end
+    for _, baseId in ipairs(baseIds) do
+        local before = #coverage
+        addStore("Base", nil, basePages[baseId], nil, nil, baseId, baseNames[baseId])
+        local site = baseSites[baseId]
+        if site ~= nil and #coverage > before then
+            local entry = coverage[#coverage]
+            entry.x, entry.y, entry.z, entry.range, entry.capacity = site.x, site.y, site.z, site.range, site.capacity
+        end
+    end
     local owners = {}
     for owner in pairs(dpsBoxes) do owners[#owners + 1] = owner end
     table.sort(owners)
@@ -1063,6 +1073,7 @@ local function write(controller, pals, coverage)
         coverage = array(coverage),
         capture = captureData,
         relics = relicsData,
+        obtained = obtainedData,
     }
     local content = jsonValue(document)
     if content == lastContent then return false, "unchanged" end
@@ -1081,7 +1092,7 @@ function export()
     local controller = localController()
     if controller == nil then return false end
     local pals, coverage = collect(controller)
-    if #pals == 0 and #coverage == 0 and captureData == nil and relicsData == nil then return false end
+    if #pals == 0 and #coverage == 0 and captureData == nil and relicsData == nil and obtainedData == nil then return false end
 
     local written, why = write(controller, pals, coverage)
     if not written then
@@ -2094,6 +2105,15 @@ local function baseSweepStep(sweep)
             end
 
             local pals, source, slotCount = palsOfContainer(container, function(slot) return { kind = "Base", page = 0, slot = slot, baseId = baseId, baseName = baseNames[baseId] } end)
+            -- T151: where the base is, written with its page (never logged). A (0, 0) place means "not known".
+            local x, y, z = vectorOf(member(model, "Transform"))
+            if x ~= nil and not (x == 0 and y == 0) then
+                local site = { x = x, y = y, z = z, range = number(member(model, "AreaRange")), capacity = (slotCount or 0) > 0 and slotCount or nil }
+                if baseSites[baseId] == nil or jsonValue(baseSites[baseId]) ~= jsonValue(site) then
+                    baseSites[baseId] = site
+                    dirty = true
+                end
+            end
             if pals ~= nil then noteOnce("basesummary:" .. baseId, "base %s: container %d slots, %d filled", baseId:sub(-8), slotCount or 0, #pals) end
             if pals == nil then
                 noteOnce("basenoslots:" .. baseId, "base %s: the container has no readable slots (%s)", baseId:sub(-8), tostring(source))
@@ -2588,6 +2608,88 @@ local function readRelics(record)
     return result, found
 end
 
+-- T144, T148-T150: what the own player has taken, opened and done. The record keeps these as the fast arrays of T132 (Items[] { Key, Value }); the map
+-- read is the fallback. Returns the keys whose value is true, sorted; nil when the field cannot be read.
+local function readFlags(record, name)
+    local field = member(record, name)
+    if field == nil then return nil end
+    local result = {}
+    local function keep(key, value)
+        local k = text(key)
+        if unwrap(value) == true and k ~= nil and k ~= "" and k ~= "None" then result[#result + 1] = k end
+    end
+    local fromItems = items(member(field, "Items"))
+    if fromItems ~= nil then
+        for _, element in ipairs(fromItems) do keep(member(element, "Key"), (member(element, "Value"))) end
+    elseif not pcall(function() field:ForEach(keep) end) then
+        return nil
+    end
+    table.sort(result)
+    return result
+end
+
+-- The quests of the player's quest manager: the ones taken (with the step they are at) and the finished ones. Both lists nil when neither holds
+-- anything: an empty answer cannot be told apart from data a client was not sent.
+local function readQuests(manager)
+    if manager == nil then return nil, nil end
+    local active, seen = {}, {}
+    local function take(id, block)
+        local name = text(id)
+        if name ~= nil and name ~= "" and name ~= "None" and not seen[name] then
+            seen[name] = true
+            active[#active + 1] = { id = name, block = number(block) or 0 }
+        end
+    end
+    for _, quest in ipairs(items(member(member(manager, "QuestReplicationData"), "OrderedQuestArray")) or {}) do
+        take(member(quest, "QuestId"), (member(quest, "QuestBlockIndex")))
+    end
+    if #active == 0 then
+        for _, saved in ipairs(items(member(manager, "CahcedSaveData_OrderedQuestData")) or {}) do   -- the game's own spelling
+            take(member(saved, "QuestName"), (member(saved, "BlockIndex")))
+        end
+    end
+    local done = {}
+    for _, id in ipairs(items(member(manager, "CompletedQuestNames")) or {}) do
+        local name = text(id)
+        if name ~= nil and name ~= "" and name ~= "None" then done[#done + 1] = name end
+    end
+    if #active == 0 and #done == 0 then return nil, nil end
+    table.sort(active, function(a, b) return a.id < b.id end)
+    table.sort(done)
+    return active, done
+end
+
+-- The "obtained" block of palbox.json; only the parts that could be read, nil when there is none.
+local function readObtained(record, manager)
+    local relic, found = {}, false
+    local names = { "RelicObtainForInstanceFlag" }
+    for _, kind in pairs(RELIC_TYPES) do names[#names + 1] = "RelicObtainForInstanceFlag_" .. kind end
+    for _, name in ipairs(names) do
+        local keys = readFlags(record, name)
+        if keys ~= nil then
+            found = true
+            for _, key in ipairs(keys) do relic[#relic + 1] = key end
+        end
+    end
+    table.sort(relic)
+    local result, any = {}, false
+    local function put(key, list)
+        if list ~= nil then result[key] = array(list) any = true end
+    end
+    put("relic", found and relic or nil)
+    put("pickup", readFlags(record, "ItemPickupObtainForInstanceFlag"))
+    put("fastTravel", readFlags(record, "FastTravelPointUnlockFlag"))
+    put("note", readFlags(record, "NoteObtainForInstanceFlag"))
+    put("towerBoss", readFlags(record, "TowerBossDefeatFlag"))
+    local active, done = readQuests(manager)
+    put("questsActive", active)
+    put("questsDone", done)
+    local counter = member(record, "PredatorDefeatCount")
+    local predators = number(counter) or number(member(counter, "Value"))
+    if predators ~= nil then result.predatorDefeats = predators any = true end
+    return any and result or nil
+end
+
 -- T133: the cumulative effigy cost of every rank per type (data/gamedata.json "relics", from DT_PlayerStatusRankMasterDataTable). The level of a type is the
 -- highest rank whose cumulative cost is <= what was spent (collected - in hand). Only the F10 log uses it; a test compares it with the data bundle.
 local RELIC_THRESHOLDS = {
@@ -2653,6 +2755,20 @@ local function captureStep(controller)
     return true
 end
 
+-- T144, T148-T150: the world progress is its own job, one tick after the capture read: a failed read here cannot cost the capture or effigy data,
+-- and each job stays short.
+local function obtainedStep(controller)
+    local state = member(controller, "PlayerState")
+    local record = state ~= nil and member(state, "RecordData") or nil
+    if record == nil then return false end
+    local obtained = readObtained(record, member(state, "QuestManager"))
+    if (obtained == nil) ~= (obtainedData == nil) or (obtained ~= nil and jsonValue(obtained) ~= jsonValue(obtainedData)) then
+        obtainedData = obtained
+        dirty = true
+    end
+    return true
+end
+
 local function slowStep(now, menuOpen)
     if box.epoch ~= cacheEpoch then
         -- Cache cleared (new character, F11): the whole box is read again, step by step.
@@ -2668,12 +2784,17 @@ local function slowStep(now, menuOpen)
     local boxDue = box.sweep ~= nil or box.requested or (menuOpen and now - box.lastSweep >= AUTO_SECONDS)
     local fingerprintDue = not menuOpen and now - box.lastFp >= FINGERPRINT_INTERVAL
     local captureDue = now - lastCapture >= CAPTURE_INTERVAL
-    if not (partyDue or baseDue or boxDue or fingerprintDue or captureDue) then return end
+    if not (partyDue or baseDue or boxDue or fingerprintDue or captureDue or box.obtained) then return end
 
     local controller = localController()
     if controller == nil then return end
+    if box.obtained then
+        box.obtained = false
+        timed("obtained", obtainedStep, controller)
+        return
+    end
     if captureDue then
-        lastCapture = now
+        lastCapture, box.obtained = now, true
         if timed("capture", captureStep, controller) ~= true then lastCapture = now - (CAPTURE_INTERVAL - CAPTURE_RETRY) end
         return
     end

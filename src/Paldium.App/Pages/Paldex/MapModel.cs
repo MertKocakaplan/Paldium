@@ -3,16 +3,57 @@ using System.Globalization;
 namespace Paldium.App.Pages.PaldexParts;
 
 /// <summary>
-/// A point on the main map: fractions 0..1 from the left and top of the picture, the spawn radius as a fraction of the map width.
+/// A point on one of the two maps: fractions 0..1 from the left and top of the picture, the spawn radius as a fraction of the map width.
 /// <paramref name="Night"/>: the spawn area is only used at night (obtain.wild[].night; T116).
 /// </summary>
 public sealed record MapDot(double Left, double Top, double Radius, bool Alpha, int? MapX, int? MapY, bool Night = false);
 
 /// <summary>
-/// One row of the places list (T104): where a species lives. <see cref="Kind"/> is "wild", "alpha" or "other" (another map: it stays in the list,
-/// is not on the picture and cannot be selected).
+/// One row of the places list (T104): where a species lives. <see cref="Kind"/> is "wild" or "alpha"; <see cref="MapId"/> is the map it is on
+/// ("MainMap" or "Tree", T140), or null for a place on neither picture (it stays in the list and cannot be selected).
 /// </summary>
-public sealed record MapPlace(string Kind, string KindLabel, string Name, string Meta, string Title, bool OnMain, IReadOnlyList<MapDot> Dots, bool Night = false);
+public sealed record MapPlace(string Kind, string KindLabel, string Name, string Meta, string Title, string? MapId, IReadOnlyList<MapDot> Dots, bool Night = false);
+
+/// <summary>T140: the two maps of the "Where in the world" section.</summary>
+public static class ObtainMaps
+{
+    public const string Main = "MainMap";
+    public const string Tree = "Tree";
+
+    private static readonly string[] Both = [Main, Tree];
+
+    private static bool HasWild(Paldium.Core.Domain.ObtainInfo obtain, string map) =>
+        obtain.Wild.Any(w => w.Points.Any(p => p.Map == map));
+
+    private static bool HasBoss(Paldium.Core.Domain.ObtainInfo obtain, string map) => obtain.Bosses.Any(b => b.Point.Map == map);
+
+    /// <summary>The maps with a wild area or a boss of the species, Palpagos first.</summary>
+    public static IReadOnlyList<string> Of(Paldium.Core.Domain.ObtainInfo obtain) =>
+        Both.Where(m => HasWild(obtain, m) || HasBoss(obtain, m)).ToList();
+
+    /// <summary>The map shown first: the one with wild areas (Palpagos first); a species without wild areas shows the map of its boss.</summary>
+    public static string Default(Paldium.Core.Domain.ObtainInfo obtain) =>
+        Both.FirstOrDefault(m => HasWild(obtain, m)) ?? Both.FirstOrDefault(m => HasBoss(obtain, m)) ?? Main;
+
+    /// <summary>The wild areas (spawners) on the map; a map with bosses only counts those.</summary>
+    public static int AreaCount(Paldium.Core.Domain.ObtainInfo obtain, string map)
+    {
+        var wild = obtain.Wild.Where(w => w.Points.Any(p => p.Map == map)).Select(w => w.Spawner).Distinct(StringComparer.Ordinal).Count();
+        return wild > 0 ? wild : obtain.Bosses.Count(b => b.Point.Map == map);
+    }
+
+    /// <summary>Palpagos places first, then the World Tree, then the places without a map; the order inside a map is kept.</summary>
+    public static List<MapPlace> Ordered(IEnumerable<MapPlace> places) =>
+        places.OrderBy(p => p.MapId == Main ? 0 : p.MapId == Tree ? 1 : 2).ToList();
+
+    /// <summary>The dot of a world point on the picture of its own map.</summary>
+    public static MapDot Dot(Paldium.Core.Domain.MapPoint point, bool alpha, bool night = false)
+    {
+        var projection = Paldium.Core.Domain.MapProjection.ForMap(point.Map);
+        var (left, top) = projection.ToFraction(point.X, point.Y);
+        return new MapDot(left, top, point.Radius / (projection.MaxY - projection.MinY), alpha, point.MapX, point.MapY, night);
+    }
+}
 
 /// <summary>The part of the picture a preview shows (fractions of the picture) and the CSS that places the picture and the points in it.</summary>
 public sealed record MapFrame(double Left, double Top, double Width, double Height)
@@ -55,17 +96,18 @@ public static class MapFraming
 public static class WildDots
 {
     /// <summary>Every spawn area once (points close together share a dot; a night dot and a day dot at one place stay two), with the night flag.</summary>
-    public static List<MapDot> Preview(IEnumerable<Paldium.Core.Domain.WildSpawn> wild, Func<Paldium.Core.Domain.MapPoint, bool, MapDot> dotOf, out int mainMapPoints)
+    public static List<MapDot> Preview(IEnumerable<Paldium.Core.Domain.WildSpawn> wild, Func<Paldium.Core.Domain.MapPoint, bool, MapDot> dotOf, out int mapPoints,
+        string map = ObtainMaps.Main)
     {
         var dots = new List<MapDot>();
         var seen = new HashSet<(int X, int Y, bool Night)>();
-        mainMapPoints = 0;
+        mapPoints = 0;
         foreach (var w in wild)
         {
             foreach (var pt in w.Points)
             {
-                if (!string.Equals(pt.Map, "MainMap", StringComparison.Ordinal)) continue;
-                mainMapPoints++;
+                if (!string.Equals(pt.Map, map, StringComparison.Ordinal)) continue;
+                mapPoints++;
                 var dot = dotOf(pt, w.Night);
                 if (seen.Add(((int)Math.Round(dot.Left * 200), (int)Math.Round(dot.Top * 200), w.Night))) dots.Add(dot);
             }

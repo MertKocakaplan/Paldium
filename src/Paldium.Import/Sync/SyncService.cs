@@ -146,12 +146,13 @@ public sealed class SyncService : ISyncService
 
             try
             {
-                var (pals, captures) = await Task.Run(() => Read(config)).ConfigureAwait(false);
+                var (pals, captures, worldName, worldId, bases) = await Task.Run(() => Read(config)).ConfigureAwait(false);
                 if (runtime.Disposed) return;
 
-                var status = new SourceStatus(config.Id, SourceState.Ok, DateTimeOffset.UtcNow, pals.Count, null);
+                var status = new SourceStatus(config.Id, SourceState.Ok, DateTimeOffset.UtcNow, pals.Count, null) { WorldName = worldName, WorldId = worldId };
                 _repository.PublishSourceSnapshot(config.Id, pals, status);
                 _captures?.Publish(config.Id, captures);
+                _captures?.PublishBases(config.Id, bases);
                 runtime.Watcher?.SetReadSignature(signature);
                 SetStatus(runtime, status);
             }
@@ -175,22 +176,23 @@ public sealed class SyncService : ISyncService
         }
     }
 
-    private (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<PlayerCapture> Captures) Read(SourceConfig config)
+    private (IReadOnlyList<OwnedPal> Pals, IReadOnlyList<PlayerCapture> Captures, string? WorldName, string? WorldId, IReadOnlyList<BaseSite> Bases) Read(SourceConfig config)
     {
         switch (config.Type)
         {
             case SourceType.GlobalStorageFile:
                 var accountFolder = Directory.Exists(config.Path) ? config.Path : Path.GetDirectoryName(config.Path)!;
-                return (_reader.ReadGlobalStorage(accountFolder).Select(p => p with { SourceId = config.Id }).ToList(), []);
+                return (_reader.ReadGlobalStorage(accountFolder).Select(p => p with { SourceId = config.Id }).ToList(), [], null, null, []);
 
             case SourceType.ModBridgeFile:
                 if (_bridge == null) throw new InvalidOperationException("No mod bridge reader is configured.");
                 var bridgeFile = Bridge.ModBridgeReader.EffectiveFile(config.Path);
-                return _bridge.ReadAll(bridgeFile, config.Id);
+                var (bridgePals, bridgeCaptures, bridgeBases) = _bridge.ReadAll(bridgeFile, config.Id);
+                return (bridgePals, bridgeCaptures, null, Bridge.ModBridgeReader.Summarize(bridgeFile)?.WorldId, bridgeBases);
 
             default:
                 var snapshot = _reader.ReadWorld(config.Path);
-                return (snapshot.Pals.Select(p => p with { SourceId = config.Id }).ToList(), snapshot.Captures);
+                return (snapshot.Pals.Select(p => p with { SourceId = config.Id }).ToList(), snapshot.Captures, snapshot.WorldName, snapshot.WorldId, snapshot.Bases);
         }
     }
 

@@ -16,7 +16,14 @@ public sealed class BridgePageStore
 {
     public sealed record StoredPage(string World, string Kind, string Box, int Page, DateTimeOffset ReadAtUtc, IReadOnlyList<BridgePal> Pals);
 
-    public sealed record StoredBox(string World, string Kind, string Box, string? OwnerUid, string? OwnerName, string? OwnerSource, int? PageCount);
+    public sealed record StoredBox(string World, string Kind, string Box, string? OwnerUid, string? OwnerName, string? OwnerSource, int? PageCount)
+    {
+        // A base's place, range and worker slots (T151), kept for the bases a later session has not loaded.
+        public double? X { get; init; }
+        public double? Y { get; init; }
+        public double? Range { get; init; }
+        public int? Capacity { get; init; }
+    }
 
     private sealed class State
     {
@@ -117,9 +124,14 @@ public sealed class BridgePageStore
                 var known = uid != null || !string.IsNullOrEmpty(coverage.OwnerName);
                 var ownerName = !string.IsNullOrEmpty(coverage.OwnerName) ? coverage.OwnerName : previous?.OwnerName;
                 var ownerSource = !string.IsNullOrEmpty(coverage.OwnerSource) ? coverage.OwnerSource : previous?.OwnerSource;
-                state.Boxes.Add(known || previous == null
+                var stored = known || previous == null
                     ? new StoredBox(world, coverage.Kind, box, uid ?? previous?.OwnerUid, ownerName, ownerSource, coverage.PageCount ?? previous?.PageCount)
-                    : previous with { PageCount = coverage.PageCount ?? previous.PageCount });
+                    : previous with { PageCount = coverage.PageCount ?? previous.PageCount };
+                state.Boxes.Add(stored with
+                {
+                    X = coverage.X ?? previous?.X, Y = coverage.Y ?? previous?.Y, Range = coverage.Range ?? previous?.Range,
+                    Capacity = coverage.Capacity ?? previous?.Capacity,
+                });
             }
 
             // Pages that hold Pals count as read even when an older mod wrote no coverage.
@@ -394,6 +406,7 @@ public sealed class BridgePageStore
                 BoxId = string.IsNullOrEmpty(g.Key.Box) ? null : g.Key.Box,
                 OwnerName = box?.OwnerName,
                 OwnerSource = box?.OwnerSource,
+                X = box?.X, Y = box?.Y, Range = box?.Range, Capacity = box?.Capacity,
                 PageCount = box?.PageCount,
                 PalCount = g.SelectMany(p => p.Pals).Select(p => p.InstanceId ?? Guid.NewGuid().ToString()).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
                 PagesRead = g.Select(p => p.Page).Distinct().Order().ToList(),

@@ -1,0 +1,68 @@
+@inherits LocalizedComponentBase
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+@* The places of a species (T104): the list of the full screen map viewer and of the Pals tab of the Map page (T146). Arrows move between
+   the places that are on a map. *@
+<ul class="wl3" role="listbox" aria-label="@L["Detail.Map.Places"].Value" @onkeydown="OnListKeyDownAsync">
+    @for (var i = 0; i < Places.Count; i++)
+    {
+        var idx = i;
+        var place = Places[idx];
+        var selected = idx == Selected;
+        @if (place.MapId == ObtainMaps.Tree && TreeHeader && (idx == 0 || Places[idx - 1].MapId != ObtainMaps.Tree))
+        {
+            <li class="sub" role="presentation">@Term("Map.Tree")</li>
+        }
+        <li id="@($"{IdPrefix}{idx}")"
+            role="option"
+            tabindex="@(selected || (Selected < 0 && idx == FirstEnabled(Places, CurrentMap)) ? 0 : -1)"
+            aria-selected="@(selected ? "true" : "false")"
+            aria-disabled="@(place.MapId != null ? null : "true")"
+            title="@place.Title"
+            @onclick="() => PickAsync(idx)">
+            <span class="@(place.MapId == null ? "mk o" : place.Kind == "alpha" ? "mk a" : "mk w")" aria-hidden="true"></span>
+            <span class="k">@place.KindLabel</span>
+            <span class="n">@place.Name@if (place.Night) { <img class="nm" src="gamedata/icons/misc/Night.png" alt="@L["Obtain.Night"].Value" title="@L["Obtain.Night"].Value" width="14" height="14" /> }</span>
+            <span class="m">@place.Meta</span>
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MapPlace> Places { get; set; } = [];
+    [Parameter] public int Selected { get; set; } = -1;
+    [Parameter] public string CurrentMap { get; set; } = ObtainMaps.Main;
+
+    /// <summary>A "World Tree" line before its places (a species on both maps).</summary>
+    [Parameter] public bool TreeHeader { get; set; }
+
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "";
+    [Parameter] public EventCallback<int> OnPick { get; set; }
+
+    /// <summary>The first place of the shown map, else the first on any map; -1 when no place is on a map.</summary>
+    public static int FirstEnabled(IReadOnlyList<MapPlace> places, string map)
+    {
+        for (var i = 0; i < places.Count; i++) if (places[i].MapId == map) return i;
+        for (var i = 0; i < places.Count; i++) if (places[i].MapId != null) return i;
+        return -1;
+    }
+
+    private Task PickAsync(int index) =>
+        index < 0 || index >= Places.Count || Places[index].MapId == null ? Task.CompletedTask : OnPick.InvokeAsync(index);
+
+    private async Task OnListKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is not ("ArrowDown" or "ArrowUp")) return;
+        var step = e.Key == "ArrowDown" ? 1 : -1;
+        var i = Selected < 0 ? (step > 0 ? -1 : Places.Count) : Selected;
+        for (i += step; i >= 0 && i < Places.Count; i += step)
+        {
+            if (Places[i].MapId == null) continue;
+            await PickAsync(i);
+            try { await JS.InvokeVoidAsync("pbFocusId", $"{IdPrefix}{i}"); }
+            catch (JSException) { }
+            return;
+        }
+    }
+}

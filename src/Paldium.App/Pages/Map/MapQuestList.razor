@@ -1,0 +1,74 @@
+@inherits LocalizedComponentBase
+@using Paldium.Core.Owned
+
+@* The Quests tab (T145): the main and side quests with their giver and region, and a filter of its own. With the player's record (T150) each
+   row shows its state, the list can be narrowed to a state and the finished quests left out. *@
+<div class="wm-filter">
+    <SearchField Value="@Filter" ValueChanged="OnFilter" Placeholder="@L["Map.Quest.Filter"].Value" AriaLabel="@L["Map.Quest.Filter"].Value" OnEscape="() => OnFilter.InvokeAsync(string.Empty)" />
+</div>
+@if (Progress != null)
+{
+    <div class="wm-filter">
+        <Segmented TValue="QuestFilter" Mini="true" Items="@ShowItems()" Value="@Show" ValueChanged="OnShow" AriaLabel="@L["Map.Quest.Show.Label"].Value" />
+    </div>
+    <button type="button" class="wm-switch" role="switch" aria-checked="@(HideDone ? "true" : "false")" @onclick="() => OnHideDone.InvokeAsync(!HideDone)">
+        <span class="sw" aria-hidden="true"></span><span>@L["Map.Quest.HideDone"]</span>
+    </button>
+}
+@foreach (var main in new[] { true, false })
+{
+    var rows = WorldMapModel.Quests(Data, main, Filter, Lang, Progress, Show, HideDone);
+    var all = Data.Quests.Where(q => q.IsMain == main).ToList();
+    var group = main ? "Main" : "Sub";
+    var open = !Folded.Contains("Quest" + group) || !string.IsNullOrWhiteSpace(Filter);
+    <section class="wm-grp">
+        <div class="gh">
+            <button type="button" class="fold" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleFold(group)">
+                <Icon Name="@(open ? "chevron-down" : "chevron-right")" Size="14" />@L["Map.Quest." + group]
+                <span class="num">@(Progress == null ? rows.Count.ToString() : L["Map.CollectedCount", all.Count(q => Progress.Done.Contains(q.Id)), all.Count].Value)</span>
+            </button>
+        </div>
+        @if (open)
+        {
+            @foreach (var row in rows)
+            {
+                <button type="button" class="@("wm-quest" + (row.Status == QuestStatus.Done ? " done" : ""))" aria-pressed="@(row.Quest.Id == Selected ? "true" : "false")" @onclick="() => OnOpen.InvokeAsync(row.Quest.Id)">
+                    <b>@row.Name</b>
+                    <span class="s">@Line(row)</span>
+                    @if (row.Status == QuestStatus.Done) { <span class="tag ok"><Icon Name="check" Size="12" />@L["Map.Quest.Done"]</span> }
+                    else if (row.Status == QuestStatus.Active) { <span class="tag on">@L["Map.Quest.Active", row.Step, Math.Max(1, row.Quest.Blocks)]</span> }
+                    @if (row.Point == null) { <span class="tag">@L["Map.Quest.NoPlace"]</span> }
+                </button>
+            }
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public MapData Data { get; set; } = default!;
+    [Parameter] public string Filter { get; set; } = "";
+    [Parameter] public string? Selected { get; set; }
+    [Parameter, EditorRequired] public HashSet<string> Folded { get; set; } = [];
+    [Parameter] public QuestProgress? Progress { get; set; }
+    [Parameter] public QuestFilter Show { get; set; }
+    [Parameter] public bool HideDone { get; set; }
+    [Parameter] public EventCallback<string> OnFilter { get; set; }
+    [Parameter] public EventCallback<QuestFilter> OnShow { get; set; }
+    [Parameter] public EventCallback<bool> OnHideDone { get; set; }
+    [Parameter] public EventCallback<string> OnOpen { get; set; }
+
+    private IReadOnlyList<SegmentedItem<QuestFilter>> ShowItems() => Enum.GetValues<QuestFilter>()
+        .Select(f => new SegmentedItem<QuestFilter>(f, L["Map.Quest.Show." + f].Value, IsWord: true)).ToList();
+
+    // The giver and the region; a side quest without a known giver says so, a main quest needs none.
+    private string Line(QuestRow row) => string.Join(" · ", new[]
+    {
+        row.Giver ?? (row.Quest.IsMain ? null : L["Map.Quest.GiverUnknown"].Value),
+        row.Region,
+    }.Where(part => part != null));
+
+    private void ToggleFold(string group)
+    {
+        if (!Folded.Remove("Quest" + group)) Folded.Add("Quest" + group);
+    }
+}

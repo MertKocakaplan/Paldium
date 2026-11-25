@@ -30,6 +30,14 @@ once and the list is complete (the mod remembers the pages for the whole session
 
 The app can install the mod for you: Settings > Sources > "Install mod". The mod reports scan progress in `bridge\status.json`; the app shows it next to the mod source (there is no scan button in the app: the scan is started with the shortcut in the game).
 
+## World progress and base places (0.2.0)
+
+Once a minute the mod reads the player's own record data and writes an `obtained` block: `relic`, `pickup`, `fastTravel` (level object
+ids of the entries that are set), `note` (journal row names), `towerBoss` (tower keys), `questsActive` (`id`, `block`) and `questsDone`
+from the player's quest manager, and `predatorDefeats`. A part it cannot read is left out; both quest lists are left out when neither
+holds anything. Each base entry of `coverage` also carries `x`, `y`, `z`, `range` (from its model) and `capacity` (worker slots). Base
+names and places are only written to `palbox.json`. Reading only, as everything else.
+
 ## Scan all
 
 Only the pages you have looked at are sent to a client. "Scan all" turns the pages through the open UI's own page control, which is what the page buttons do; nothing else in the game is changed. It stops (`cancelled`) when the UI is closed or you change the page by hand. If the Dimensional Pal Storage page control is not found it ends with `failed`; press F10 with the storage open and send the log (it lists the widgets that were considered).

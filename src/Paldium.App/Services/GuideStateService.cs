@@ -43,6 +43,13 @@ public sealed class GuideStateService
     public string MountSort { get; set; } = "sprint";
     public bool MountDescending { get; set; } = true;
 
+    // The Merchants table (T137): the search, the selected row (an item or a shop) and the product sort are kept while the app is open.
+    public string ShopQuery { get; set; } = "";
+    public string? ShopSelected { get; set; }
+    public bool ShopSelectedIsItem { get; set; }
+    public string ShopSort { get; set; } = "name";
+    public bool ShopSortDescending { get; set; }
+
     public bool Reading
     {
         get => _reading;
@@ -61,5 +68,6 @@ public sealed class GuideStateService
         slug != null && (slug.Equals("agil", StringComparison.OrdinalIgnoreCase)
                          || slug.Equals("tasima", StringComparison.OrdinalIgnoreCase)
                          || slug.Equals("binekler", StringComparison.OrdinalIgnoreCase)
-                         || slug.Equals("heykeller", StringComparison.OrdinalIgnoreCase));
+                         || slug.Equals("heykeller", StringComparison.OrdinalIgnoreCase)
+                         || slug.Equals("tuccarlar", StringComparison.OrdinalIgnoreCase));
 }

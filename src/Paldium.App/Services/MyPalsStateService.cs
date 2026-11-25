@@ -26,13 +26,21 @@ public sealed class MyPalsStateService
     /// Filters and sorts. The gallery sort (name, recently added) belongs to the card views only; the table sorts by its column
     /// (<see cref="SortKey"/> and <see cref="Descending"/>), so the arrow in a column header is the real order.
     /// </summary>
-    public IReadOnlyList<OwnedPal> ApplyAll(IEnumerable<OwnedPal> pals, IGameData data, string lang, bool tableView = false)
+    public IReadOnlyList<OwnedPal> ApplyAll(IEnumerable<OwnedPal> pals, IGameData data, string lang, bool tableView = false) =>
+        ApplyFilterAndSort(pals, Filter, data, lang, tableView);
+
+    /// <summary>Applies the current sort order without any active filters (used by full-list export).</summary>
+    public IReadOnlyList<OwnedPal> ApplySortOnly(IEnumerable<OwnedPal> pals, IGameData data, string lang, bool tableView = false) =>
+        ApplyFilterAndSort(pals, OwnedPalFilter.Empty, data, lang, tableView);
+
+    private IReadOnlyList<OwnedPal> ApplyFilterAndSort(
+        IEnumerable<OwnedPal> pals, OwnedPalFilter filter, IGameData data, string lang, bool tableView)
     {
-        if (tableView) return Filter.Apply(pals, data, SortKey, Descending);
+        if (tableView) return filter.Apply(pals, data, SortKey, Descending);
 
         if (GallerySort == SortName)
         {
-            var filtered = Filter.Apply(pals, data, OwnedSortKey.Default, false);
+            var filtered = filter.Apply(pals, data, OwnedSortKey.Default, false);
             var comparer = StringComparer.Create(
                 CultureInfo.GetCultureInfo(string.Equals(lang, "tr", StringComparison.OrdinalIgnoreCase) ? "tr-TR" : "en-US"),
                 ignoreCase: true);
@@ -51,7 +59,7 @@ public sealed class MyPalsStateService
 
         if (GallerySort == SortAdded)
         {
-            var filtered = Filter.Apply(pals, data, OwnedSortKey.Default, false);
+            var filtered = filter.Apply(pals, data, OwnedSortKey.Default, false);
             var ordered = Descending
                 ? filtered.OrderByDescending(p => p.SeenAtUtc)
                 : filtered.OrderBy(p => p.SeenAtUtc);
@@ -61,7 +69,7 @@ public sealed class MyPalsStateService
                 .ToList();
         }
 
-        return Filter.Apply(pals, data, SortKey, Descending);
+        return filter.Apply(pals, data, SortKey, Descending);
     }
 
     public void SetGallerySort(string mode, bool descending)

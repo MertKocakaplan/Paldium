@@ -39,6 +39,9 @@ public sealed record WorldSnapshot(
     /// <summary>The capture records (T121) of the players whose <c>Players/&lt;id&gt;.sav</c> could be read.</summary>
     public IReadOnlyList<Paldium.Core.Owned.PlayerCapture> Captures { get; init; } = [];
 
+    /// <summary>The bases of the world (T151) with the players of the owning guild.</summary>
+    public IReadOnlyList<Paldium.Core.Owned.BaseSite> Bases { get; init; } = [];
+
     /// <summary>How long copying and reading took.</summary>
     public TimeSpan ReadDuration { get; init; }
 }

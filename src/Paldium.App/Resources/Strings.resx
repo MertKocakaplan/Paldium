@@ -209,7 +209,6 @@
   <data name="Obtain.AreaCount" xml:space="preserve"><value>{0} area(s)</value></data>
   <data name="Obtain.Level" xml:space="preserve"><value>Lv {0}–{1}</value></data>
   <data name="Obtain.LevelOne" xml:space="preserve"><value>Lv {0}</value></data>
-  <data name="Obtain.TreeMap" xml:space="preserve"><value>World Tree map</value></data>
   <data name="Obtain.RankNormal" xml:space="preserve"><value>Normal</value></data>
   <data name="Obtain.RankMidBoss" xml:space="preserve"><value>Mid-boss</value></data>
   <data name="Obtain.RankBoss" xml:space="preserve"><value>Boss</value></data>
@@ -1199,7 +1198,7 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Detail.WhereTitle" xml:space="preserve"><value>Where in the world</value></data>
   <data name="Detail.PlotAria" xml:space="preserve"><value>{0} points on the Main Map</value></data>
   <data name="Detail.PlotHint" xml:space="preserve"><value>Dots mark Main Map spawn areas; the orange dot is an Alpha Pal. Map artwork is not included in the data bundle, so only distribution is plotted.</value></data>
-  <data name="Detail.PlotHintMap" xml:space="preserve"><value>Dots mark Main Map spawn areas on the game map; the orange dot is an Alpha Pal.</value></data>
+  <data name="Detail.PlotHintMap" xml:space="preserve"><value>Dots mark spawn areas on the game map; the orange dot is an Alpha Pal.</value></data>
   <data name="Detail.Map.Close" xml:space="preserve"><value>Close</value></data>
   <data name="Detail.Map.Places" xml:space="preserve"><value>Spawn places</value></data>
   <data name="Detail.Map.LegendArea" xml:space="preserve"><value>Spawn area (centre)</value></data>
@@ -1630,4 +1629,186 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Settings.UpdOn" xml:space="preserve"><value>On</value></data>
   <data name="Settings.UpdSkipped" xml:space="preserve"><value>{0} skipped.</value></data>
   <data name="Settings.UpdUndo" xml:space="preserve"><value>Undo</value></data>
+  <data name="MyPals.Export" xml:space="preserve"><value>Export</value></data>
+  <data name="MyPals.Export.Aria" xml:space="preserve"><value>Export (Markdown)</value></data>
+  <data name="MyPals.Export.Visible" xml:space="preserve"><value>Visible list ({0} Pals)</value></data>
+  <data name="MyPals.Export.All" xml:space="preserve"><value>Whole list ({0} Pals)</value></data>
+  <data name="MyPals.Export.FileName" xml:space="preserve"><value>pals-{0}</value></data>
+  <data name="MyPals.Export.Done" xml:space="preserve"><value>{0} Pals exported</value></data>
+  <data name="MyPals.Export.OpenFolder" xml:space="preserve"><value>Open folder</value></data>
+  <data name="MyPals.Export.Failed" xml:space="preserve"><value>Could not write the file: {0}</value></data>
+  <data name="Picker.AriaPassives" xml:space="preserve"><value>passives: {0}</value></data>
+  <data name="Shop.Title" xml:space="preserve"><value>Merchants: who sells what</value></data>
+  <data name="Shop.Summary" xml:space="preserve"><value>Every shop, what it sells, prices and where it is.</value></data>
+  <data name="Shop.Search" xml:space="preserve"><value>Search an item or merchant (e.g. Flame Organ)</value></data>
+  <data name="Shop.Scope" xml:space="preserve"><value>{0} shops, {1} items</value></data>
+  <data name="Shop.SearchTool" xml:space="preserve"><value>Search an item</value></data>
+  <data name="Shop.InHit" xml:space="preserve"><value>{0}: sold by {1} merchants</value></data>
+  <data name="Shop.Group.Village" xml:space="preserve"><value>Town merchants</value></data>
+  <data name="Shop.Group.Pal" xml:space="preserve"><value>Pal merchants</value></data>
+  <data name="Shop.Group.Wandering" xml:space="preserve"><value>Wandering and visiting merchants</value></data>
+  <data name="Shop.Group.Token" xml:space="preserve"><value>Shops with their own currency</value></data>
+  <data name="Shop.Group.Dungeon" xml:space="preserve"><value>Dungeon</value></data>
+  <data name="Shop.Group.Unknown" xml:space="preserve"><value>Place unknown</value></data>
+  <data name="Shop.Items" xml:space="preserve"><value>Items</value></data>
+  <data name="Shop.Vendors" xml:space="preserve"><value>Merchants</value></data>
+  <data name="Shop.SoldBy" xml:space="preserve"><value>{0} merchants</value></data>
+  <data name="Shop.ProductCount" xml:space="preserve"><value>{0} items</value></data>
+  <data name="Shop.PalCount" xml:space="preserve"><value>{0} Pals</value></data>
+  <data name="Shop.UnknownVendor" xml:space="preserve"><value>Unknown merchant</value></data>
+  <data name="Shop.PlaceUnknown" xml:space="preserve"><value>Place unknown</value></data>
+  <data name="Shop.Visitor" xml:space="preserve"><value>Visits your base</value></data>
+  <data name="Shop.DungeonPlace" xml:space="preserve"><value>Inside dungeons</value></data>
+  <data name="Shop.Col.Vendor" xml:space="preserve"><value>Merchant</value></data>
+  <data name="Shop.Col.Place" xml:space="preserve"><value>Place</value></data>
+  <data name="Shop.Col.Item" xml:space="preserve"><value>Item</value></data>
+  <data name="Shop.Col.Price" xml:space="preserve"><value>Price</value></data>
+  <data name="Shop.Col.PerBuy" xml:space="preserve"><value>Per buy</value></data>
+  <data name="Shop.Col.Stock" xml:space="preserve"><value>Stock</value></data>
+  <data name="Shop.Col.Note" xml:space="preserve"><value>Note</value></data>
+  <data name="Shop.Col.Level" xml:space="preserve"><value>Level</value></data>
+  <data name="Shop.Once" xml:space="preserve"><value>One per player</value></data>
+  <data name="Shop.Chance" xml:space="preserve"><value>Random stock: {0}% chance</value></data>
+  <data name="Shop.PoolHead" xml:space="preserve"><value>Random stock: {0} chance</value></data>
+  <data name="Shop.PalNote" xml:space="preserve"><value>{0} of these at random on each visit</value></data>
+  <data name="Shop.Currency" xml:space="preserve"><value>Currency</value></data>
+  <data name="Shop.Condition" xml:space="preserve"><value>Condition</value></data>
+  <data name="Shop.InTower" xml:space="preserve"><value>In an Ancient Tower ({0}).</value></data>
+  <data name="Shop.ShowOnMap" xml:space="preserve"><value>Show on map</value></data>
+  <data name="Shop.Empty" xml:space="preserve"><value>No merchant sells "{0}".</value></data>
+  <data name="Shop.EmptyHint" xml:space="preserve"><value>You can look the item up in Paldex or Technology.</value></data>
+  <data name="Nav.Map" xml:space="preserve"><value>Map</value></data>
+  <data name="Map.Search" xml:space="preserve"><value>Search a place, marker or Pal</value></data>
+  <data name="Map.MapChoice" xml:space="preserve"><value>Map</value></data>
+  <data name="Map.Layers" xml:space="preserve"><value>Markers</value></data>
+  <data name="Map.ShowAll" xml:space="preserve"><value>Show all</value></data>
+  <data name="Map.HideAll" xml:space="preserve"><value>Hide all</value></data>
+  <data name="Map.GroupAll" xml:space="preserve"><value>All</value></data>
+  <data name="Map.Group.Locations" xml:space="preserve"><value>Locations</value></data>
+  <data name="Map.Group.Npc" xml:space="preserve"><value>NPCs</value></data>
+  <data name="Map.Group.Collectibles" xml:space="preserve"><value>Collectibles</value></data>
+  <data name="Map.Group.Items" xml:space="preserve"><value>Items</value></data>
+  <data name="Map.Group.Enemies" xml:space="preserve"><value>Enemies</value></data>
+  <data name="Map.Group.Quests" xml:space="preserve"><value>Quests</value></data>
+  <data name="Map.Group.Materials" xml:space="preserve"><value>Materials</value></data>
+  <data name="Map.Cat.sealed_realm" xml:space="preserve"><value>Sealed Realms</value></data>
+  <data name="Map.Cat.dungeon" xml:space="preserve"><value>Dungeons</value></data>
+  <data name="Map.Cat.merchant" xml:space="preserve"><value>Merchants</value></data>
+  <data name="Map.Cat.npc" xml:space="preserve"><value>NPCs</value></data>
+  <data name="Map.Cat.effigy" xml:space="preserve"><value>Effigies</value></data>
+  <data name="Map.Cat.journal" xml:space="preserve"><value>Journals</value></data>
+  <data name="Map.Cat.chest" xml:space="preserve"><value>Treasure chests</value></data>
+  <data name="Map.Cat.skill_fruit" xml:space="preserve"><value>Skill fruit trees</value></data>
+  <data name="Map.Cat.enemy_camp" xml:space="preserve"><value>Enemy camps</value></data>
+  <data name="Map.Cat.fishing" xml:space="preserve"><value>Fishing spots</value></data>
+  <data name="Map.Cat.supply" xml:space="preserve"><value>Supply drops</value></data>
+  <data name="Map.Cat.respawn" xml:space="preserve"><value>Respawn points</value></data>
+  <data name="Map.Cat.quest" xml:space="preserve"><value>Quest places</value></data>
+  <data name="Map.Kind.Region" xml:space="preserve"><value>Regions</value></data>
+  <data name="Map.Kind.FastTravel" xml:space="preserve"><value>Fast travel</value></data>
+  <data name="Map.Kind.Dungeon" xml:space="preserve"><value>Dungeons and towers</value></data>
+  <data name="Map.Kind.Merchant" xml:space="preserve"><value>Merchants and NPCs</value></data>
+  <data name="Map.Kind.Quest" xml:space="preserve"><value>Quests</value></data>
+  <data name="Map.Kind.Enemy" xml:space="preserve"><value>Enemies</value></data>
+  <data name="Map.Kind.Pal" xml:space="preserve"><value>Pals</value></data>
+  <data name="Map.OtherMap" xml:space="preserve"><value>Other map</value></data>
+  <data name="Map.NoResult" xml:space="preserve"><value>No match for "{0}". Try a region, fast travel point, dungeon, merchant or Pal.</value></data>
+  <data name="Map.LoadFailed" xml:space="preserve"><value>Map markers could not be loaded.</value></data>
+  <data name="Map.NoPicture" xml:space="preserve"><value>The map picture is missing.</value></data>
+  <data name="Map.Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Map.Copied" xml:space="preserve"><value>Coordinates copied</value></data>
+  <data name="Map.Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Map.Region" xml:space="preserve"><value>Region</value></data>
+  <data name="Map.Coordinates" xml:space="preserve"><value>Coordinates</value></data>
+  <data name="Map.Level" xml:space="preserve"><value>Level {0}</value></data>
+  <data name="Map.Grade" xml:space="preserve"><value>Grade {0}</value></data>
+  <data name="Map.ElementChest" xml:space="preserve"><value>Element chest</value></data>
+  <data name="Map.OilRigChest" xml:space="preserve"><value>Oil rig chest</value></data>
+  <data name="Map.Vendor" xml:space="preserve"><value>Merchant</value></data>
+  <data name="Map.WhatSells" xml:space="preserve"><value>What it sells</value></data>
+  <data name="Map.OpenPaldex" xml:space="preserve"><value>Open in Paldex</value></data>
+  <data name="Map.Cluster" xml:space="preserve"><value>{0} markers</value></data>
+  <data name="Map.Cursor" xml:space="preserve"><value>Cursor:</value></data>
+  <data name="Map.CoordHint" xml:space="preserve"><value>Move over the map for coordinates</value></data>
+  <data name="Map.NoCoords" xml:space="preserve"><value>Coordinates are not shown on this map</value></data>
+  <data name="Map.PalLayer" xml:space="preserve"><value>Spawn areas: {0}</value></data>
+  <data name="Map.PalLayerClear" xml:space="preserve"><value>Remove the spawn areas</value></data>
+  <data name="Map.Alpha" xml:space="preserve"><value>Alpha</value></data>
+  <data name="Map.Area" xml:space="preserve"><value>Spawn area</value></data>
+  <data name="Map.Tabs" xml:space="preserve"><value>Panel</value></data>
+  <data name="Map.Tab.Layers" xml:space="preserve"><value>Layers</value></data>
+  <data name="Map.Tab.Pals" xml:space="preserve"><value>Pals</value></data>
+  <data name="Map.Tab.Quests" xml:space="preserve"><value>Quests</value></data>
+  <data name="Map.Cat.pickup_tower" xml:space="preserve"><value>Ancient Tower</value></data>
+  <data name="Map.Cat.quest_giver" xml:space="preserve"><value>Quest givers</value></data>
+  <data name="Map.Kind.Tower" xml:space="preserve"><value>Ancient towers</value></data>
+  <data name="Map.Kind.Effigy" xml:space="preserve"><value>Effigies</value></data>
+  <data name="Map.EffigyTypes" xml:space="preserve"><value>Effigy types</value></data>
+  <data name="Map.TowerContains" xml:space="preserve"><value>Contains</value></data>
+  <data name="Map.Unlocks" xml:space="preserve"><value>Unlocks: {0}</value></data>
+  <data name="Map.Lock" xml:space="preserve"><value>Lock</value></data>
+  <data name="Map.UnmarkCollected" xml:space="preserve"><value>Undo</value></data>
+  <data name="Map.CollectedCount" xml:space="preserve"><value>{0}/{1}</value></data>
+  <data name="Map.Quest.Main" xml:space="preserve"><value>Main quests</value></data>
+  <data name="Map.Quest.Sub" xml:space="preserve"><value>Side quests</value></data>
+  <data name="Map.Quest.Filter" xml:space="preserve"><value>Filter quests</value></data>
+  <data name="Map.Quest.Giver" xml:space="preserve"><value>Given by</value></data>
+  <data name="Map.Quest.GiverUnknown" xml:space="preserve"><value>Giver unknown</value></data>
+  <data name="Map.Quest.Steps" xml:space="preserve"><value>Steps</value></data>
+  <data name="Map.Quest.Rewards" xml:space="preserve"><value>Rewards</value></data>
+  <data name="Map.Quest.Exp" xml:space="preserve"><value>Experience</value></data>
+  <data name="Map.Quest.NoPlace" xml:space="preserve"><value>No place on the map</value></data>
+  <data name="Map.Quest.Show" xml:space="preserve"><value>Show on the map</value></data>
+  <data name="Map.Quest.ShowGiver" xml:space="preserve"><value>Show the giver</value></data>
+  <data name="Map.Quest.Of" xml:space="preserve"><value>Quests here</value></data>
+  <data name="Map.Npc.Quests" xml:space="preserve"><value>Quests</value></data>
+  <data name="Map.Pal.Pick" xml:space="preserve"><value>Choose a Pal</value></data>
+  <data name="Map.Pal.OpenPaldex" xml:space="preserve"><value>Open in the Paldex</value></data>
+  <data name="Map.Pal.OtherMap" xml:space="preserve"><value>Other map: found on {0}</value></data>
+  <data name="Map.Pal.NoPlaces" xml:space="preserve"><value>This Pal has no place on the maps.</value></data>
+  <data name="Map.Effect" xml:space="preserve"><value>Effect</value></data>
+  <data name="Map.Cat.watchtower" xml:space="preserve"><value>Watchtowers</value></data>
+  <data name="Map.Cat.predator" xml:space="preserve"><value>Predator Pals</value></data>
+  <data name="Map.Cat.base" xml:space="preserve"><value>My bases</value></data>
+  <data name="Map.Kind.Predator" xml:space="preserve"><value>Predator Pals</value></data>
+  <data name="Map.Kind.Base" xml:space="preserve"><value>My bases</value></data>
+  <data name="Map.PredatorTypes" xml:space="preserve"><value>Predator species</value></data>
+  <data name="Map.PredatorDefeats" xml:space="preserve"><value>Predators defeated: {0}</value></data>
+  <data name="Map.Predator.AreaLevel" xml:space="preserve"><value>Area level {0}</value></data>
+  <data name="Map.Predator.Note" xml:space="preserve"><value>Not certain: the game data does not say where predators appear. Shown are the wild areas of the base species (game setting: PredatorPal_AppearanceProbability = 4).</value></data>
+  <data name="Map.Pal.Predator" xml:space="preserve"><value>A predator may show up too: {0}</value></data>
+  <data name="Map.Boss" xml:space="preserve"><value>Boss</value></data>
+  <data name="Map.FastTravelPoint" xml:space="preserve"><value>Fast travel point</value></data>
+  <data name="Map.Hide.Collect" xml:space="preserve"><value>Hide collected</value></data>
+  <data name="Map.Hide.Open" xml:space="preserve"><value>Hide opened</value></data>
+  <data name="Map.Hide.Defeat" xml:space="preserve"><value>Hide defeated</value></data>
+  <data name="Map.Mark.Collect" xml:space="preserve"><value>Mark as collected</value></data>
+  <data name="Map.Mark.Open" xml:space="preserve"><value>Mark as opened</value></data>
+  <data name="Map.Mark.Defeat" xml:space="preserve"><value>Mark as defeated</value></data>
+  <data name="Map.Done.Collect" xml:space="preserve"><value>Collected</value></data>
+  <data name="Map.Done.Open" xml:space="preserve"><value>Opened</value></data>
+  <data name="Map.Done.Defeat" xml:space="preserve"><value>Defeated</value></data>
+  <data name="Map.FromRecord.Collect" xml:space="preserve"><value>Collected (from the game)</value></data>
+  <data name="Map.FromRecord.Open" xml:space="preserve"><value>Opened (from the game)</value></data>
+  <data name="Map.FromRecord.Defeat" xml:space="preserve"><value>Defeated (from the game)</value></data>
+  <data name="Map.Locked" xml:space="preserve"><value>Not opened yet</value></data>
+  <data name="Map.Base.Numbered" xml:space="preserve"><value>Base {0}</value></data>
+  <data name="Map.Base.Count" xml:space="preserve"><value>{0} Pals</value></data>
+  <data name="Map.Base.CountOf" xml:space="preserve"><value>{0}/{1} Pals</value></data>
+  <data name="Map.Base.Filter" xml:space="preserve"><value>Filter My Pals by this base</value></data>
+  <data name="Map.Quest.Done" xml:space="preserve"><value>Done</value></data>
+  <data name="Map.Quest.Active" xml:space="preserve"><value>In progress · step {0}/{1}</value></data>
+  <data name="Map.Quest.HideDone" xml:space="preserve"><value>Hide finished quests</value></data>
+  <data name="Map.Quest.Show.Label" xml:space="preserve"><value>Quest state</value></data>
+  <data name="Map.Quest.Show.All" xml:space="preserve"><value>All</value></data>
+  <data name="Map.Quest.Show.Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Map.Quest.Show.NotTaken" xml:space="preserve"><value>Not taken</value></data>
+  <data name="Map.Quest.Show.Done" xml:space="preserve"><value>Done</value></data>
+  <data name="MyPals.FilterOneBase" xml:space="preserve"><value>One base</value></data>
+  <data name="Map.CanvasAria" xml:space="preserve"><value>Map. Plus and minus zoom, arrows pan, 0 fits the whole map.</value></data>
+  <data name="Map.ZoomIn" xml:space="preserve"><value>Zoom in</value></data>
+  <data name="Map.ZoomOut" xml:space="preserve"><value>Zoom out</value></data>
+  <data name="Map.Fit" xml:space="preserve"><value>Fit the map</value></data>
+  <data name="Detail.MapAreas" xml:space="preserve"><value>{0} · {1} area(s)</value></data>
+  <data name="Detail.Map.NoCoords" xml:space="preserve"><value>Coordinates are not shown on this map</value></data>
 </root>

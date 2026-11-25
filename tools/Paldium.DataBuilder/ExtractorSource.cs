@@ -326,6 +326,89 @@ public sealed class ExtractorSource
         }).ToList();
     }
 
+    /// <summary>T137: merchant and Pal shops from <c>shops.json</c> (null when the file is missing).</summary>
+    public IReadOnlyList<ShopDto>? Shops()
+    {
+        var path = Path.Combine(_dir, "shops.json");
+        if (!File.Exists(path)) return null;
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+        static SortedDictionary<string, string> Texts(JsonElement e)
+        {
+            var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            if (e.ValueKind != JsonValueKind.Object) return result;
+            foreach (var p in e.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.String) result[p.Name] = p.Value.GetString()!;
+            return result;
+        }
+
+        static string? Str(JsonElement e, string name) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        return doc.RootElement.GetProperty("shops").EnumerateArray().Select(s =>
+        {
+            var pl = s.GetProperty("place");
+            var points = new List<ShopMapPointDto>();
+            foreach (var mp in pl.GetProperty("mapPoints").EnumerateArray())
+            {
+                var x = mp.GetProperty("x").GetDouble();
+                var y = mp.GetProperty("y").GetDouble();
+                var (map, mx, my) = MapTransform.Locate(x, y);
+                SortedDictionary<string, string>? ptNames = mp.TryGetProperty("names", out var pn) && pn.ValueKind == JsonValueKind.Object
+                    ? Texts(pn)
+                    : null;
+                points.Add(new ShopMapPointDto(x, y, map, mx, my, ptNames));
+            }
+
+            var curEl = s.GetProperty("currency");
+            var cur = new ShopCurrencyDto(curEl.GetProperty("itemId").GetString()!, Texts(curEl.GetProperty("names")), Str(curEl, "icon"));
+
+            SortedDictionary<string, string>? cond = s.TryGetProperty("condition", out var cd) && cd.ValueKind == JsonValueKind.Object
+                ? Texts(cd)
+                : null;
+
+            List<ShopPoolEntryDto>? pool = s.TryGetProperty("pool", out var po) && po.ValueKind == JsonValueKind.Array
+                ? po.EnumerateArray().Select(x => new ShopPoolEntryDto(
+                    x.GetProperty("group").GetString()!,
+                    x.GetProperty("weight").GetDouble(),
+                    x.GetProperty("chance").GetDouble())).ToList()
+                : null;
+
+            List<ShopProductDto>? products = s.TryGetProperty("products", out var pr) && pr.ValueKind == JsonValueKind.Array
+                ? pr.EnumerateArray().Select(x => new ShopProductDto(
+                    x.GetProperty("itemId").GetString()!,
+                    Texts(x.GetProperty("names")),
+                    Str(x, "icon"),
+                    x.GetProperty("price").GetInt32(),
+                    x.GetProperty("perPurchase").GetInt32(),
+                    x.GetProperty("stock").GetInt32(),
+                    x.GetProperty("oncePerPlayer").GetBoolean(),
+                    Str(x, "poolGroup"),
+                    x.TryGetProperty("chance", out var ch) && ch.ValueKind == JsonValueKind.Number ? ch.GetDouble() : 1.0)).ToList()
+                : null;
+
+            int charNum = s.TryGetProperty("characterNum", out var cn) && cn.ValueKind == JsonValueKind.Number ? cn.GetInt32() : 0;
+            List<ShopPalDto>? pals = s.TryGetProperty("pals", out var pa) && pa.ValueKind == JsonValueKind.Array
+                ? pa.EnumerateArray().Select(x => new ShopPalDto(
+                    x.GetProperty("palId").GetString()!,
+                    x.GetProperty("levelMin").GetInt32(),
+                    x.GetProperty("levelMax").GetInt32())).ToList()
+                : null;
+
+            return new ShopDto(
+                s.GetProperty("id").GetString()!,
+                s.GetProperty("kind").GetString()!,
+                Texts(s.GetProperty("vendor").GetProperty("names")),
+                new ShopPlaceDto(pl.GetProperty("kind").GetString()!, Texts(pl.GetProperty("names")), points),
+                cur,
+                cond,
+                pool,
+                products,
+                charNum,
+                pals);
+        }).ToList();
+    }
+
     private static List<DropDto> BuildDrops(JsonElement row) =>
         row.GetProperty("drops").EnumerateArray().Select(d =>
         {

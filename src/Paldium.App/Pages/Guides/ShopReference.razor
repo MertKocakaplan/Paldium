@@ -1,0 +1,454 @@
+@namespace Paldium.App.Pages.GuidesParts
+@using System.Globalization
+@using Paldium.Core.Domain
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject GuideStateService State
+@inject Paldium.App.Services.MapDataService MapFiles
+
+@* "Merchants: who sells what" (screens/guides.md, T137): a reference table from the game data. List on the left (vendors by place, or items while
+   searching), detail on the right (an item's sellers, a shop's goods or a Pal merchant's Pals). *@
+<div class="rread ranch shop9">
+    <h1 class="sr" tabindex="-1">@L["Shop.Title"]</h1>
+    <div class="rbar">
+        <a class="btn2" href="guides"><Icon Name="back" Size="14" />@L["Nav.Guides"]</a>
+        <span class="crumb">@L["Guide.Group.reference"] · <b>@L["Shop.Title"]</b></span>
+    </div>
+
+    <div class="rg9">
+        <aside class="rl9">
+            <div class="hd">
+                <SearchField Value="@State.ShopQuery"
+                             ValueChanged="SetQuery"
+                             Placeholder="@L["Shop.Search"].Value"
+                             AriaLabel="@L["Shop.Search"].Value"
+                             OnEscape="() => SetQuery(string.Empty)" />
+            </div>
+
+            <ul class="ls9" role="listbox" tabindex="0" aria-label="@L["Shop.Title"].Value" @onkeydown="OnListKeyDown">
+                @if (!Searching)
+                {
+                    @foreach (var (group, shops) in ShopModel.Grouped(Data.Shops))
+                    {
+                        <li class="grp9" role="presentation">@L["Shop.Group." + group]</li>
+                        @foreach (var shop in shops)
+                        {
+                            @ShopRow(shop)
+                        }
+                    }
+                }
+                else
+                {
+                    var items = VisibleItems();
+                    var sellers = VisibleShops();
+                    if (items.Count > 0)
+                    {
+                        <li class="grp9" role="presentation">@L["Shop.Items"]</li>
+                        @foreach (var found in items)
+                        {
+                            @ItemRow(found)
+                        }
+                    }
+                    if (sellers.Count > 0)
+                    {
+                        <li class="grp9" role="presentation">@L["Shop.Vendors"]</li>
+                        @foreach (var shop in sellers)
+                        {
+                            @ShopRow(shop)
+                        }
+                    }
+                    if (items.Count == 0 && sellers.Count == 0)
+                    {
+                        <li class="noresult">
+                            <p class="h">@L["Shop.Empty", State.ShopQuery]</p>
+                            <p class="h">@L["Shop.EmptyHint"]</p>
+                            <button type="button" class="btn2" @onclick='() => SetQuery(string.Empty)'>@L["Ranch.ClearSearch"]</button>
+                        </li>
+                    }
+                }
+            </ul>
+        </aside>
+
+        <section class="rd9" aria-live="polite">
+            @if (SelectedItem is { } item)
+            {
+                @ItemDetail(item)
+            }
+            else if (SelectedShop is { } shop)
+            {
+                @ShopDetail(shop)
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? ItemId { get; set; }
+    [Parameter] public string? ShopId { get; set; }
+
+    private IReadOnlyList<ShopItem> _items = [];
+    private Paldium.Core.Map.MapData? _map;
+    private readonly OnceParameter _itemOnce = new();
+    private readonly OnceParameter _shopOnce = new();
+
+    private bool Searching => !string.IsNullOrWhiteSpace(State.ShopQuery);
+
+    private IReadOnlyList<ShopItem> VisibleItems() => Searching ? ShopModel.SearchItems(_items, State.ShopQuery) : [];
+
+    private IReadOnlyList<ShopInfo> VisibleShops() =>
+        Searching ? ShopModel.SearchShops(Data.Shops, State.ShopQuery)
+                  : ShopModel.Grouped(Data.Shops).SelectMany(g => g.Shops).ToList();
+
+    // The detail follows the selection while it is in the list; otherwise the first row of the list.
+    private ShopItem? SelectedItem
+    {
+        get
+        {
+            if (State.ShopSelectedIsItem)
+            {
+                var chosen = (Searching ? VisibleItems() : _items).FirstOrDefault(i => i.ItemId == State.ShopSelected);
+                if (chosen != null) return chosen;
+            }
+            else if (VisibleShops().Any(s => s.Id == State.ShopSelected)) return null;
+            return Searching ? VisibleItems().FirstOrDefault() : null;
+        }
+    }
+
+    private ShopInfo? SelectedShop
+    {
+        get
+        {
+            if (SelectedItem != null) return null;
+            var shops = VisibleShops();
+            return shops.FirstOrDefault(s => !State.ShopSelectedIsItem && s.Id == State.ShopSelected) ?? shops.FirstOrDefault();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Load();
+    }
+
+    // The map markers tell which items also lie in an ancient tower (T143).
+    protected override async Task OnInitializedAsync() => _map = await MapFiles.LoadAsync();
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        var itemNew = _itemOnce.IsNew(ItemId);
+        var shopNew = _shopOnce.IsNew(ShopId);
+        if (itemNew && !string.IsNullOrEmpty(ItemId) && _items.Any(i => i.ItemId == ItemId))
+        {
+            State.ShopQuery = "";
+            Select(ItemId, isItem: true);
+        }
+        else if (shopNew && !string.IsNullOrEmpty(ShopId) && Data.Shops.Any(s => s.Id == ShopId))
+        {
+            State.ShopQuery = "";
+            Select(ShopId, isItem: false);
+        }
+    }
+
+    protected override void OnUiLanguageChanged() => Load();
+
+    private void Load() => _items = ShopModel.Items(Data.Shops, Lang);
+
+    private Task SetQuery(string value)
+    {
+        State.ShopQuery = value;
+        return Task.CompletedTask;
+    }
+
+    private void Select(string id, bool isItem)
+    {
+        State.ShopSelected = id;
+        State.ShopSelectedIsItem = isItem;
+    }
+
+    private void OnRowKey(KeyboardEventArgs e, string id, bool isItem)
+    {
+        if (e.Key is "Enter" or " ") Select(id, isItem);
+    }
+
+    private void OnListKeyDown(KeyboardEventArgs e)
+    {
+        var step = e.Key == "ArrowDown" ? 1 : e.Key == "ArrowUp" ? -1 : 0;
+        if (step == 0) return;
+        var rows = VisibleItems().Select(i => (Id: i.ItemId, IsItem: true)).Concat(VisibleShops().Select(s => (Id: s.Id, IsItem: false))).ToList();
+        if (rows.Count == 0) return;
+        var current = SelectedItem is { } item ? rows.FindIndex(r => r.IsItem && r.Id == item.ItemId)
+            : rows.FindIndex(r => !r.IsItem && r.Id == SelectedShop?.Id);
+        var next = rows[Math.Clamp(current + step, 0, rows.Count - 1)];
+        Select(next.Id, next.IsItem);
+    }
+
+    // ---- texts --------------------------------------------------------------------------------------------
+
+    private string VendorName(ShopInfo shop)
+    {
+        var name = shop.VendorNames.Get(Lang);
+        return shop.VendorNames.TryGet(Lang, out _) || shop.VendorNames.TryGet("en", out _) ? name : L["Shop.UnknownVendor"].Value;
+    }
+
+    private string PlaceText(ShopInfo shop, int max = 2)
+    {
+        var names = ShopModel.PlaceNames(shop, Lang);
+        if (names.Count > 0)
+            return string.Join(" · ", names.Take(max)) + (names.Count > max ? " · +" + (names.Count - max).ToString(CultureInfo.InvariantCulture) : "");
+        return shop.Place.Kind switch
+        {
+            "visitor" or "wandering" => L["Shop.Visitor"].Value,
+            "dungeon" => L["Shop.DungeonPlace"].Value,
+            _ => L["Shop.PlaceUnknown"].Value,
+        };
+    }
+
+    private string Number(int value) => value.ToString("N0", CultureInfo.GetCultureInfo(Lang));
+
+    private string Percent(double chance)
+    {
+        var value = Math.Round(chance * 100).ToString("0", CultureInfo.InvariantCulture);
+        return Lang == "tr" ? "%" + value : value + "%";
+    }
+
+    private int GoodsCount(ShopInfo shop) => shop.Kind == "pal" ? shop.Pals.Count : shop.Products.Count;
+
+    // Two shops can share vendor and place (the two merchants of a village): their first goods tell them apart.
+    private string? Hint(ShopInfo shop) =>
+        Data.Shops.Count(s => VendorName(s) == VendorName(shop) && PlaceText(s) == PlaceText(shop)) > 1
+            ? string.Join(", ", shop.Products.Take(3).Select(p => p.Names.Get(Lang)))
+            : null;
+
+    // ---- rows ---------------------------------------------------------------------------------------------
+
+    private RenderFragment ShopRow(ShopInfo shop) => __builder =>
+    {
+        var selected = SelectedShop?.Id == shop.Id;
+        var hint = Hint(shop);
+        <li class="@("srow9" + (selected ? " sel" : ""))" role="option" tabindex="0" aria-selected="@(selected ? "true" : "false")"
+            @onclick="() => Select(shop.Id, false)" @onkeydown="e => OnRowKey(e, shop.Id, false)">
+            <span class="t">@VendorName(shop)</span>
+            <span class="n num">@L[shop.Kind == "pal" ? "Shop.PalCount" : "Shop.ProductCount", GoodsCount(shop)]</span>
+            <span class="p">@PlaceText(shop)</span>
+            @if (hint != null) { <span class="p">@hint</span> }
+        </li>
+    };
+
+    private RenderFragment ItemRow(ShopItem item) => __builder =>
+    {
+        var selected = SelectedItem?.ItemId == item.ItemId;
+        var other = Lang == "tr" ? "en" : "tr";
+        var sellers = item.Offers.Select(o => o.Shop.Id).Distinct().Count();
+        <li class="@("prow9" + (selected ? " sel" : ""))" role="option" tabindex="0" aria-selected="@(selected ? "true" : "false")"
+            @onclick="() => Select(item.ItemId, true)" @onkeydown="e => OnRowKey(e, item.ItemId, true)">
+            @if (item.IconPath != null) { <img src="@("gamedata/" + item.IconPath)" alt="" /> } else { <span></span> }
+            <span class="t">@item.Names.Get(Lang)</span>
+            <span class="r"></span>
+            <span class="iline">
+                @if (item.Names.TryGet(other, out var otherName)) { <span lang="@other">@otherName</span><span aria-hidden="true">·</span> }
+                <span>@L["Shop.SoldBy", sellers]</span>
+                <span aria-hidden="true">·</span>
+                <span class="num">@string.Join(", ", ShopModel.PriceRanges(item.Offers).Select(Range))</span>
+            </span>
+        </li>
+    };
+
+    private string Range(ShopPriceRange range) =>
+        (range.Min == range.Max ? Number(range.Min) : Number(range.Min) + "–" + Number(range.Max)) + " " + range.Currency.Names.Get(Lang);
+
+    private RenderFragment Price(int price, ShopCurrency currency) => __builder =>
+    {
+        <span class="prc9" title="@currency.Names.Get(Lang)">
+            @if (currency.IconPath != null) { <img src="@("gamedata/" + currency.IconPath)" alt="@currency.Names.Get(Lang)" /> }
+            else { <span class="m">@currency.Names.Get(Lang)</span> }
+            <span class="num">@Number(price)</span>
+        </span>
+    };
+
+    private RenderFragment MapLink(ShopInfo shop) => __builder =>
+    {
+        if (ShopModel.MapPointId(shop) is { } point)
+        {
+            <a class="lnk" href="@("map?focus=" + Uri.EscapeDataString(point))"><Icon Name="pin" Size="14" />@L["Shop.ShowOnMap"]</a>
+        }
+    };
+
+    // ---- details ------------------------------------------------------------------------------------------
+
+    private RenderFragment ItemDetail(ShopItem item) => __builder =>
+    {
+        var other = Lang == "tr" ? "en" : "tr";
+        var comparer = StringComparer.Create(CultureInfo.GetCultureInfo(Lang), ignoreCase: true);
+        var rows = item.Offers.OrderBy(o => o.Shop.Currency.ItemId != "Money").ThenBy(o => o.Product.Price)
+            .ThenBy(o => VendorName(o.Shop), comparer).ToList();
+        <div class="dh9">
+            @if (item.IconPath != null) { <img src="@("gamedata/" + item.IconPath)" alt="" /> }
+            <div>
+                <h2>@item.Names.Get(Lang)</h2>
+                <div class="m">
+                    @if (item.Names.TryGet(other, out var otherName)) { <span lang="@other">@otherName</span> }
+                    <span>@L["Shop.SoldBy", rows.Select(o => o.Shop.Id).Distinct().Count()]</span>
+                </div>
+            </div>
+        </div>
+        <div class="sec9">
+            <div class="tscroll">
+                <table class="dt9 st9">
+                    <thead>
+                        <tr>
+                            <th>@L["Shop.Col.Vendor"]</th>
+                            <th>@L["Shop.Col.Place"]</th>
+                            <th>@L["Shop.Col.Price"]</th>
+                            <th>@L["Shop.Col.PerBuy"]</th>
+                            <th>@L["Shop.Col.Stock"]</th>
+                            <th>@L["Shop.Col.Note"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var offer in rows)
+                        {
+                            <tr>
+                                <th class="iname" scope="row"><button type="button" class="lnk" @onclick="() => OpenShop(offer.Shop.Id)">@VendorName(offer.Shop)</button></th>
+                                <td>
+                                    <span>@PlaceText(offer.Shop, 3)</span>
+                                    @MapLink(offer.Shop)
+                                </td>
+                                <td>@Price(offer.Product.Price, offer.Shop.Currency)</td>
+                                <td class="num">@Number(offer.Product.PerPurchase)</td>
+                                <td class="num">@Stock(offer.Product)</td>
+                                <td class="nt9">@Note(offer.Product)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (ShopModel.Towers(_map, item.ItemId) is { Count: > 0 } towers)
+            {
+                <p class="h">@L["Shop.InTower", towers.Count] <a class="lnk" href="@("map?focus=" + Uri.EscapeDataString(towers[0].Id))"><Icon Name="pin" Size="14" />@L["Shop.ShowOnMap"]</a></p>
+            }
+        </div>
+    };
+
+    private RenderFragment ShopDetail(ShopInfo shop) => __builder =>
+    {
+        <div class="dh9">
+            <div>
+                <h2>@VendorName(shop)</h2>
+                <div class="m">
+                    <span>@PlaceText(shop, 6)</span>
+                    @MapLink(shop)
+                </div>
+                <div class="m">
+                    <span class="prc9">
+                        @L["Shop.Currency"]:
+                        @if (shop.Currency.IconPath != null) { <img src="@("gamedata/" + shop.Currency.IconPath)" alt="" /> }
+                        @shop.Currency.Names.Get(Lang)
+                    </span>
+                    @if (shop.Condition is { } condition) { <span>@L["Shop.Condition"]: @condition.Get(Lang)</span> }
+                </div>
+            </div>
+        </div>
+
+        if (shop.Kind == "pal")
+        {
+            <div class="sec9">
+                @if (shop.CharacterNum > 0) { <p class="h">@L["Shop.PalNote", shop.CharacterNum]</p> }
+                <div class="tscroll">
+                    <table class="dt9 st9">
+                        <thead>
+                            <tr><th>@L["Ranch.PalWord"]</th><th>@L["Shop.Col.Level"]</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var sold in shop.Pals)
+                            {
+                                var pal = Data.Pals.FirstOrDefault(p => string.Equals(p.Id, sold.PalId, StringComparison.OrdinalIgnoreCase));
+                                if (pal == null) continue;
+                                <tr>
+                                    <th class="iname" scope="row"><span class="inm"><PalIcon Pal="pal" Size="28" /><span>@pal.DisplayName(Lang)</span></span></th>
+                                    <td class="num">@(sold.LevelMin == sold.LevelMax ? Number(sold.LevelMin) : Number(sold.LevelMin) + "–" + Number(sold.LevelMax))</td>
+                                    <td><a class="lnk" href="@Paldium.App.Components.Links.Pal(pal.Id)">@L["Ranch.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var pool in ShopModel.PoolGroups(shop))
+            {
+                <div class="sec9">
+                    @if (pool.Group != null) { <div class="sh"><h3>@L["Shop.PoolHead", Percent(pool.Chance)]</h3></div> }
+                    <div class="tscroll">
+                        <table class="dt9 st9">
+                            <thead>
+                                <tr>
+                                    @SortHeader(ShopModel.SortName, L["Shop.Col.Item"].Value)
+                                    @SortHeader(ShopModel.SortPrice, L["Shop.Col.Price"].Value)
+                                    <th>@L["Shop.Col.PerBuy"]</th>
+                                    <th>@L["Shop.Col.Stock"]</th>
+                                    <th>@L["Shop.Col.Note"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in ShopModel.Sort(pool.Products, State.ShopSort, State.ShopSortDescending, Lang))
+                                {
+                                    <tr>
+                                        <th class="iname" scope="row">
+                                            <button type="button" class="inm" @onclick="() => OpenItem(product.ItemId)">
+                                                @if (product.IconPath != null) { <img src="@("gamedata/" + product.IconPath)" alt="" /> }
+                                                <span>@product.Names.Get(Lang)</span>
+                                            </button>
+                                        </th>
+                                        <td>@Price(product.Price, shop.Currency)</td>
+                                        <td class="num">@Number(product.PerPurchase)</td>
+                                        <td class="num">@Stock(product)</td>
+                                        <td class="nt9">@(product.OncePerPlayer ? L["Shop.Once"].Value : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    };
+
+    // The data has 0 and -1 beside real stock counts; what the two mean is not confirmed, so no number and no claim is shown for them.
+    private string Stock(ShopProduct product) => product.Stock > 0 ? Number(product.Stock) : "—";
+
+    private string Note(ShopProduct product)
+    {
+        var notes = new List<string>();
+        if (product.OncePerPlayer) notes.Add(L["Shop.Once"].Value);
+        if (product.Chance < 1) notes.Add(L["Shop.Chance", Math.Round(product.Chance * 100)].Value);
+        return string.Join(" · ", notes);
+    }
+
+    private RenderFragment SortHeader(string key, string label) => __builder =>
+    {
+        var sorted = State.ShopSort == key;
+        <th aria-sort="@(sorted ? (State.ShopSortDescending ? "descending" : "ascending") : null)">
+            <button type="button" @onclick="() => SortBy(key)">
+                @label
+                @if (sorted) { <Icon Name="@(State.ShopSortDescending ? "chevron-down" : "chevron-up")" Size="14" /> }
+            </button>
+        </th>
+    };
+
+    private void SortBy(string key)
+    {
+        if (State.ShopSort == key) State.ShopSortDescending = !State.ShopSortDescending;
+        else { State.ShopSort = key; State.ShopSortDescending = false; }
+    }
+
+    private void OpenShop(string id)
+    {
+        State.ShopQuery = "";
+        Select(id, isItem: false);
+    }
+
+    private void OpenItem(string id) => Select(id, isItem: true);
+}

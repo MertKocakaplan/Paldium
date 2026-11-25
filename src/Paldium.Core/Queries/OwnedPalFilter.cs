@@ -21,6 +21,7 @@ public sealed record OwnedPalFilter
     public const string OwnerKey = "owner";
     public const string SourceKey = "source";
     public const string MinIvKey = "minIv";
+    public const string BaseKey = "base";
 
     public static OwnedPalFilter Empty { get; } = new();
 
@@ -33,6 +34,9 @@ public sealed record OwnedPalFilter
     public IReadOnlySet<string> Sources { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public int MinIvTotal { get; init; }
 
+    /// <summary>Only the Pals that work at this base (<see cref="Owned.CaptureRecord.ObjectKey"/> of its id), from the Map page (T151).</summary>
+    public string? BaseId { get; init; }
+
     public bool HasAny =>
         !string.IsNullOrWhiteSpace(SpeciesQuery)
         || !string.IsNullOrEmpty(SpeciesId)
@@ -41,7 +45,8 @@ public sealed record OwnedPalFilter
         || Locations.Count > 0
         || Owners.Count > 0
         || Sources.Count > 0
-        || MinIvTotal > 0;
+        || MinIvTotal > 0
+        || !string.IsNullOrEmpty(BaseId);
 
     public IReadOnlyList<FilterClause<OwnedPal>> BuildClauses(IGameData data)
     {
@@ -82,6 +87,13 @@ public sealed record OwnedPalFilter
             clauses.Add(new(LocationKey, p =>
                 selected.Contains(p.Location.Kind.ToString())
                 || (p.IsOnExpedition && selected.Contains(ExpeditionLocationKey))));
+        }
+
+        if (!string.IsNullOrEmpty(BaseId))
+        {
+            var key = BaseId;
+            clauses.Add(new(BaseKey, p => p.Location.Kind == LocationKind.Base && p.Location.BaseId != null &&
+                                          Owned.CaptureRecord.ObjectKey(p.Location.BaseId) == key));
         }
 
         if (Owners.Count > 0)
@@ -137,6 +149,7 @@ public sealed record OwnedPalFilter
         {
             GenderKey => this with { Gender = GenderAll },
             LocationKey => this with { Locations = new HashSet<string>(StringComparer.Ordinal) },
+            BaseKey => this with { BaseId = null },
             OwnerKey => this with { Owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
             SourceKey => this with { Sources = new HashSet<string>(StringComparer.Ordinal) },
             MinIvKey => this with { MinIvTotal = 0 },

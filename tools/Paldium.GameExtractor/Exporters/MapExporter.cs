@@ -14,51 +14,76 @@ public static class MapExporter
 {
     public const int MaxSize = 2048;
     public const int LargeSize = 4096;
-    private const string TexturePath = "Pal/Content/Pal/Texture/UI/Map/T_WorldMap.T_WorldMap";
+    private const string MainTexturePath = "Pal/Content/Pal/Texture/UI/Map/T_WorldMap.T_WorldMap";
+    private const string TreeTexturePath = "Pal/Content/Pal/Texture/UI/Map/T_TreeMap.T_TreeMap";
     private const string UiDataTable = "Pal/Content/Pal/DataTable/WorldMapUIData/DT_WorldMapUIData";
 
     /// <summary>Writes <c>world-map.png</c> and returns its description (null, with a note, when the texture cannot be read).</summary>
-    public static JObject? Export(DefaultFileProvider provider, string outFolder, List<string> warnings)
+    public static JObject? Export(DefaultFileProvider provider, string outFolder, List<string> warnings) =>
+        ExportMap(provider, outFolder, MainTexturePath, "MainMap", "world-map",
+            "Pal/Content/Pal/Texture/UI/Map/T_WorldMap (DT_WorldMapUIData row MainMap)", warnings);
+
+    /// <summary>Writes <c>tree-map.png</c>, <c>tree-map-large.png</c> and returns its description (T138/T140).</summary>
+    public static JObject? ExportTree(DefaultFileProvider provider, string outFolder, List<string> warnings) =>
+        ExportMap(provider, outFolder, TreeTexturePath, "Tree", "tree-map",
+            "Pal/Content/Pal/Texture/UI/Map/T_TreeMap (DT_WorldMapUIData row Tree)", warnings);
+
+    private static JObject? ExportMap(
+        DefaultFileProvider provider, string outFolder, string texturePath, string uiRowName,
+        string fileBaseName, string sourceLabel, List<string> warnings)
     {
         UTexture2D? texture;
-        try { texture = provider.LoadPackageObject<UTexture2D>(TexturePath); }
-        catch (Exception ex) { warnings.Add("World map texture could not be loaded: " + ex.Message); return null; }
+        try { texture = provider.LoadPackageObject<UTexture2D>(texturePath); }
+        catch (Exception ex) { warnings.Add($"Map texture {texturePath} could not be loaded: " + ex.Message); return null; }
         var mip = texture?.GetFirstMip();
-        if (texture == null || mip?.BulkData?.Data == null) { warnings.Add("World map texture not found or empty: " + TexturePath); return null; }
-        if (texture.Format != CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat.PF_DXT1)
-        {
-            warnings.Add($"World map texture has the format {texture.Format}; only DXT1 is read.");
-            return null;
-        }
+        if (texture == null || mip?.BulkData?.Data == null) { warnings.Add("Map texture not found or empty: " + texturePath); return null; }
 
         int sourceWidth = mip.SizeX, sourceHeight = mip.SizeY;
-        var scale = Math.Max(1, (int)Math.Ceiling(Math.Max(sourceWidth, sourceHeight) / (double)MaxSize));
-        var rgba = DecodeDxt1(mip.BulkData.Data, sourceWidth, sourceHeight, scale, out var width, out var height);
-        File.WriteAllBytes(Path.Combine(outFolder, "world-map.png"), PngWriter.Write(rgba, width, height));
+        byte[] rgba, large;
+        int width, height, largeWidth, largeHeight;
 
-        // The second, larger picture for the full screen viewer above x2 (T104): half the source size.
-        var largeScale = Math.Max(1, (int)Math.Ceiling(Math.Max(sourceWidth, sourceHeight) / (double)LargeSize));
-        var large = DecodeDxt1(mip.BulkData.Data, sourceWidth, sourceHeight, largeScale, out var largeWidth, out var largeHeight);
-        File.WriteAllBytes(Path.Combine(outFolder, "world-map-large.png"), PngWriter.Write(large, largeWidth, largeHeight));
+        if (texture.Format == CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat.PF_DXT1)
+        {
+            var scale = Math.Max(1, (int)Math.Ceiling(Math.Max(sourceWidth, sourceHeight) / (double)MaxSize));
+            rgba = DecodeDxt1(mip.BulkData.Data, sourceWidth, sourceHeight, scale, out width, out height);
 
-        JToken? main = null;
-        try { main = GameTables.LoadRows(provider, UiDataTable)["MainMap"]; }
+            // The second, larger picture for the full screen viewer above x2 (T104): half the source size.
+            var largeScale = Math.Max(1, (int)Math.Ceiling(Math.Max(sourceWidth, sourceHeight) / (double)LargeSize));
+            large = DecodeDxt1(mip.BulkData.Data, sourceWidth, sourceHeight, largeScale, out largeWidth, out largeHeight);
+        }
+        else
+        {
+            var fullRgba = TextureDecoder.ToRgba(texture.Format, mip.BulkData.Data, sourceWidth, sourceHeight);
+            if (fullRgba == null)
+            {
+                warnings.Add($"Map texture {texturePath} has unsupported format {texture.Format}.");
+                return null;
+            }
+            (rgba, width, height) = TextureDecoder.Downscale(fullRgba, sourceWidth, sourceHeight, MaxSize);
+            (large, largeWidth, largeHeight) = TextureDecoder.Downscale(fullRgba, sourceWidth, sourceHeight, LargeSize);
+        }
+
+        File.WriteAllBytes(Path.Combine(outFolder, fileBaseName + ".png"), PngWriter.Write(rgba, width, height));
+        File.WriteAllBytes(Path.Combine(outFolder, fileBaseName + "-large.png"), PngWriter.Write(large, largeWidth, largeHeight));
+
+        JToken? row = null;
+        try { row = GameTables.LoadRows(provider, UiDataTable)[uiRowName]; }
         catch (Exception ex) { warnings.Add("DT_WorldMapUIData could not be read: " + ex.Message); }
         return new JObject
         {
-            ["file"] = "world-map.png",
+            ["file"] = fileBaseName + ".png",
             ["width"] = width,
             ["height"] = height,
-            ["largeFile"] = "world-map-large.png",
+            ["largeFile"] = fileBaseName + "-large.png",
             ["largeWidth"] = largeWidth,
             ["largeHeight"] = largeHeight,
             ["sourceWidth"] = sourceWidth,
             ["sourceHeight"] = sourceHeight,
-            ["source"] = "Pal/Content/Pal/Texture/UI/Map/T_WorldMap (DT_WorldMapUIData row MainMap)",
-            ["worldMinX"] = (double?)main?["landScapeRealPositionMin"]?["X"],
-            ["worldMinY"] = (double?)main?["landScapeRealPositionMin"]?["Y"],
-            ["worldMaxX"] = (double?)main?["landScapeRealPositionMax"]?["X"],
-            ["worldMaxY"] = (double?)main?["landScapeRealPositionMax"]?["Y"],
+            ["source"] = sourceLabel,
+            ["worldMinX"] = (double?)row?["landScapeRealPositionMin"]?["X"],
+            ["worldMinY"] = (double?)row?["landScapeRealPositionMin"]?["Y"],
+            ["worldMaxX"] = (double?)row?["landScapeRealPositionMax"]?["X"],
+            ["worldMaxY"] = (double?)row?["landScapeRealPositionMax"]?["Y"],
         };
     }
 

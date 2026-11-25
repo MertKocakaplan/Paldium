@@ -1,0 +1,53 @@
+@inherits LocalizedComponentBase
+@using Paldium.App.Pages.PaldexParts
+
+@* The Pals tab (T146): a species picker (the Paldex one) and the species' places, the same list as the Paldex's full screen viewer. *@
+<div class="wm-filter">
+    <PalPicker Mode="PalPicker.PickerMode.Species" InlineSearch="true" Placeholder="@L["Map.Pal.Pick"].Value" AriaLabel="@L["Map.Pal.Pick"].Value" ValueChanged="PickAsync" />
+</div>
+@if (Pal is { } pal)
+{
+    <div class="wm-pal">
+        <PalIcon Pal="pal" Size="32" />
+        <div><b>@pal.DisplayName(Lang)</b> <span class="m num">@($"#{pal.DexLabel}")</span></div>
+        <button type="button" class="btn2" aria-label="@L["Map.PalLayerClear"].Value" title="@L["Map.PalLayerClear"].Value" @onclick="() => OnPick.InvokeAsync(null)"><Icon Name="x" Size="14" /></button>
+    </div>
+    @if (Predator is { } predator)
+    {
+        <button type="button" class="wm-switch" role="switch" aria-checked="@(PredatorOn ? "true" : "false")" @onclick="OnTogglePredator">
+            <span class="sw" aria-hidden="true"></span><span>@L["Map.Pal.Predator", predator.Names.Get(Lang)]</span>
+        </button>
+    }
+    @if (OtherMapOnly is { } other)
+    {
+        <button type="button" class="lnk wm-other" @onclick="() => OnMap.InvokeAsync(other)">@L["Map.Pal.OtherMap", Term(other == ObtainMaps.Tree ? "Map.Tree" : "Map.MainMap")]<Icon Name="arrow-right" Size="14" /></button>
+    }
+    @if (Places.Count == 0)
+    {
+        <p class="wm-empty">@L["Map.Pal.NoPlaces"]</p>
+    }
+    else
+    {
+        <PlaceList Places="Places" Selected="Selected" CurrentMap="@MapId" TreeHeader="@(Places.Any(p => p.MapId == ObtainMaps.Main))" IdPrefix="wm-place-" OnPick="OnPlace" />
+    }
+    <a class="lnk wm-other" href="@Links.Pal(pal.Id)">@L["Map.Pal.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a>
+}
+
+@code {
+    [Parameter] public PalSpecies? Pal { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<MapPlace> Places { get; set; } = [];
+    [Parameter, EditorRequired] public string MapId { get; set; } = ObtainMaps.Main;
+    [Parameter] public int Selected { get; set; } = -1;
+    /// <summary>The species' predator variant, when it has one (T149).</summary>
+    [Parameter] public Paldium.Core.Map.MapPredator? Predator { get; set; }
+    [Parameter] public bool PredatorOn { get; set; }
+    [Parameter] public EventCallback OnTogglePredator { get; set; }
+    [Parameter] public EventCallback<PalSpecies?> OnPick { get; set; }
+    [Parameter] public EventCallback<int> OnPlace { get; set; }
+    [Parameter] public EventCallback<string> OnMap { get; set; }
+
+    /// <summary>The other map, when the species has places there and none on the shown one.</summary>
+    private string? OtherMapOnly => Places.Any(p => p.MapId == MapId) ? null : Places.Select(p => p.MapId).FirstOrDefault(m => m != null && m != MapId);
+
+    private Task PickAsync(PalSpecies? pal) => pal == null ? Task.CompletedTask : OnPick.InvokeAsync(pal);
+}

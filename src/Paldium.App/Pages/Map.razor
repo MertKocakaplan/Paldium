@@ -1,0 +1,865 @@
+@page "/map"
+@using Microsoft.JSInterop
+@using Paldium.App.Pages.MapParts
+@using Paldium.App.Pages.PaldexParts
+@using Paldium.Core.Map
+@using Paldium.Core.Owned
+@using Paldium.Import.Sync
+@inherits LocalizedComponentBase
+@implements IAsyncDisposable
+@inject IGameData Data
+@inject MapDataService MapFiles
+@inject MapStateService State
+@inject SettingsStore Settings
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISyncService Sync
+@inject CaptureProgressStore Captures
+@inject IOwnedPalRepository Pals
+
+@* The Map page (screens/map.md, T138, T142-T151): both game maps with the checked markers. The side panel (map choice, tabs, search, layers,
+   Pals, quests and the card) is here; the picture, the markers, the labels and the camera are js/worldmap.js. *@
+<div class="b wm" @ref="_root" @onkeydown="OnKeyDownAsync">
+    <h1 class="sr" tabindex="-1">@L["Nav.Map"]</h1>
+    <aside class="wm-side">
+        <div class="hd">
+            <Segmented TValue="string" Items="@MapItems()" Value="@_mapId" ValueChanged="ChooseMapAsync" AriaLabel="@L["Map.MapChoice"].Value" />
+            <Segmented TValue="string" Items="@TabItems()" Value="@_tab" ValueChanged="ChooseTab" AriaLabel="@L["Map.Tabs"].Value" />
+            <div @onkeydown="OnSearchKeyAsync">
+                <SearchField Value="@State.Query" ValueChanged="SetQueryAsync" Placeholder="@L["Map.Search"].Value" AriaLabel="@L["Map.Search"].Value"
+                             OnSubmit="SubmitSearchAsync" OnEscape="() => SetQueryAsync(string.Empty)" />
+            </div>
+        </div>
+        <div class="wm-scroll">
+            @if (Searching)
+            {
+                @if (_hits.Count == 0)
+                {
+                    <p class="wm-empty" role="status">@L["Map.NoResult", State.Query]</p>
+                }
+                else
+                {
+                    <ul class="wm-list" role="listbox" aria-label="@L["Map.Search"].Value">
+                        @for (var i = 0; i < _hits.Count; i++)
+                        {
+                            var index = i;
+                            var hit = _hits[index];
+                            @if (index == 0 || _hits[index - 1].Kind != hit.Kind)
+                            {
+                                <li class="wm-kind" role="presentation">@L["Map.Kind." + hit.Kind]</li>
+                            }
+                            <li id="@($"wm-hit-{index}")" class="@("wm-hit" + (index == _cursor ? " cur" : ""))" role="option" aria-selected="@(index == _cursor ? "true" : "false")"
+                                tabindex="-1" @onclick="() => OpenHitAsync(index)">
+                                <b>@hit.PrimaryText</b>
+                                @if (hit.SecondaryText != null) { <span class="s">@hit.SecondaryText</span> }
+                                @if (hit.MapId != _mapId) { <span class="tag">@L["Map.OtherMap"]</span> }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else if (!_loaded)
+            {
+                @for (var i = 0; i < 8; i++) { <div class="wm-skel" aria-hidden="true"></div> }
+            }
+            else if (_tab == "pals")
+            {
+                var predator = PredatorOfPal;
+                <MapPalTab Pal="PalOfLayer" Places="_palPlaces" MapId="@_mapId" Selected="_palSelected" OnPick="PickPalAsync" OnPlace="OpenPlaceAsync" OnMap="ChooseMapAsync"
+                           Predator="predator" PredatorOn="@(predator != null && _enabled.Contains(PredatorLayer(predator.PalId)))" OnTogglePredator="TogglePredatorAsync" />
+            }
+            else if (_data != null && _tab == "quests")
+            {
+                <MapQuestList Data="_data" Filter="@State.QuestFilter" Selected="@State.SelectedQuest" Folded="State.FoldedGroups" Progress="_progress?.Quests"
+                              Show="QuestShow" HideDone="Settings.Current.Map.HideDoneQuests" OnFilter="f => State.QuestFilter = f" OnShow="s => State.QuestShow = s.ToString()"
+                              OnHideDone="h => Settings.Update(s => s with { Map = s.Map with { HideDoneQuests = h } })" OnOpen="OpenQuestFromListAsync" />
+            }
+            else if (_data != null)
+            {
+                <MapLayers Layers="_layers" Enabled="_enabled" Counts="_counts" DoneCounts="_doneCounts" Folded="State.FoldedGroups" NameOf="CategoryName"
+                           Hidden="HiddenKinds" OpenCategories="OpenCategories" PredatorDefeats="_progress?.PredatorDefeats" OnSet="SetLayersAsync"
+                           OnHide="SetHiddenAsync" OnTypesOpen="ToggleTypes" />
+            }
+        </div>
+        @if (SelectedQuest is { } quest)
+        {
+            <MapQuestCard Quest="quest" Data="_data!" Progress="_progress?.Quests" OnClose="CloseCardAsync" OnGo="GoToAsync" />
+        }
+        else if (SelectedArea is { } area)
+        {
+            <MapPredatorCard Area="area" OnClose="CloseCardAsync" />
+        }
+        else if (SelectedPoint is { } point)
+        {
+            var category = _data!.TryGetCategory(point.Category);
+            var name = category == null ? point.Category : CategoryName(category);
+            var region = point.RegionId == null ? null : _data.TryGetRegion(point.RegionId)?.Names.Get(Lang);
+            if (point.Category == WorldMapModel.Base && _bases.FirstOrDefault(b => WorldMapModel.BaseId(b.Id) == point.Id) is { } site)
+            {
+                <MapBaseCard Point="point" Title="@WorldMapModel.Title(point, name, Data, Lang)" SiteId="@site.Id" Capacity="site.Capacity" RegionName="@region"
+                             Workers="WorldMapModel.Workers(Pals.Current.Pals, site.Id, _sourceIds)" OnClose="CloseCardAsync" />
+            }
+            else
+            {
+                <MapPointCard Point="point" Map="_data" Category="category" CategoryName="@name" Title="@WorldMapModel.Title(point, name, Data, Lang)"
+                              RegionName="@region" Done="_done.Contains(point.Id)" InRecord="WorldMapModel.DoneInRecord(point, _progress)" StateKnown="_progress != null"
+                              OnClose="CloseCardAsync" OnToggleDone="() => ToggleDoneAsync(point.Id)" OnQuest="id => OpenQuestAsync(id, point.Id)" />
+            }
+        }
+    </aside>
+
+    <div class="wm-canvas" data-role="canvas" tabindex="0" role="application" aria-label="@L["Map.CanvasAria"].Value">
+        <div class="world" data-role="world"><img data-role="image" alt="" draggable="false" hidden /></div>
+        <canvas data-role="draw" aria-hidden="true"></canvas>
+        @if (_loaded && _data == null)
+        {
+            <div class="wm-banner" role="alert"><Icon Name="warn" Size="16" />@L["Map.LoadFailed"]</div>
+        }
+        else if (!MapFiles.HasPicture(PictureFile(_mapId)))
+        {
+            <div class="wm-banner" role="alert"><Icon Name="warn" Size="16" />@L["Map.NoPicture"]</div>
+        }
+        @if (PalOfLayer is { } layerPal)
+        {
+            <div class="wm-banner low">
+                <PalIcon Pal="layerPal" Size="24" />
+                <span>@L["Map.PalLayer", layerPal.DisplayName(Lang)]</span>
+                <a class="lnk" href="@Links.Pal(layerPal.Id)">@L["Map.OpenPaldex"]</a>
+                <button type="button" class="btn2" aria-label="@L["Map.PalLayerClear"].Value" title="@L["Map.PalLayerClear"].Value" @onclick="ClearPalLayerAsync"><Icon Name="x" Size="14" /></button>
+            </div>
+        }
+        <div class="mtip" data-role="tip" hidden></div>
+        <div class="mmap" data-role="mini" aria-hidden="true">
+            <img data-role="miniimage" alt="" draggable="false" hidden />
+            <span class="vp" data-role="miniview"></span>
+        </div>
+        <div class="coord num" data-role="coord"></div>
+        <div class="zc" data-role="zoomctl">
+            <button type="button" data-act="in" aria-label="@L["Map.ZoomIn"].Value"><Icon Name="plus" Size="16" /></button>
+            <span class="zl num" data-role="zoomlabel">×1</span>
+            <button type="button" data-act="out" aria-label="@L["Map.ZoomOut"].Value"><Icon Name="minus" Size="16" /></button>
+            <button type="button" data-act="fit" aria-label="@L["Map.Fit"].Value"><Icon Name="refresh" Size="16" /></button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ElementReference _root;
+    private IJSObjectReference? _view;
+    private DotNetObjectReference<Map>? _self;
+    private MapData? _file;     // the markers of the data bundle
+    private MapData? _data;     // the same with the player's bases
+    private bool _loaded;
+    private bool _disposed;
+    private string _mapId = WorldMapModel.Main;
+    private IReadOnlySet<string> _enabled = new HashSet<string>();
+    private IReadOnlyDictionary<string, int> _counts = new Dictionary<string, int>();
+    private IReadOnlyList<MapLayer> _layers = [];
+    private string _tab = "layers";
+    private List<MapPlace> _palPlaces = [];
+    private int _palSelected = -1;
+
+    // What the sources know about the player (T144, T148-T151).
+    private string _worldKey = "default";
+    private IReadOnlyList<string> _sourceIds = [];
+    private WorldProgress? _progress;
+    private IReadOnlyList<BaseSite> _bases = [];
+    private string _baseSignature = "";
+    private HashSet<string> _done = [];
+    private IReadOnlyDictionary<string, int> _doneCounts = new Dictionary<string, int>();
+
+    private IReadOnlyList<PredatorArea> _areas = [];
+    private int _area = -1;
+    private IReadOnlyList<MapSearchHit> _hits = [];
+    private int _cursor;
+    private readonly OnceParameter _mapOnce = new();
+    private readonly OnceParameter _focusOnce = new();
+    private readonly OnceParameter _queryOnce = new();
+    private string? _pendingFocus;
+
+    [SupplyParameterFromQuery(Name = "map")] public string? MapName { get; set; }
+    [SupplyParameterFromQuery(Name = "focus")] public string? Focus { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+
+    private bool Searching => !string.IsNullOrWhiteSpace(State.Query);
+
+    private MapMarker? SelectedPoint => State.SelectedPoint == null ? null : _data?.TryGetPoint(State.SelectedPoint);
+
+    private MapQuest? SelectedQuest => State.SelectedQuest == null ? null : _data?.TryGetQuest(State.SelectedQuest);
+
+    private PredatorArea? SelectedArea => _area >= 0 && _area < _areas.Count ? _areas[_area] : null;
+
+    private PalSpecies? PalOfLayer => Settings.Current.Map.Pal is { } id ? Data.Pals.FirstOrDefault(p => p.Id == id) : null;
+
+    private MapPredator? PredatorOfPal => PalOfLayer is { } pal ? _data?.Predators.FirstOrDefault(p => p.PalId == pal.Id) : null;
+
+    private static string PredatorLayer(string palId) => WorldMapModel.Predator + ":" + palId;
+
+    private QuestFilter QuestShow => Enum.TryParse<QuestFilter>(State.QuestShow, out var show) ? show : QuestFilter.All;
+
+    private IReadOnlySet<MarkKind> HiddenKinds
+    {
+        get
+        {
+            var map = Settings.Current.Map;
+            var hidden = new HashSet<MarkKind>();
+            if (map.HideCollected) hidden.Add(MarkKind.Collect);
+            if (map.HideOpened) hidden.Add(MarkKind.Open);
+            if (map.HideDefeated) hidden.Add(MarkKind.Defeat);
+            return hidden;
+        }
+    }
+
+    private IReadOnlySet<string> OpenCategories
+    {
+        get
+        {
+            var open = new HashSet<string>(StringComparer.Ordinal);
+            if (State.EffigyTypesOpen) open.Add(WorldMapModel.Effigy);
+            if (State.PredatorTypesOpen) open.Add(WorldMapModel.Predator);
+            return open;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _mapId = WorldMapModel.MapId(Settings.Current.Map.LastMap) ?? WorldMapModel.Main;
+        _tab = Settings.Current.Map.Tab is "pals" or "quests" ? Settings.Current.Map.Tab : "layers";
+        BuildPalPlaces();
+        // A new read of a source can change what is done, the quests and the bases.
+        Captures.Changed += OnSourceChanged;
+        Sync.StatusesChanged += OnSourceChanged;
+        Pals.Changed += OnPalsChanged;
+    }
+
+    private void OnSourceChanged(object? sender, EventArgs e) => InvokeAsync(async () =>
+    {
+        if (_disposed) return;
+        ReadRecord();
+        await ShowAsync();
+        StateHasChanged();
+    });
+
+    private void OnPalsChanged(object? sender, OwnedPalSnapshot snapshot) => InvokeAsync(StateHasChanged);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_mapOnce.IsNew(MapName) && WorldMapModel.MapId(MapName) is { } asked) _mapId = asked;
+        if (_queryOnce.IsNew(Query) && !string.IsNullOrEmpty(Query)) State.Query = Query;
+        if (_focusOnce.IsNew(Focus) && !string.IsNullOrEmpty(Focus)) _pendingFocus = Focus;
+        if (_view != null) await ShowAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _self = DotNetObjectReference.Create(this);
+            _view = await JS.InvokeAsync<IJSObjectReference>("pbWorldMap.attach", _root, _self, Config());
+            await ShowAsync(); // the picture first, the markers when the file is read
+            _file = await MapFiles.LoadAsync();
+            if (_disposed) return;
+            _loaded = true;
+            ReadRecord();
+            Search();
+            await ShowAsync();
+            StateHasChanged();
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    protected override void OnUiLanguageChanged()
+    {
+        BuildPalPlaces();
+        _baseSignature = ""; // the numbered base names are in the language
+        ReadRecord();
+        Search();
+        _ = RestartViewAsync();
+    }
+
+    // The script holds the texts of one language: it is attached again after a language change.
+    private async Task RestartViewAsync()
+    {
+        if (_view == null || _self == null) return;
+        try
+        {
+            await _view.InvokeVoidAsync("dispose");
+            await _view.DisposeAsync();
+            _view = await JS.InvokeAsync<IJSObjectReference>("pbWorldMap.attach", _root, _self, Config());
+            await ShowAsync(forceMap: true);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private object Config() => new
+    {
+        lang = Lang,
+        strings = new
+        {
+            cursor = L["Map.Cursor"].Value,
+            coordHint = L["Map.CoordHint"].Value,
+            noCoords = L["Map.NoCoords"].Value,
+            cluster = L["Map.Cluster"].Value,
+            collect = L["Map.Done.Collect"].Value,
+            open = L["Map.Done.Open"].Value,
+            defeat = L["Map.Done.Defeat"].Value,
+        },
+    };
+
+    // ---- the player's record ------------------------------------------------------------------------------
+
+    private void ReadRecord()
+    {
+        var statuses = Sync.Statuses;
+        _worldKey = WorldMapModel.WorldKey(statuses);
+        _sourceIds = WorldMapModel.SourcesOfWorld(statuses, _worldKey);
+        var me = Settings.Current.Scope.MyPlayerId;
+        _progress = Captures.Progress(_sourceIds, me);
+        _bases = Captures.Bases(_sourceIds, me);
+        if (_file != null)
+        {
+            // The markers are built again only when the bases changed: the map is sent to the script anew then.
+            var signature = string.Join("|", _bases.Select(b => $"{b.Id}:{b.X:0}:{b.Y:0}:{b.Range:0}:{b.Name}"));
+            if (_data == null || signature != _baseSignature)
+            {
+                _baseSignature = signature;
+                _data = _file.With(WorldMapModel.BaseCategory, WorldMapModel.BaseMarkers(_bases, n => L["Map.Base.Numbered", n].Value, Lang));
+                _layers = WorldMapModel.Layers(_data, Data.Relics);
+                _shownMap = null;
+            }
+            var map = Settings.Current.Map;
+            _enabled = WorldMapModel.Enabled(map.Categories, _layers, map.LayerSet, map.HideBases);
+        }
+        CountDone();
+    }
+
+    private void CountDone()
+    {
+        _done = _data == null ? [] : WorldMapModel.Done(_data.Points, WorldMapModel.Marked(Settings.Current.Map.Collected, _worldKey), _progress);
+        _doneCounts = _data == null ? new Dictionary<string, int>() : WorldMapModel.DoneCounts(_data.Points, _mapId, _done);
+    }
+
+    private void CountMarkers()
+    {
+        if (_data == null)
+        {
+            _counts = new Dictionary<string, int>();
+            return;
+        }
+
+        var counts = new Dictionary<string, int>(WorldMapModel.Counts(_data.Points, _mapId), StringComparer.Ordinal);
+        // A predator's count is the number of wild areas of its base species on the map.
+        foreach (var predator in _data.Predators)
+        {
+            var areas = Data.Pals.FirstOrDefault(p => p.Id == predator.PalId)?.Obtain?.Wild
+                .Where(w => w.Points.Any(p => p.Map == _mapId)).Select(w => w.Spawner).Distinct(StringComparer.Ordinal).Count() ?? 0;
+            counts[PredatorLayer(predator.PalId)] = areas;
+            counts[WorldMapModel.Predator] = counts.GetValueOrDefault(WorldMapModel.Predator) + areas;
+        }
+
+        _counts = counts;
+    }
+
+    // ---- what the canvas shows ----------------------------------------------------------------------------
+
+    private static string PictureFile(string mapId) => mapId == WorldMapModel.Tree ? "tree-map.png" : "world-map.png";
+
+    private string CategoryName(MapCategory category)
+    {
+        if (category.Names.TryGet(Lang, out var name) || category.Names.TryGet("en", out name)) return name;
+        return L["Map.Cat." + category.Id].Value;
+    }
+
+    private string LayerName(MapLayer layer) => layer.Relic?.ItemNames.Get(Lang) ?? layer.Predator?.Names.Get(Lang) ?? CategoryName(layer.Category);
+
+    private object MapPayload()
+    {
+        var projection = MapProjection.ForMap(_mapId);
+        var picture = PictureFile(_mapId);
+        var large = picture.Replace(".png", "-large.png", StringComparison.Ordinal);
+        var index = _layers.Select((l, i) => (l.Id, i)).ToDictionary(x => x.Id, x => x.i, StringComparer.Ordinal);
+
+        double[] At(double x, double y)
+        {
+            var (left, top) = projection.ToFraction(x, y);
+            return [Math.Round(left, 5), Math.Round(top, 5)];
+        }
+
+        var points = new List<object?[]>();
+        foreach (var p in _data?.Points.Where(p => p.Map == _mapId) ?? [])
+        {
+            if (!index.TryGetValue(WorldMapModel.LayerId(p), out var layer)) continue;
+            var at = At(p.X, p.Y);
+            var title = p.Names != null || p.Category == WorldMapModel.Effigy || p.RefKind == "pal"
+                ? WorldMapModel.Title(p, LayerName(_layers[layer]), Data, Lang)
+                : p.Items is { Count: > 0 } items ? _data!.TryGetItem(items[0].ItemId)?.Names.Get(Lang) : null;
+            var range = p.Range is { } r ? Math.Round(r / (projection.MaxY - projection.MinY), 5) : 0;
+            points.Add([p.Id, layer, at[0], at[1], p.MapX, p.MapY, title, (int)WorldMapModel.KindOf(p.Category), range]);
+        }
+
+        return new
+        {
+            id = _mapId,
+            image = MapFiles.HasPicture(picture) ? "gamedata/map/" + picture : null,
+            large = MapFiles.HasPicture(large) ? "gamedata/map/" + large : null,
+            matrix = _mapId == WorldMapModel.Main ? WorldMapProjection.Matrix : null,
+            world = new { minX = projection.MinX, maxX = projection.MaxX, minY = projection.MinY, maxY = projection.MaxY },
+            categories = _layers.Select(l =>
+            {
+                // Fast travel points and watchtowers have the game's two looks for "unlocked" and "locked".
+                var states = WorldMapModel.KindOf(l.Category.Id) == MarkKind.Open ? "gamedata/icons/map/" + l.Category.Id : null;
+                return new
+                {
+                    id = l.Id,
+                    name = LayerName(l),
+                    icon = (l.Relic?.IconPath ?? l.Category.Icon) is { } icon ? "gamedata/" + icon : null,
+                    openIcon = states == null ? null : states + "_open.png",
+                    lockedIcon = states == null ? null : states + "_locked.png",
+                    color = WorldMapModel.Color(l.Category.Group),
+                    letter = WorldMapModel.Letter(LayerName(l)),
+                };
+            }),
+            points,
+            regions = (_data?.Regions.Where(r => r.Map == _mapId) ?? []).Select(r =>
+            {
+                var at = At(r.X, r.Y);
+                return new object[] { at[0], at[1], r.Level, r.Names.Get(Lang) };
+            }),
+        };
+    }
+
+    private string? _shownMap;
+    private bool _shownData;
+
+    // Sends the map (only when it or the data changed), the switches, the marks, the areas and a pending link target.
+    private async Task ShowAsync(bool forceMap = false)
+    {
+        if (_view == null) return;
+        MapMarker? target = null;
+        if (_pendingFocus != null && _loaded)
+        {
+            target = _data?.TryGetPoint(_pendingFocus);
+            _pendingFocus = null;
+            if (target != null)
+            {
+                _mapId = target.Map;
+                State.SelectedPoint = target.Id;
+                State.SelectedQuest = null;
+                State.Query = "";
+                _hits = [];
+                Enable(target);
+            }
+        }
+        CountMarkers();
+        CountDone();
+
+        try
+        {
+            if (forceMap || _shownMap != _mapId || _shownData != (_data != null))
+            {
+                _shownMap = _mapId;
+                _shownData = _data != null;
+                _area = -1;
+                await _view.InvokeVoidAsync("setMap", MapPayload(), _enabled);
+                await _view.InvokeVoidAsync("setPalLayer", PalSpots(), false);
+                await _view.InvokeVoidAsync("select", State.SelectedPoint);
+            }
+            else await _view.InvokeVoidAsync("setEnabled", _enabled);
+            await SendMarksAsync();
+            await SendAreasAsync();
+
+            if (target != null)
+            {
+                await FlyAsync(target.Id, target.X, target.Y);
+                StateHasChanged();
+            }
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task SendMarksAsync()
+    {
+        if (_view == null) return;
+        var givers = _data == null ? new Dictionary<string, int>() : WorldMapModel.GiverStates(_data.Points, _progress?.Quests);
+        try { await _view.InvokeVoidAsync("setMarks", _done, HiddenKinds.Select(k => (int)k).ToList(), _progress != null, givers); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task SendAreasAsync()
+    {
+        if (_view == null) return;
+        var chosen = SelectedArea;
+        _areas = _data == null ? [] : WorldMapModel.PredatorAreas(_data.Predators.Where(p => _enabled.Contains(PredatorLayer(p.PalId))), Data.Pals, _mapId);
+        _area = chosen == null ? -1 : _areas.ToList().IndexOf(chosen);
+        var projection = MapProjection.ForMap(_mapId);
+        var spots = _areas.Select(a =>
+        {
+            var (left, top) = projection.ToFraction(a.Point.X, a.Point.Y);
+            return new object[] { Math.Round(left, 5), Math.Round(top, 5), Math.Round(a.Point.Radius / (projection.MaxY - projection.MinY), 5), a.Predator.Names.Get(Lang) };
+        }).ToList();
+        try { await _view.InvokeVoidAsync("setAreas", spots, _area); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task FlyAsync(string? pointId, double x, double y)
+    {
+        if (_view == null) return;
+        var (left, top) = MapProjection.ForMap(_mapId).ToFraction(x, y);
+        try { await _view.InvokeVoidAsync("flyTo", pointId, left, top); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private List<object[]>? PalSpots()
+    {
+        if (PalOfLayer == null) return null;
+        var spots = new List<object[]>();
+        for (var i = 0; i < _palPlaces.Count; i++)
+        {
+            if (_palPlaces[i].MapId != _mapId) continue;
+            foreach (var dot in _palPlaces[i].Dots)
+                spots.Add([Math.Round(dot.Left, 5), Math.Round(dot.Top, 5), Math.Round(dot.Radius, 5), dot.Alpha ? 1 : 0, i]);
+        }
+        return spots;
+    }
+
+    private IReadOnlyList<SegmentedItem<string>> TabItems() =>
+    [
+        new("layers", L["Map.Tab.Layers"].Value, IsWord: true),
+        new("pals", L["Map.Tab.Pals"].Value, IsWord: true),
+        new("quests", L["Map.Tab.Quests"].Value, IsWord: true),
+    ];
+
+    // Choosing a tab also leaves the search results.
+    private void ChooseTab(string tab)
+    {
+        _tab = tab;
+        State.Query = "";
+        _hits = [];
+        Settings.Update(s => s with { Map = s.Map with { Tab = tab } });
+    }
+
+    private IReadOnlyList<SegmentedItem<string>> MapItems() =>
+    [
+        new(WorldMapModel.Main, Term("Map.MainMap"), IsWord: true),
+        new(WorldMapModel.Tree, Term("Map.Tree"), IsWord: true),
+    ];
+
+    private async Task ChooseMapAsync(string mapId)
+    {
+        _mapId = mapId;
+        _palSelected = -1;
+        Settings.Update(s => s with { Map = s.Map with { LastMap = mapId } });
+        if (SelectedPoint is { } point && point.Map != mapId) State.SelectedPoint = null;
+        await ShowAsync();
+    }
+
+    private async Task SetLayersAsync((List<string> Ids, bool On) change)
+    {
+        SaveEnabled(change.On ? _enabled.Union(change.Ids) : _enabled.Except(change.Ids));
+        if (!change.On && SelectedPoint is { } point && change.Ids.Contains(WorldMapModel.LayerId(point))) State.SelectedPoint = null;
+        await ShowAsync();
+        await SelectOnViewAsync(State.SelectedPoint);
+    }
+
+    private void SaveEnabled(IEnumerable<string> ids)
+    {
+        var list = ids.Distinct(StringComparer.Ordinal).OrderBy(i => i, StringComparer.Ordinal).ToList();
+        _enabled = list.ToHashSet(StringComparer.Ordinal);
+        // The bases are kept apart: their category exists only while a source gives them.
+        var bases = _layers.Any(l => l.Id == WorldMapModel.Base);
+        Settings.Update(s => s with
+        {
+            Map = s.Map with { Categories = list, LayerSet = WorldMapModel.LayerSet, HideBases = bases ? !_enabled.Contains(WorldMapModel.Base) : s.Map.HideBases },
+        });
+    }
+
+    // The layer of a marker that is opened from a search, a link or a card is switched on.
+    private void Enable(MapMarker point)
+    {
+        var layer = WorldMapModel.LayerId(point);
+        if (!_enabled.Contains(layer)) SaveEnabled(_enabled.Append(layer));
+    }
+
+    private void ToggleTypes(string category)
+    {
+        if (category == WorldMapModel.Predator) State.PredatorTypesOpen = !State.PredatorTypesOpen;
+        else State.EffigyTypesOpen = !State.EffigyTypesOpen;
+    }
+
+    private async Task SelectOnViewAsync(string? pointId)
+    {
+        if (_view == null) return;
+        try { await _view.InvokeVoidAsync("select", pointId); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    // ---- collected, opened, defeated (T144, T148) ---------------------------------------------------------
+
+    private async Task ToggleDoneAsync(string pointId)
+    {
+        if (_data?.TryGetPoint(pointId) is not { } point || WorldMapModel.KindOf(point.Category) == MarkKind.None || WorldMapModel.DoneInRecord(point, _progress)) return;
+        Settings.Update(s => s with { Map = s.Map with { Collected = WorldMapModel.Toggle(s.Map.Collected, _worldKey, pointId) } });
+        CountDone();
+        await SendMarksAsync();
+    }
+
+    private async Task SetHiddenAsync((MarkKind Kind, bool Hide) change)
+    {
+        Settings.Update(s => s with
+        {
+            Map = change.Kind switch
+            {
+                MarkKind.Open => s.Map with { HideOpened = change.Hide },
+                MarkKind.Defeat => s.Map with { HideDefeated = change.Hide },
+                _ => s.Map with { HideCollected = change.Hide },
+            },
+        });
+        await SendMarksAsync();
+    }
+
+    /// <summary>A right click on a marker (js/worldmap.js).</summary>
+    [JSInvokable]
+    public async Task OnPointToggled(string id)
+    {
+        await ToggleDoneAsync(id);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ---- Pals (T146, T149) --------------------------------------------------------------------------------
+
+    private void BuildPalPlaces()
+    {
+        _palPlaces = new ObtainPlaces(L, Terms, Lang).Places(PalOfLayer?.Obtain);
+        if (_palSelected >= _palPlaces.Count) _palSelected = -1;
+    }
+
+    private async Task PickPalAsync(PalSpecies? pal)
+    {
+        if (pal == null)
+        {
+            await ClearPalLayerAsync();
+            return;
+        }
+
+        Settings.Update(s => s with { Map = s.Map with { Pal = pal.Id } });
+        _palSelected = -1;
+        BuildPalPlaces();
+        // The map stays when the species has places on it; the tab offers the other map otherwise.
+        await DrawPalAsync(frame: true);
+    }
+
+    private async Task DrawPalAsync(bool frame)
+    {
+        if (_view == null) return;
+        try { await _view.InvokeVoidAsync("setPalLayer", PalSpots(), frame); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task OpenPlaceAsync(int index)
+    {
+        if (index < 0 || index >= _palPlaces.Count || _palPlaces[index].MapId is not { } map) return;
+        if (map != _mapId) await ChooseMapAsync(map);
+        _palSelected = index;
+        if (_view == null) return;
+        try { await _view.InvokeVoidAsync("focusPal", index); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task ClearPalLayerAsync()
+    {
+        Settings.Update(s => s with { Map = s.Map with { Pal = null } });
+        _palSelected = -1;
+        BuildPalPlaces();
+        await DrawPalAsync(frame: false);
+    }
+
+    private Task TogglePredatorAsync()
+    {
+        if (PredatorOfPal is not { } predator) return Task.CompletedTask;
+        var layer = PredatorLayer(predator.PalId);
+        return SetLayersAsync((new List<string> { layer }, !_enabled.Contains(layer)));
+    }
+
+    // ---- quests (T145) ------------------------------------------------------------------------------------
+
+    private async Task OpenQuestFromListAsync(string id)
+    {
+        State.SelectedPoint = null;
+        await OpenQuestAsync(id, null);
+        if (SelectedQuest?.Points.Select(_data!.TryGetPoint).FirstOrDefault(p => p != null) is { } place) await GoToAsync(place.Id);
+        else await SelectOnViewAsync(null);
+    }
+
+    private Task OpenQuestAsync(string id, string? fromPoint)
+    {
+        State.SelectedQuest = id;
+        State.QuestFrom = fromPoint;
+        return Task.CompletedTask;
+    }
+
+    // Shows a marker: its map, its layer, the camera. The open quest card stays.
+    private async Task GoToAsync(string pointId)
+    {
+        if (_data?.TryGetPoint(pointId) is not { } point) return;
+        if (point.Map != _mapId)
+        {
+            _mapId = point.Map;
+            Settings.Update(s => s with { Map = s.Map with { LastMap = _mapId } });
+        }
+
+        State.SelectedPoint = point.Id;
+        Enable(point);
+        await ShowAsync();
+        await FlyAsync(point.Id, point.X, point.Y);
+    }
+
+    // ---- search -------------------------------------------------------------------------------------------
+
+    private void Search()
+    {
+        _hits = Searching ? MapSearchEngine.Search(State.Query, Lang, _mapId, _data, Data) : [];
+        _cursor = 0;
+    }
+
+    private Task SetQueryAsync(string value)
+    {
+        State.Query = value;
+        Search();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnSearchKeyAsync(KeyboardEventArgs e)
+    {
+        var step = e.Key == "ArrowDown" ? 1 : e.Key == "ArrowUp" ? -1 : 0;
+        if (step == 0 || _hits.Count == 0) return;
+        _cursor = Math.Clamp(_cursor + step, 0, _hits.Count - 1);
+        try { await JS.InvokeVoidAsync("pbScrollIntoView", $"wm-hit-{_cursor}"); }
+        catch (JSException) { }
+    }
+
+    private Task SubmitSearchAsync() => _hits.Count > 0 ? OpenHitAsync(_cursor) : Task.CompletedTask;
+
+    private async Task OpenHitAsync(int index)
+    {
+        if (index < 0 || index >= _hits.Count) return;
+        _cursor = index;
+        var hit = _hits[index];
+        _area = -1;
+        if (hit.MapId != _mapId)
+        {
+            _mapId = hit.MapId;
+            _palSelected = -1;
+            Settings.Update(s => s with { Map = s.Map with { LastMap = _mapId } });
+        }
+
+        if (hit.PalId != null)
+        {
+            // A species found by search opens the Pals tab with it.
+            State.SelectedPoint = null;
+            State.SelectedQuest = null;
+            ChooseTab("pals");
+            await ShowAsync();
+            await SelectOnViewAsync(null);
+            if (Data.Pals.FirstOrDefault(p => p.Id == hit.PalId) is { } pal) await PickPalAsync(pal);
+            return;
+        }
+
+        if (hit.Kind == MapSearchKind.Quest)
+        {
+            State.SelectedPoint = null;
+            await OpenQuestAsync(hit.Id, null);
+            if (hit.PointId != null) await GoToAsync(hit.PointId);
+            else await ShowAsync();
+            return;
+        }
+
+        State.SelectedQuest = null;
+        State.SelectedPoint = hit.PointId;
+        if (hit.CategoryId != null && !_enabled.Contains(hit.CategoryId) && _layers.Any(l => l.Id == hit.CategoryId)) SaveEnabled(_enabled.Append(hit.CategoryId));
+        if (hit.PointId != null && _data?.TryGetPoint(hit.PointId) is { } marker) Enable(marker);
+        await ShowAsync();
+        if (hit.PointId == null) await SelectOnViewAsync(null);
+        // An effigy type or a predator has no single place: the whole map shows it.
+        if (hit.Kind is MapSearchKind.Effigy or MapSearchKind.Predator) await FitAsync();
+        else await FlyAsync(hit.PointId, hit.X, hit.Y);
+    }
+
+    private async Task FitAsync()
+    {
+        if (_view == null) return;
+        try { await _view.InvokeVoidAsync("fit"); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    // ---- the card -----------------------------------------------------------------------------------------
+
+    [JSInvokable]
+    public async Task OnPointPicked(string id)
+    {
+        State.SelectedQuest = null;
+        State.SelectedPoint = id;
+        _area = -1;
+        if (_view != null) await _view.InvokeVoidAsync("select", id);
+        await SendAreasAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>A click inside a predator area (js/worldmap.js).</summary>
+    [JSInvokable]
+    public async Task OnAreaPicked(int index)
+    {
+        State.SelectedQuest = null;
+        State.SelectedPoint = null;
+        _area = index;
+        await SelectOnViewAsync(null);
+        await SendAreasAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Closing a quest card opened from a marker goes back to that marker's card.
+    private async Task CloseCardAsync()
+    {
+        State.SelectedPoint = State.SelectedQuest != null ? State.QuestFrom : null;
+        State.SelectedQuest = null;
+        State.QuestFrom = null;
+        _area = -1;
+        await SelectOnViewAsync(State.SelectedPoint);
+        await SendAreasAsync();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape" || (State.SelectedPoint == null && State.SelectedQuest == null && _area < 0) || Searching) return;
+        await CloseCardAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        Captures.Changed -= OnSourceChanged;
+        Sync.StatusesChanged -= OnSourceChanged;
+        Pals.Changed -= OnPalsChanged;
+        if (_view != null)
+        {
+            try { await _view.InvokeVoidAsync("dispose"); await _view.DisposeAsync(); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+            _view = null;
+        }
+
+        _self?.Dispose();
+        Dispose();
+    }
+}

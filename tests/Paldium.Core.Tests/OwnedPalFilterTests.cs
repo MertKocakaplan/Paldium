@@ -34,6 +34,20 @@ public class OwnedPalFilterTests
             IsOnExpedition: isOnExpedition);
 
     [Fact]
+    public void TheBaseFilter_TakesTheWorkersOfThatBase_HoweverTheIdIsSpelled()
+    {
+        OwnedPal Worker(string uid, string? baseId, LocationKind kind = LocationKind.Base) =>
+            Pal(uid, "SheepBall", location: kind) with { Location = new PalLocation(kind, null, 0, baseId) };
+        IReadOnlyList<OwnedPal> pals = [Worker("save", "0000aaaa-0001"), Worker("mod", "0000AAAA0001"), Worker("other", "0000AAAA0002"), Worker("box", null, LocationKind.Palbox)];
+
+        var filter = new OwnedPalFilter { BaseId = Paldium.Core.Owned.CaptureRecord.ObjectKey("0000AAAA-0001") };
+
+        Assert.True(filter.HasAny);
+        Assert.Equal(["mod", "save"], filter.Apply(pals, Data.Value).Select(p => p.Uid).Order());
+        Assert.Equal(4, filter.WithoutClause(OwnedPalFilter.BaseKey).Apply(pals, Data.Value).Count);
+    }
+
+    [Fact]
     public void EmptyResult_RemovalCounts_ReflectSingleClauseRemoval()
     {
         var alice = new PalOwner("p1", "Alice", null, null);

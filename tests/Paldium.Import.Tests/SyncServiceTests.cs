@@ -17,6 +17,7 @@ public class SyncServiceTests : IDisposable
         public readonly List<string> WorldPaths = [];
         public Func<int, IReadOnlyList<OwnedPal>> Pals = _ => [];
         public IReadOnlyList<PlayerCapture> Captures = [];
+        public string? WorldName;
         public Func<int, Exception?> Failure = _ => null;
         public TimeSpan Delay = TimeSpan.Zero;
 
@@ -33,7 +34,7 @@ public class SyncServiceTests : IDisposable
             {
                 if (Delay > TimeSpan.Zero) Thread.Sleep(Delay);
                 if (Failure(attempt) is { } failure) throw failure;
-                return new WorldSnapshot("w", null, [], [], Pals(attempt), DateTimeOffset.UtcNow) { Captures = Captures };
+                return new WorldSnapshot("w", WorldName, [], [], Pals(attempt), DateTimeOffset.UtcNow) { Captures = Captures };
             }
             finally
             {
@@ -136,6 +137,22 @@ public class SyncServiceTests : IDisposable
         Assert.Equal(2, _repo.Current.Pals.Count);
         Assert.All(_repo.Current.Pals, p => Assert.Equal("src1", p.SourceId));
         Assert.True(events >= 2); // Reading, then Ok
+    }
+
+    [Fact]
+    public async Task TheWorldName_OfASaveSource_IsKeptInItsStatus_AlsoWhenALaterReadFails()
+    {
+        _reader.WorldName = "Test World";
+        _reader.Failure = attempt => attempt > 1 ? new IOException("locked") : null;
+        var service = NewService();
+
+        service.ApplyConfig([new SourceConfig("src1", SourceType.WorldFolder, NewWorldFolder(), true)]);
+        Assert.True(WaitUntil(() => service.Statuses is [{ State: SourceState.Ok }]));
+        Assert.Equal("Test World", service.Statuses[0].WorldName);
+
+        await service.RefreshNowAsync();
+        Assert.True(WaitUntil(() => service.Statuses is [{ State: SourceState.Error }]));
+        Assert.Equal("Test World", service.Statuses[0].WorldName);
     }
 
     [Fact]

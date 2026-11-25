@@ -115,6 +115,8 @@ public class TechnologyModelTests
         Assert.Equal("icons/items/Pickaxe_Default.png", Tech("Product_Pickaxe_Grade_02").Unlocks.Single(u => u.Id == "Pickaxe_Tier_01").IconPath);
         Assert.Equal("icons/items/Pickaxe_Default.png", Tech("Product_Pickaxe_Grade_03").Unlocks.Single(u => u.Id == "Pickaxe_Tier_02").IconPath);
         Assert.Equal("icons/items/Bow3.png", Tech("Battle_RangeWeapon_Bow3").Unlocks.Single(u => u.Id == "Bow_triple").IconPath);
-        Assert.Equal("icons/items/SakuraSaurus_Water.png", Tech("SkillUnlock_SakuraSaurus_Water").Unlocks.Single(u => u.Id == "SkillUnlock_Sakurasaurus_Water").IconPath);
+        // The unlock id is spelled differently from its item row (Sakurasaurus / SakuraSaurus): found case-insensitively, the row's IconName is
+        // the saddle icon like every other saddle's (the earlier expectation of the Pal picture came from a hand-edited bundle).
+        Assert.Equal("icons/items/SkillUnlock_Saddle.png", Tech("SkillUnlock_SakuraSaurus_Water").Unlocks.Single(u => u.Id == "SkillUnlock_Sakurasaurus_Water").IconPath);
     }
 }

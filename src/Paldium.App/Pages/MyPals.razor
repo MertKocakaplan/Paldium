@@ -2,7 +2,7 @@
 @using Paldium.App.Pages.MyPalsParts
 @inherits LocalizedComponentBase
 
-<OwnedPalList InitialPassive="@Passive" InitialSpecies="@Species" InitialPal="@Pal" />
+<OwnedPalList InitialPassive="@Passive" InitialSpecies="@Species" InitialPal="@Pal" InitialBase="@Base" />
 
 @code {
     /// <summary>Optional <c>?passive=PassiveId</c>: opens the list filtered by that passive (from the Skills page).</summary>
@@ -16,4 +16,8 @@
     /// <summary>Optional <c>?pal=SelectionKey</c>: selects that Pal and opens the edit panel (from the Planner links).</summary>
     [SupplyParameterFromQuery(Name = "pal")]
     public string? Pal { get; set; }
+
+    /// <summary>Optional <c>?base=BaseId</c>: opens the list filtered by the workers of that base (from the Map page).</summary>
+    [SupplyParameterFromQuery(Name = "base")]
+    public string? Base { get; set; }
 }

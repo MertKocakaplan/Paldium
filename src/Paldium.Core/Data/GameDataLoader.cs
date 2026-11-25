@@ -150,7 +150,25 @@ public static class GameDataLoader
                 x.Requires.TowerBoss?.Type, x.Requires.TowerBoss == null ? null : new LocalizedText(x.Requires.TowerBoss.Names, x.Requires.TowerBoss.Type),
                 x.Requires.Research?.Id, x.Requires.Research == null ? null : new LocalizedText(x.Requires.Research.Names, x.Requires.Research.Id)),
             x.Unlocks.Select(u => new TechnologyUnlock(u.Kind == "build", u.Id, new LocalizedText(u.Names, u.Id), u.Icon)).ToList())).ToList();
-        return new GameData(meta, mechanics, pals, passives, actives, elements, workTypes, terms) { Relics = relics, Technologies = technologies };
+        var shops = (f.Shops ?? []).Select(s => new ShopInfo(
+            s.Id,
+            s.Kind,
+            new LocalizedText(s.VendorNames, s.Id),
+            new ShopPlace(
+                s.Place.Kind,
+                new LocalizedText(s.Place.Names, string.Empty),
+                s.Place.MapPoints.Select(mp => new ShopMapPoint(
+                    mp.X, mp.Y, mp.Map, mp.MapX, mp.MapY,
+                    mp.Names == null ? null : new LocalizedText(mp.Names, string.Empty))).ToList()),
+            new ShopCurrency(s.Currency.ItemId, new LocalizedText(s.Currency.Names, s.Currency.ItemId), s.Currency.Icon),
+            s.Condition == null ? null : new LocalizedText(s.Condition, string.Empty),
+            (s.Pool ?? []).Select(p => new ShopPoolEntry(p.Group, p.Weight, p.Chance)).ToList(),
+            (s.Products ?? []).Select(pr => new ShopProduct(
+                pr.ItemId, new LocalizedText(pr.Names, pr.ItemId), pr.Icon, pr.Price,
+                pr.PerPurchase, pr.Stock, pr.OncePerPlayer, pr.PoolGroup, pr.Chance)).ToList(),
+            s.CharacterNum,
+            (s.Pals ?? []).Select(pa => new ShopPal(pa.PalId, pa.LevelMin, pa.LevelMax)).ToList())).ToList();
+        return new GameData(meta, mechanics, pals, passives, actives, elements, workTypes, terms) { Relics = relics, Technologies = technologies, Shops = shops };
     }
 
     private static ObtainInfo MapObtain(ObtainDto o, string palId)

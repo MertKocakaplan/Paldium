@@ -20,7 +20,7 @@
                      OnEscape="CloseInlineAsync" />
         @if (_inlineOpen)
         {
-            <div class="picker-inline-drop" @onmousedown:preventDefault="true">
+            <div class="@($"picker-inline-drop{(Mode == PickerMode.Owned ? " owned" : "")}")" @onmousedown:preventDefault="true">
                 @if (Mode == PickerMode.Species)
                 {
                     var matches = MatchingSpecies();
@@ -61,12 +61,29 @@
                             @foreach (var owned in ownedMatches)
                             {
                                 var captured = owned;
-                                <button type="button" class="pk" role="option" @onclick="() => PickOwnedAsync(captured)">
+                                <button type="button" class="pk pk-owned" role="option" aria-label="@OwnedAriaLabel(captured)" @onclick="() => PickOwnedAsync(captured)">
                                     <PalIcon PalId="@captured.SpeciesId" Size="28" />
-                                    <span class="t">@OwnedName(captured)</span>
-                                    <GenderIcon Gender="@captured.Gender" Size="12" />
-                                    <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
-                                    <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                    <div class="pk-body">
+                                        <div class="pk-top">
+                                            <span class="t">@OwnedName(captured)</span>
+                                            <GenderIcon Gender="@captured.Gender" Size="12" />
+                                            <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
+                                            <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                        </div>
+                                        <div class="pk-pas" aria-hidden="true">
+                                            @if (captured.Passives.Count == 0)
+                                            {
+                                                <PassiveLine IsEmpty="true" />
+                                            }
+                                            else
+                                            {
+                                                @foreach (var pid in captured.Passives)
+                                                {
+                                                    <PassiveLine PassiveId="@pid" Want="@PalPickerFormat.PassiveMatchesQuery(Data, pid, _query)" />
+                                                }
+                                            }
+                                        </div>
+                                    </div>
                                 </button>
                             }
                         </div>
@@ -154,7 +171,7 @@ else
     private RenderFragment RenderPopover() => __builder =>
     {
         <MudPopover Open="_open" Elevation="0" Fixed="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" OverflowBehavior="OverflowBehavior.FlipOnOpen">
-            <div class="picker-pop" @onkeydown="OnPopKeyDownAsync" tabindex="-1">
+            <div class="@($"picker-pop{(Mode == PickerMode.Owned ? " owned" : "")}")" @onkeydown="OnPopKeyDownAsync" tabindex="-1">
                 <SearchField Value="@_query"
                              ValueChanged="q => _query = q"
                              Placeholder="@(Placeholder ?? (Mode == PickerMode.Owned ? L["Picker.OwnedPlaceholder"].Value : L["Picker.Placeholder"].Value))"
@@ -213,12 +230,29 @@ else
                             @foreach (var owned in ownedMatches)
                             {
                                 var captured = owned;
-                                <button type="button" class="pk" role="option" @onclick="() => PickOwnedAsync(captured)">
+                                <button type="button" class="pk pk-owned" role="option" aria-label="@OwnedAriaLabel(captured)" @onclick="() => PickOwnedAsync(captured)">
                                     <PalIcon PalId="@captured.SpeciesId" Size="28" />
-                                    <span class="t">@OwnedName(captured)</span>
-                                    <GenderIcon Gender="@captured.Gender" Size="12" />
-                                    <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
-                                    <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                    <div class="pk-body">
+                                        <div class="pk-top">
+                                            <span class="t">@OwnedName(captured)</span>
+                                            <GenderIcon Gender="@captured.Gender" Size="12" />
+                                            <span class="sub">@LocationText.ShortPlace(captured, Terms, L)</span>
+                                            <span class="m num">@($"{L["MyPals.ColLevel"]} {captured.Level}")</span>
+                                        </div>
+                                        <div class="pk-pas" aria-hidden="true">
+                                            @if (captured.Passives.Count == 0)
+                                            {
+                                                <PassiveLine IsEmpty="true" />
+                                            }
+                                            else
+                                            {
+                                                @foreach (var pid in captured.Passives)
+                                                {
+                                                    <PassiveLine PassiveId="@pid" Want="@PalPickerFormat.PassiveMatchesQuery(Data, pid, _query)" />
+                                                }
+                                            }
+                                        </div>
+                                    </div>
                                 </button>
                             }
                         </div>
@@ -259,6 +293,17 @@ else
     }
 
     private string OwnedName(OwnedPal pal) => pal.Nickname ?? Data.Pal(pal.SpeciesId).DisplayName(Lang);
+
+    private string OwnedAriaLabel(OwnedPal pal) => PalPickerFormat.BuildOwnedAriaLabel(
+        pal,
+        Data,
+        Lang,
+        LocationText.ShortPlace(pal, Terms, L),
+        L["MyPals.ColLevel"].Value,
+        L["Common.Male"].Value,
+        L["Common.Female"].Value,
+        L["Picker.AriaPassives"].Value,
+        L["Plan.NoPassives"].Value);
 
     private string OwnedText(OwnedPal pal)
     {

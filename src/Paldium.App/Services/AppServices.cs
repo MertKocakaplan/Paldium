@@ -77,6 +77,9 @@ public static class AppServices
         services.AddSingleton<SkillsStateService>();
         services.AddSingleton<GuideStateService>();
         services.AddSingleton<TechnologyStateService>();
+        services.AddSingleton<MapStateService>();
+        services.AddSingleton(sp => new MapDataService(Path.Combine(AppContext.BaseDirectory, "data"),
+            Path.Combine(AppContext.BaseDirectory, "wwwroot", "gamedata", "map"), sp.GetRequiredService<ILogger<MapDataService>>()));
         services.AddSingleton(sp =>
         {
             var version = (System.Reflection.Assembly.GetEntryAssembly() ?? typeof(AppServices).Assembly)

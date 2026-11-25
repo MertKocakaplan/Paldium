@@ -1,7 +1,7 @@
 using Paldium.DataBuilder;
 
-// Usage: Paldium.DataBuilder --palcalc <dir> --out <dir> [--extractor <dir>] [--report <file>] [--timestamp <ISO-8601 UTC>]
-string? palcalc = null, outDir = null, timestamp = null, extractorDir = null, reportPath = null;
+// Usage: Paldium.DataBuilder --palcalc <dir> --out <dir> [--extractor <dir>] [--world <dir>] [--report <file>] [--timestamp <ISO-8601 UTC>]
+string? palcalc = null, outDir = null, timestamp = null, extractorDir = null, worldDir = null, reportPath = null;
 for (var i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -9,6 +9,7 @@ for (var i = 0; i < args.Length; i++)
         case "--palcalc" when i + 1 < args.Length: palcalc = args[++i]; break;
         case "--out" when i + 1 < args.Length: outDir = args[++i]; break;
         case "--extractor" when i + 1 < args.Length: extractorDir = args[++i]; break;
+        case "--world" when i + 1 < args.Length: worldDir = args[++i]; break;
         case "--report" when i + 1 < args.Length: reportPath = args[++i]; break;
         case "--timestamp" when i + 1 < args.Length: timestamp = args[++i]; break;
         default:
@@ -19,7 +20,7 @@ for (var i = 0; i < args.Length; i++)
 
 if (palcalc == null || outDir == null)
 {
-    Console.Error.WriteLine("Usage: Paldium.DataBuilder --palcalc <dir> --out <dir> [--extractor <dir>] [--report <file>] [--timestamp <ISO-8601 UTC>]");
+    Console.Error.WriteLine("Usage: Paldium.DataBuilder --palcalc <dir> --out <dir> [--extractor <dir>] [--world <dir>] [--report <file>] [--timestamp <ISO-8601 UTC>]");
     return 2;
 }
 
@@ -33,8 +34,15 @@ var (gameData, breeding) = source.Build(timestamp, commit, tagsPath, outDir, ext
 BundleWriter.Write(outDir, gameData, breeding);
 if (extractor?.BreedingRules() is { } rules) BundleWriter.WriteRules(outDir, rules);
 if (extractorDir != null) Console.WriteLine($"Building icons copied: {BundleWriter.CopyBuildingIcons(extractorDir, outDir)}.");
-if (extractorDir != null) Console.WriteLine($"Ranch item icons copied: {BundleWriter.CopyItemIcons(extractorDir, outDir)}, Pals with Ranch drops: {gameData.Pals.Count(p => p.Ranch is { Count: > 0 })}.");
-if (extractorDir != null) Console.WriteLine(BundleWriter.CopyWorldMap(extractorDir, outDir) ? "World map picture copied." : "No world map picture in the extractor output.");
+if (extractorDir != null) Console.WriteLine($"Item icons copied: {BundleWriter.CopyItemIcons(extractorDir, outDir)}, Pals with Ranch drops: {gameData.Pals.Count(p => p.Ranch is { Count: > 0 })}, Shops: {gameData.Shops?.Count ?? 0}.");
+if (extractorDir != null) Console.WriteLine($"Map icons copied: {BundleWriter.CopyMapIcons(extractorDir, outDir)}.");
+if (extractorDir != null) Console.WriteLine(BundleWriter.CopyWorldMap(extractorDir, outDir) ? "World & tree map pictures copied." : "No world map picture in the extractor output.");
+if (extractorDir != null && worldDir != null)
+{
+    var mapPoints = MapPointsBuilder.Build(extractorDir, worldDir, gameData);
+    BundleWriter.WriteMapPoints(outDir, mapPoints);
+    Console.WriteLine($"Map points built: {mapPoints.Points.Count} points, {mapPoints.Regions.Count} regions, {mapPoints.Categories.Count} categories.");
+}
 
 Console.WriteLine($"PalCalc commit {commit}, db {source.DbVersion}");
 Console.WriteLine($"Pals: {gameData.Pals.Count}, passives: {gameData.Passives.Count}, actives: {gameData.Actives.Count}, " +

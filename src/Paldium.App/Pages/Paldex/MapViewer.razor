@@ -1,6 +1,7 @@
 @implements IAsyncDisposable
 @inherits LocalizedComponentBase
 @using Microsoft.JSInterop
+@using System.IO
 @using Paldium.Core.Domain
 
 @* The full screen map viewer (T104, screens/paldex.md "Harita görüntüleyici"): a modal dialog over the whole window. The list is here; the
@@ -8,8 +9,12 @@
 <dialog @ref="_dialog" class="mview" aria-modal="true" aria-labelledby="mv-h" @onclose="OnDialogClosedAsync">
     <div class="mhead">
         <PalIcon Pal="@Pal" Size="28" />
-        <h2 id="mv-h"><b>@Pal.DisplayName(Lang)</b> <span class="m">· @L["Detail.WhereTitle"] · @L["Detail.MainMap"]</span></h2>
+        <h2 id="mv-h"><b>@Pal.DisplayName(Lang)</b> <span class="m">· @L["Detail.WhereTitle"] · @MapName(_map)</span></h2>
         <span class="sp"></span>
+        @if (Maps.Count > 1)
+        {
+            <Segmented TValue="string" Mini="true" Items="@MapItems()" Value="@_map" ValueChanged="ChooseMapAsync" AriaLabel="@L["Map.MapChoice"].Value" />
+        }
         <button type="button" class="btn2" @onclick="CloseAsync">
             <Icon Name="x" Size="14" />
             <span>@L["Detail.Map.Close"]</span>
@@ -19,26 +24,7 @@
     <div class="mbody">
         <aside class="mside">
             <h3>@L["Detail.Map.Places"]</h3>
-            <ul class="wl3" role="listbox" aria-label="@L["Detail.Map.Places"].Value" @onkeydown="OnListKeyDownAsync">
-                @for (var i = 0; i < Places.Count; i++)
-                {
-                    var idx = i;
-                    var place = Places[idx];
-                    var selected = idx == _selected;
-                    <li id="@($"mv-opt-{idx}")"
-                        role="option"
-                        tabindex="@(selected || (_selected < 0 && idx == FirstEnabled()) ? 0 : -1)"
-                        aria-selected="@(selected ? "true" : "false")"
-                        aria-disabled="@(place.OnMain ? null : "true")"
-                        title="@place.Title"
-                        @onclick="() => SelectAsync(idx)">
-                        <span class="@(place.Kind == "alpha" ? "mk a" : place.OnMain ? "mk w" : "mk o")" aria-hidden="true"></span>
-                        <span class="k">@place.KindLabel</span>
-                        <span class="n">@place.Name@if (place.Night) { <img class="nm" src="gamedata/icons/misc/Night.png" alt="@L["Obtain.Night"].Value" title="@L["Obtain.Night"].Value" width="14" height="14" /> }</span>
-                        <span class="m">@place.Meta</span>
-                    </li>
-                }
-            </ul>
+            <PlaceList Places="@Places" Selected="_selected" CurrentMap="@_map" TreeHeader="Maps.Count > 1" IdPrefix="mv-opt-" OnPick="SelectAsync" />
             <div class="leg" aria-hidden="true">
                 <span><i></i> @L["Detail.Map.LegendArea"]</span>
                 <span><i class="a"></i> @L["Detail.Map.LegendAlpha"]</span>
@@ -50,13 +36,13 @@
 
         <div class="mcan" data-role="canvas" tabindex="0" role="application" aria-label="@L["Detail.Map.CanvasAria"].Value">
             <div class="world" data-role="world">
-                <img data-role="image" class="mimg" src="@(HasImage ? "gamedata/map/world-map.png" : null)" alt="" draggable="false" hidden="@(!HasImage)" />
+                <img data-role="image" class="mimg" alt="" draggable="false" hidden />
                 <div class="pts" data-role="layer"></div>
             </div>
             <div class="chips" data-role="chips"></div>
             <div class="mtip" data-role="tip" hidden></div>
             <div class="mmap" data-role="mini" aria-hidden="true">
-                <img src="@(HasImage ? "gamedata/map/world-map.png" : null)" alt="" draggable="false" hidden="@(!HasImage)" />
+                <img data-role="miniimage" alt="" draggable="false" hidden />
                 <span class="vp" data-role="miniview"></span>
             </div>
             <div class="coord num" data-role="coord"></div>
@@ -78,9 +64,35 @@
 
     [Parameter, EditorRequired] public PalSpecies Pal { get; set; } = default!;
     [Parameter, EditorRequired] public IReadOnlyList<MapPlace> Places { get; set; } = [];
-    [Parameter] public bool HasImage { get; set; }
-    [Parameter] public bool HasLargeImage { get; set; }
+    /// <summary>The map shown when the viewer opens (the one of the preview).</summary>
+    [Parameter] public string InitialMap { get; set; } = ObtainMaps.Main;
     [Parameter] public EventCallback OnClose { get; set; }
+
+    private string _map = ObtainMaps.Main;
+
+    private IReadOnlyList<string> Maps => ObtainMaps.Of(Pal.Obtain!);
+
+    private string MapName(string map) => Term(map == ObtainMaps.Tree ? "Map.Tree" : "Map.MainMap");
+
+    private IReadOnlyList<SegmentedItem<string>> MapItems() => Maps.Select(m => new SegmentedItem<string>(m, MapName(m), IsWord: true)).ToList();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _map = InitialMap;
+    }
+
+    private async Task ChooseMapAsync(string map)
+    {
+        _map = map;
+        _selected = -1;
+        if (_view != null)
+        {
+            try { await _view.InvokeVoidAsync("showMap", map); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -91,7 +103,7 @@
             await JS.InvokeVoidAsync("pbShowModal", _dialog);
             _view = await JS.InvokeAsync<IJSObjectReference>("pbMapView.attach", _dialog, _self, Config());
             // The focus starts on the first place of the list; when there is none, on the map.
-            var first = FirstEnabled();
+            var first = PlaceList.FirstEnabled(Places, _map);
             await JS.InvokeVoidAsync("pbFocusId", first >= 0 ? $"mv-opt-{first}" : null);
         }
         catch (JSException) { }
@@ -100,54 +112,62 @@
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
-    private int FirstEnabled()
+    private object Config() => new
     {
-        for (var i = 0; i < Places.Count; i++) if (Places[i].OnMain) return i;
-        return -1;
-    }
+        lang = Lang,
+        map = _map,
+        maps = Maps.Select(MapConfig).ToList(),
+        strings = new
+        {
+            area = L["Detail.Map.Area"].Value,
+            nightArea = L["Detail.Map.NightArea"].Value,
+            alpha = L["Detail.Map.Alpha"].Value,
+            offscreen = L["Detail.Map.Offscreen"].Value,
+            cursor = L["Detail.Map.Cursor"].Value,
+            coordHint = L["Detail.Map.CoordHint"].Value,
+            noCoords = L["Detail.Map.NoCoords"].Value,
+        },
+        places = Places.Select(p => new
+        {
+            kind = p.Kind,
+            night = p.Night,
+            map = p.MapId,
+            meta = p.Meta,
+            dots = p.Dots.Select(d => new object?[] { Math.Round(d.Left, 5), Math.Round(d.Top, 5), Math.Round(d.Radius, 5), d.Alpha ? 1 : 0, d.MapX, d.MapY, d.Night ? 1 : 0 }),
+        }),
+    };
 
-    private object Config()
+    private static string? Picture(string file) =>
+        File.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot", "gamedata", "map", file)) ? "gamedata/map/" + file : null;
+
+    private static object MapConfig(string map)
     {
-        var culture = CultureInfo.GetCultureInfo(Lang);
+        var projection = MapProjection.ForMap(map);
+        var tree = map == ObtainMaps.Tree;
         var gridX = new List<double>();
         var gridY = new List<double>();
-        // Lines every 500 in-game map units, aligned to multiples of 500.
-        for (var v = -2000; v <= 1500; v += 500)
+        // Lines every 500 in-game map units, aligned to multiples of 500; the World Tree map has no game coordinates and no grid.
+        if (!tree)
         {
-            var left = WorldMapProjection.LeftOfMapX(v);
-            if (left is > 0 and < 1) gridX.Add(Math.Round(left, 5));
-            var top = WorldMapProjection.TopOfMapY(v);
-            if (top is > 0 and < 1) gridY.Add(Math.Round(top, 5));
+            for (var v = -2000; v <= 1500; v += 500)
+            {
+                var left = WorldMapProjection.LeftOfMapX(v);
+                if (left is > 0 and < 1) gridX.Add(Math.Round(left, 5));
+                var top = WorldMapProjection.TopOfMapY(v);
+                if (top is > 0 and < 1) gridY.Add(Math.Round(top, 5));
+            }
         }
 
         return new
         {
-            lang = Lang,
-            hasImage = HasImage,
-            image = "gamedata/map/world-map.png",
-            large = HasLargeImage ? "gamedata/map/world-map-large.png" : null,
+            id = map,
+            image = Picture(tree ? "tree-map.png" : "world-map.png"),
+            large = Picture(tree ? "tree-map-large.png" : "world-map-large.png"),
             gridX,
             gridY,
-            mapUnits = WorldMapProjection.MapUnitsAcross,
-            world = new { minX = WorldMapProjection.MinX, maxX = WorldMapProjection.MaxX, minY = WorldMapProjection.MinY, maxY = WorldMapProjection.MaxY },
-            matrix = WorldMapProjection.Matrix,
-            strings = new
-            {
-                area = L["Detail.Map.Area"].Value,
-                nightArea = L["Detail.Map.NightArea"].Value,
-                alpha = L["Detail.Map.Alpha"].Value,
-                offscreen = L["Detail.Map.Offscreen"].Value,
-                cursor = L["Detail.Map.Cursor"].Value,
-                coordHint = L["Detail.Map.CoordHint"].Value,
-            },
-            places = Places.Select(p => new
-            {
-                kind = p.Kind,
-                night = p.Night,
-                enabled = p.OnMain,
-                meta = p.Meta,
-                dots = p.Dots.Select(d => new object?[] { Math.Round(d.Left, 5), Math.Round(d.Top, 5), Math.Round(d.Radius, 5), d.Alpha ? 1 : 0, d.MapX, d.MapY, d.Night ? 1 : 0 }),
-            }),
+            mapUnits = tree ? (double?)null : WorldMapProjection.MapUnitsAcross,
+            world = new { minX = projection.MinX, maxX = projection.MaxX, minY = projection.MinY, maxY = projection.MaxY },
+            matrix = projection.Matrix,
         };
     }
 
@@ -160,28 +180,14 @@
 
     private async Task SelectAsync(int index)
     {
-        if (index < 0 || index >= Places.Count || !Places[index].OnMain) return;
+        if (index < 0 || index >= Places.Count || Places[index].MapId is not { } map) return;
         _selected = index;
+        _map = map; // the script switches the picture to the place's map
         if (_view != null)
         {
             try { await _view.InvokeVoidAsync("focusPlace", index); }
             catch (JSException) { }
             catch (JSDisconnectedException) { }
-        }
-    }
-
-    private async Task OnListKeyDownAsync(KeyboardEventArgs e)
-    {
-        if (e.Key is not ("ArrowDown" or "ArrowUp")) return;
-        var step = e.Key == "ArrowDown" ? 1 : -1;
-        var i = _selected < 0 ? (step > 0 ? -1 : Places.Count) : _selected;
-        for (i += step; i >= 0 && i < Places.Count; i += step)
-        {
-            if (!Places[i].OnMain) continue;
-            await SelectAsync(i);
-            try { await JS.InvokeVoidAsync("pbFocusId", $"mv-opt-{i}"); }
-            catch (JSException) { }
-            return;
         }
     }
 

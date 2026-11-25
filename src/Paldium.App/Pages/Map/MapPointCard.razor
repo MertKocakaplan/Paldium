@@ -1,0 +1,203 @@
+@using Microsoft.JSInterop
+@inherits LocalizedComponentBase
+@inject IGameData Data
+@inject IJSRuntime JS
+@inject MudBlazor.ISnackbar Snackbar
+
+@* The detail card of an opened marker (screens/map.md "Ayrıntı kartı", T138; effigies T142, ancient towers T143, collected, opened and
+   defeated T144/T148, quests T145). *@
+<section class="wm-card" aria-label="@Title">
+    <div class="th">
+        @if (Icon is { } icon) { <img class="gi" src="@("gamedata/" + icon)" alt="" /> }
+        <div>
+            <h2>@Title</h2>
+            <div class="k">@CategoryName</div>
+        </div>
+        <button type="button" class="btn2 x" @onclick="OnClose"><Icon Name="x" Size="14" /><span>@L["Map.Close"]</span></button>
+    </div>
+
+    @if (RegionName != null)
+    {
+        <div class="row"><span class="m">@L["Map.Region"]</span><span>@RegionName</span></div>
+    }
+    <div class="row">
+        <span class="m">@L["Map.Coordinates"]</span>
+        @if (WorldMapModel.Coordinates(Point.MapX, Point.MapY, Lang) is { } coordinates)
+        {
+            <span class="num">@coordinates</span>
+            <button type="button" class="lnk" @onclick="() => CopyAsync(coordinates)">@L["Map.Copy"]</button>
+        }
+        else
+        {
+            <span>@L["Map.NoCoords"]</span>
+        }
+    </div>
+
+    @if (Pal is { } pal)
+    {
+        <div class="row">
+            <PalIcon Pal="pal" Size="32" />
+            <b>@pal.DisplayName(Lang)</b>
+            @if (Level is { } level) { <span class="num">@L["Map.Level", level]</span> }
+            <a class="lnk" href="@Links.Pal(pal.Id)">@L["Map.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a>
+        </div>
+    }
+    else if (Level is { } level)
+    {
+        <div class="row"><span class="num">@L["Map.Level", level]</span></div>
+    }
+
+    @if (Shop is { } shop)
+    {
+        <div class="row">
+            <span class="m">@L["Map.Vendor"]</span><span>@(shop.VendorNames.Get(Lang))</span>
+            <a class="lnk" href="@("guides/tuccarlar?shop=" + Uri.EscapeDataString(shop.Id))">@L["Map.WhatSells"]<Icon Name="arrow-right" Size="14" /></a>
+        </div>
+    }
+
+    @if (Point.Category is "chest" or "egg")
+    {
+        @if (WorldMapModel.Grade(Point.Extra) is { } grade) { <div class="row"><span>@L["Map.Grade", grade]</span></div> }
+        @if (Point.Extra?.StartsWith("Element", StringComparison.OrdinalIgnoreCase) == true) { <div class="row"><span>@L["Map.ElementChest"]</span></div> }
+        @if (Point.Extra?.StartsWith("Oilrig", StringComparison.OrdinalIgnoreCase) == true) { <div class="row"><span>@L["Map.OilRigChest"]</span></div> }
+    }
+
+    @if (Point.Boss is { } boss)
+    {
+        <div class="row"><span class="m">@L["Map.Boss"]</span><span>@boss.Get(Lang)</span></div>
+    }
+
+    @if (Point.Category == "watchtower")
+    {
+        <div class="row"><span class="wm-tag">@L["Map.FastTravelPoint"]</span></div>
+    }
+
+    @if (Relic is { } relic)
+    {
+        @if (WorldMapModel.EffigyPal(relic, Data.Pals) is { } effigyPal)
+        {
+            <div class="row">
+                <PalIcon Pal="effigyPal" Size="32" />
+                <b>@effigyPal.DisplayName(Lang)</b>
+                <a class="lnk" href="@Links.Pal(effigyPal.Id)">@L["Map.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a>
+            </div>
+        }
+        <div class="wm-sec">
+            <span class="m">@L["Map.Effect"]</span>
+            <span><b>@relic.Names.Get(Lang)</b></span>
+            @if (relic.Descriptions.TryGet(Lang, out var effect) || relic.Descriptions.TryGet("en", out effect)) { <span>@effect</span> }
+            <a class="lnk" href="guides/heykeller">@L["Effigy.Title"]<Icon Name="arrow-right" Size="14" /></a>
+        </div>
+    }
+
+    @if (Point.Items is { Count: > 0 } contents)
+    {
+        <div class="wm-sec">
+            <span class="m">@L["Map.TowerContains"]</span>
+            <ul class="wm-items">
+                @foreach (var stack in contents)
+                {
+                    var item = Map.TryGetItem(stack.ItemId);
+                    var product = item?.Unlocks is { } id ? Map.TryGetItem(id) : null;
+                    <li>
+                        @if (item?.Icon is { } itemIcon) { <img src="@("gamedata/" + itemIcon)" alt="" /> }
+                        <span>@(item?.Names.Get(Lang) ?? stack.ItemId)</span>
+                        <span class="num">× @stack.Count</span>
+                    </li>
+                    @if (product != null)
+                    {
+                        <li class="sub">
+                            @if (product.Icon is { } productIcon) { <img src="@("gamedata/" + productIcon)" alt="" /> }
+                            <span>@L["Map.Unlocks", product.Names.Get(Lang)]</span>
+                        </li>
+                    }
+                }
+            </ul>
+        </div>
+    }
+
+    @if (Point.Hint is { } hint)
+    {
+        <div class="row"><span class="m">@L["Map.Lock"]</span><span>@hint.Get(Lang)</span></div>
+    }
+
+    @if (Kind != MarkKind.None)
+    {
+        <div class="row">
+            @if (InRecord)
+            {
+                <span class="wm-done"><Icon Name="check" Size="14" />@L["Map.FromRecord." + Kind]</span>
+            }
+            else if (Done)
+            {
+                <span class="wm-done"><Icon Name="check" Size="14" />@L["Map.Done." + Kind]</span>
+                <button type="button" class="lnk" @onclick="OnToggleDone">@L["Map.UnmarkCollected"]</button>
+            }
+            else
+            {
+                @if (Kind == MarkKind.Open && StateKnown) { <span class="m">@L["Map.Locked"]</span> }
+                <button type="button" class="btn2" @onclick="OnToggleDone"><Icon Name="check" Size="14" /><span>@L["Map.Mark." + Kind]</span></button>
+            }
+        </div>
+    }
+
+    @if (Quests.Count > 0)
+    {
+        <div class="wm-sec">
+            <span class="m">@L[Point.Category == "quest" ? "Map.Quest.Of" : "Map.Npc.Quests"]</span>
+            <ul class="wm-links">
+                @foreach (var quest in Quests)
+                {
+                    <li><button type="button" class="lnk" @onclick="() => OnQuest.InvokeAsync(quest.Id)">@quest.Names.Get(Lang)<Icon Name="arrow-right" Size="14" /></button></li>
+                }
+            </ul>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public MapMarker Point { get; set; } = default!;
+    [Parameter, EditorRequired] public MapData Map { get; set; } = default!;
+    [Parameter] public MapCategory? Category { get; set; }
+    [Parameter, EditorRequired] public string CategoryName { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? RegionName { get; set; }
+
+    /// <summary>The marker counts as done (the player's record says so, or the user marked it).</summary>
+    [Parameter] public bool Done { get; set; }
+
+    /// <summary>The record (a save or the mod) says so: the mark cannot be taken back.</summary>
+    [Parameter] public bool InRecord { get; set; }
+
+    /// <summary>A source gives the player's record, so "not opened" can be told.</summary>
+    [Parameter] public bool StateKnown { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnToggleDone { get; set; }
+    [Parameter] public EventCallback<string> OnQuest { get; set; }
+
+    private MarkKind Kind => WorldMapModel.KindOf(Point.Category);
+
+    private RelicInfo? Relic => Point.Category == WorldMapModel.Effigy ? Data.Relics.FirstOrDefault(r => r.Type == Point.Extra) : null;
+
+    private string? Icon => Relic?.IconPath ?? Category?.Icon;
+
+    private IReadOnlyList<MapQuest> Quests => (Point.Quests ?? []).Select(Map.TryGetQuest).OfType<MapQuest>().ToList();
+
+    private PalSpecies? Pal => Point.RefKind == "pal" && Point.RefId != null
+        ? Data.Pals.FirstOrDefault(p => string.Equals(p.Id, Point.RefId, StringComparison.OrdinalIgnoreCase)) : null;
+
+    private ShopInfo? Shop => Point.RefKind == "shop" ? Data.Shops.FirstOrDefault(s => s.Id == Point.RefId) : null;
+
+    private int? Level => WorldMapModel.Level(Point.Extra);
+
+    private async Task CopyAsync(string text)
+    {
+        try
+        {
+            if (await JS.InvokeAsync<bool>("pbCopyText", text)) Snackbar.Add(L["Map.Copied"].Value, MudBlazor.Severity.Normal);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+}

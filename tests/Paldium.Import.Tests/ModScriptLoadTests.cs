@@ -164,6 +164,50 @@ public class ModScriptLoadTests
     }
 
     [Fact]
+    public void ReadObtained_TakesTheTrueKeys_TheQuests_AndLeavesOutWhatCannotBeRead()
+    {
+        var source = File.ReadAllText(MainLua);
+        var start = source.IndexOf("local RELIC_TYPES = {", StringComparison.Ordinal);
+        var end = source.IndexOf("-- T133: the cumulative effigy cost", StringComparison.Ordinal);
+        var jsonStart = source.IndexOf("local function jsonString(", StringComparison.Ordinal);
+        var jsonEnd = source.IndexOf("function array(", StringComparison.Ordinal);
+
+        using var lua = new Lua();
+        lua.Encoding = System.Text.Encoding.UTF8;
+        var setup = """
+            function valid(o) return type(o) == 'table' end
+            function unwrap(v) return v end
+            function member(o, k) if valid(o) then return o[k] end return nil end
+            function text(v) return v ~= nil and tostring(v) or nil end
+            function number(v) return type(v) == 'number' and v or nil end
+            function items(t) return type(t) == 'table' and not t.__notarray and t or nil end
+            function array(list) list = list or {} list.__array = true return list end
+            """;
+        var script = setup + "\n" + source[jsonStart..jsonEnd] + "\n" + source[start..end] + """
+            local record = {
+                RelicObtainForInstanceFlag_JumpPower = { Items = { { Key = 'BB', Value = true }, { Key = 'CC', Value = false } } },
+                RelicObtainForInstanceFlag_CapturePower = { Items = { { Key = 'AA', Value = true } } },
+                ItemPickupObtainForInstanceFlag = { Items = {} },
+                NoteObtainForInstanceFlag = { Items = { { Key = 'Day1-1', Value = true } } },
+                PredatorDefeatCount = { Value = 3 },
+            }
+            local manager = {
+                QuestReplicationData = { OrderedQuestArray = { { QuestId = 'Sub_Farmer01', QuestBlockIndex = 1 } } },
+                CompletedQuestNames = { 'Main_B', 'Main_A' },
+            }
+            local nothing = readObtained({}, nil)
+            return tostring(nothing) .. '#' .. jsonValue(readObtained(record, manager))
+            """;
+        lua.DoString(script);
+
+        Assert.Equal(
+            "nil#{\"note\":[\"Day1-1\"],\"pickup\":[],\"predatorDefeats\":3,\"questsActive\":[{\"block\":1,\"id\":\"Sub_Farmer01\"}]," +
+            "\"questsDone\":[\"Main_A\",\"Main_B\"],\"relic\":[\"AA\",\"BB\"]}",
+            lua.ToString(-1));
+        lua.Pop(lua.GetTop());
+    }
+
+    [Fact]
     public void PickLocalController_PicksLocalOnHost_FallsBackToLocalPlayerOrSingleCandidate_AndNeverGuesses()
     {
         var source = File.ReadAllText(MainLua);

@@ -1,6 +1,7 @@
 // Full screen map viewer (T104, screens/paldex.md "Harita görüntüleyici"). The Razor component renders the dialog, the list and the static
 // controls; this script owns the canvas: zoom (x1..x16), pan, the points, the spawn radius, the tooltip, the off-screen Alpha chips and the
-// overview map. Positions are fractions (0..1) of the picture; the picture and the point layer share one "world" element.
+// overview map. Positions are fractions (0..1) of the picture; the picture and the point layer share one "world" element. A species on both
+// maps (T140) has two entries in cfg.maps; showMap switches the picture, the grid and the points, and a place of the other map switches too.
 window.pbMapView = (function () {
     const STEPS = [1, 1.5, 2, 3, 4, 6, 8, 12, 16];
     const MAX = 16;
@@ -18,18 +19,26 @@ window.pbMapView = (function () {
         const tip = $('[data-role="tip"]');
         const mmap = $('[data-role="mini"]');
         const mvp = $('[data-role="miniview"]');
+        const miniImg = $('[data-role="miniimage"]');
         const zl = $('[data-role="zoomlabel"]');
         const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const nf = function (n) { return (n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString(cfg.lang); };
 
-        let zoom = 1, cx = 0.5, cy = 0.5, W = 1, H = 1, selected = -1, largeLoaded = false;
+        let zoom = 1, cx = 0.5, cy = 0.5, W = 1, H = 1, selected = -1, largeFor = null;
         let drag = null;
+        let map = null;
 
         // ---- points ---------------------------------------------------------------------------------------------------------------
-        const dotEls = [];
-        const alphas = [];
+        let dotEls = [];
+        let alphas = [];
+        function build() {
+        layer.textContent = '';
+        world.querySelectorAll('.gl').forEach(function (l) { l.remove(); });
+        mmap.querySelectorAll('i').forEach(function (m) { m.remove(); });
+        dotEls = [];
+        alphas = [];
         cfg.places.forEach(function (place, pi) {
-            if (!place.enabled) return;
+            if (place.map !== map.id) return;
             place.dots.forEach(function (d, di) {
                 const i = document.createElement('i');
                 i.className = d[3] ? 'a' : (d[6] ? 'w n' : 'w');
@@ -60,18 +69,34 @@ window.pbMapView = (function () {
             mmap.insertBefore(m, mvp);
         });
         // The 500-unit in-game coordinate grid.
-        cfg.gridX.forEach(function (f) {
+        map.gridX.forEach(function (f) {
             const l = document.createElement('b');
             l.className = 'gl gx';
             l.style.left = (f * 100) + '%';
             world.insertBefore(l, layer);
         });
-        cfg.gridY.forEach(function (f) {
+        map.gridY.forEach(function (f) {
             const l = document.createElement('b');
             l.className = 'gl gy';
             l.style.top = (f * 100) + '%';
             world.insertBefore(l, layer);
         });
+        }
+
+        // Switches the picture to a map (no-op for the map already shown); the view starts fitted.
+        function useMap(id) {
+            const next = cfg.maps.find(function (m) { return m.id === id; }) || cfg.maps[0];
+            if (!next || map === next) return false;
+            map = next;
+            largeFor = null;
+            if (map.image) { img.src = map.image; miniImg.src = map.image; }
+            img.hidden = miniImg.hidden = !map.image;
+            build();
+            tip.hidden = true;
+            coord.textContent = restingCoordinate();
+            return true;
+        }
+        function restingCoordinate() { return map.matrix ? cfg.strings.coordHint : cfg.strings.noCoords; }
 
         // ---- view -----------------------------------------------------------------------------------------------------------------
         function measure() {
@@ -97,11 +122,12 @@ window.pbMapView = (function () {
             $('[data-act="fit"]').disabled = zoom <= 1.001;
             $('[data-act="in"]').disabled = zoom >= MAX - 0.001;
             $('[data-act="out"]').disabled = zoom <= 1.001;
-            if (cfg.large && !largeLoaded && zoom > LARGE_ZOOM) {
-                largeLoaded = true;
+            if (map.large && largeFor !== map.id && zoom > LARGE_ZOOM) {
+                largeFor = map.id;
+                const wanted = map;
                 const pre = new Image();
-                pre.onload = function () { img.src = cfg.large; };
-                pre.src = cfg.large;
+                pre.onload = function () { if (map === wanted) img.src = wanted.large; };
+                pre.src = wanted.large;
             }
             // The overview map: the visible part of the picture.
             const vw = Math.min(1, W / size), vh = Math.min(1, H / size);
@@ -139,11 +165,12 @@ window.pbMapView = (function () {
         // ---- places ---------------------------------------------------------------------------------------------------------------
         function focusPlace(index) {
             selected = index;
+            const place = index < 0 ? null : cfg.places[index];
+            if (place && place.map) useMap(place.map);
             canvas.classList.toggle('hasSel', index >= 0);
             dotEls.forEach(function (d) { d.el.classList.toggle('sel', d.place === index); });
             if (index < 0) { setView(1, 0.5, 0.5, true); return; }
-            const place = cfg.places[index];
-            if (!place || !place.enabled || place.dots.length === 0) return;
+            if (!place || !place.map || place.dots.length === 0) return;
             let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
             place.dots.forEach(function (d) { x0 = Math.min(x0, d[0]); x1 = Math.max(x1, d[0]); y0 = Math.min(y0, d[1]); y1 = Math.max(y1, d[1]); });
             const bw = Math.max(0.002, (x1 - x0) * 1.3), bh = Math.max(0.002, (y1 - y0) * 1.3);
@@ -161,7 +188,7 @@ window.pbMapView = (function () {
                 const dx = px - W / 2, dy = py - H / 2;
                 const k = Math.min((W / 2 - 48) / Math.max(1e-6, Math.abs(dx)), (H / 2 - 24) / Math.max(1e-6, Math.abs(dy)));
                 const bx = W / 2 + dx * k, by = H / 2 + dy * k;
-                const units = Math.round(Math.hypot((a.left - cx), (a.top - cy)) * cfg.mapUnits);
+                const units = map.mapUnits == null ? null : Math.round(Math.hypot((a.left - cx), (a.top - cy)) * map.mapUnits);
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'offs';
@@ -172,7 +199,7 @@ window.pbMapView = (function () {
                 arrow.style.display = 'inline-block';
                 arrow.style.transform = 'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI + 90) + 'deg)';
                 const label = document.createElement('span');
-                label.textContent = cfg.strings.offscreen.replace('{0}', nf(units));
+                label.textContent = units == null ? cfg.strings.alpha : cfg.strings.offscreen.replace('{0}', nf(units));
                 b.appendChild(arrow);
                 b.appendChild(label);
                 b.addEventListener('click', function (e) { e.stopPropagation(); setView(4, a.left, a.top, true); });
@@ -201,12 +228,12 @@ window.pbMapView = (function () {
             const r = canvas.getBoundingClientRect();
             const size = fitSize() * zoom;
             const fx = cx + (e.clientX - r.left - W / 2) / size, fy = cy + (e.clientY - r.top - H / 2) / size;
-            if (fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) {
-                const wy = cfg.world.minY + fx * (cfg.world.maxY - cfg.world.minY);
-                const wx = cfg.world.maxX - fy * (cfg.world.maxX - cfg.world.minX);
-                const m = cfg.matrix;
+            if (map.matrix && fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) {
+                const wy = map.world.minY + fx * (map.world.maxY - map.world.minY);
+                const wx = map.world.maxX - fy * (map.world.maxX - map.world.minX);
+                const m = map.matrix;
                 coord.textContent = cfg.strings.cursor + ' (' + nf(m[0] * wx + m[1] * wy + m[2]) + ', ' + nf(m[3] * wx + m[4] * wy + m[5]) + ')';
-            } else coord.textContent = cfg.strings.coordHint;
+            } else coord.textContent = restingCoordinate();
             if (drag) {
                 if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
                 cx = drag.cx - (e.clientX - drag.x) / size;
@@ -293,7 +320,7 @@ window.pbMapView = (function () {
             else setView(1, 0.5, 0.5, true);
             canvas.focus();
         }
-        function onLeave() { tip.hidden = true; coord.textContent = cfg.strings.coordHint; }
+        function onLeave() { tip.hidden = true; coord.textContent = restingCoordinate(); }
         const ro = new ResizeObserver(function () { measure(); apply(); });
         ro.observe(canvas);
 
@@ -311,11 +338,17 @@ window.pbMapView = (function () {
         $('[data-role="zoomctl"]').addEventListener('click', onButton);
 
         measure();
+        useMap(cfg.map);
         apply();
-        coord.textContent = cfg.strings.coordHint;
 
         return {
             focusPlace: focusPlace,
+            showMap: function (id) {
+                if (!useMap(id)) return;
+                selected = -1;
+                canvas.classList.remove('hasSel');
+                setView(1, 0.5, 0.5, false);
+            },
             canvasFocus: function () { canvas.focus(); },
             dispose: function () {
                 ro.disconnect();

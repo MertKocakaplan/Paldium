@@ -24,6 +24,10 @@ public static partial class TextExporter
         ("humanName", "DT_HumanNameText_Common"),
         ("partnerSkillAppend", "DT_PartnerSkillAppendText"),
         ("worldMap", "DT_WorldMap_Common_Text_Common"),
+        ("respawnText", "DT_MapRespawnPointInfoText"),
+        ("uniqueNpcText", "DT_UniqueNPCText_Common"),
+        ("noteDesc", "DT_NoteDescText"),
+        ("namePrefix", "DT_NamePrefixText_Common"),
     ];
 
     /// <summary>language -> table short name -> key -> text.</summary>

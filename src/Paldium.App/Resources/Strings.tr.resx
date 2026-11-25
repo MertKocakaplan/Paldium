@@ -209,7 +209,6 @@
   <data name="Obtain.AreaCount" xml:space="preserve"><value>{0} alan</value></data>
   <data name="Obtain.Level" xml:space="preserve"><value>Sv {0}–{1}</value></data>
   <data name="Obtain.LevelOne" xml:space="preserve"><value>Sv {0}</value></data>
-  <data name="Obtain.TreeMap" xml:space="preserve"><value>Dünya Ağacı haritası</value></data>
   <data name="Obtain.RankNormal" xml:space="preserve"><value>Normal</value></data>
   <data name="Obtain.RankMidBoss" xml:space="preserve"><value>Ara boss</value></data>
   <data name="Obtain.RankBoss" xml:space="preserve"><value>Boss</value></data>
@@ -1199,7 +1198,7 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Detail.WhereTitle" xml:space="preserve"><value>Dünyada nerede</value></data>
   <data name="Detail.PlotAria" xml:space="preserve"><value>Ana haritada {0} nokta</value></data>
   <data name="Detail.PlotHint" xml:space="preserve"><value>Noktalar ana haritadaki doğma alanları; turuncu nokta Alfa Pal. Harita görseli veri paketinde yok, bu yüzden yalnızca dağılım gösterilir.</value></data>
-  <data name="Detail.PlotHintMap" xml:space="preserve"><value>Noktalar oyun haritasındaki ana harita doğma alanlarını gösterir; turuncu nokta bir Alfa Pal.</value></data>
+  <data name="Detail.PlotHintMap" xml:space="preserve"><value>Noktalar oyun haritasındaki doğma alanlarını gösterir; turuncu nokta bir Alfa Pal.</value></data>
   <data name="Detail.Map.Close" xml:space="preserve"><value>Kapat</value></data>
   <data name="Detail.Map.Places" xml:space="preserve"><value>Doğma yerleri</value></data>
   <data name="Detail.Map.LegendArea" xml:space="preserve"><value>Doğma alanı (merkez)</value></data>
@@ -1630,4 +1629,186 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Settings.UpdOn" xml:space="preserve"><value>Açık</value></data>
   <data name="Settings.UpdSkipped" xml:space="preserve"><value>{0} atlandı.</value></data>
   <data name="Settings.UpdUndo" xml:space="preserve"><value>Geri al</value></data>
+  <data name="MyPals.Export" xml:space="preserve"><value>Dışa aktar</value></data>
+  <data name="MyPals.Export.Aria" xml:space="preserve"><value>Dışa aktar (Markdown)</value></data>
+  <data name="MyPals.Export.Visible" xml:space="preserve"><value>Görünen liste ({0} Pal)</value></data>
+  <data name="MyPals.Export.All" xml:space="preserve"><value>Bütün liste ({0} Pal)</value></data>
+  <data name="MyPals.Export.FileName" xml:space="preserve"><value>paller-{0}</value></data>
+  <data name="MyPals.Export.Done" xml:space="preserve"><value>{0} Pal dışa aktarıldı</value></data>
+  <data name="MyPals.Export.OpenFolder" xml:space="preserve"><value>Klasörü aç</value></data>
+  <data name="MyPals.Export.Failed" xml:space="preserve"><value>Dosya yazılamadı: {0}</value></data>
+  <data name="Picker.AriaPassives" xml:space="preserve"><value>pasifler: {0}</value></data>
+  <data name="Shop.Title" xml:space="preserve"><value>Tüccarlar: kim ne satar</value></data>
+  <data name="Shop.Summary" xml:space="preserve"><value>Bütün dükkânlar, ne sattıkları, fiyatları ve nerede oldukları.</value></data>
+  <data name="Shop.Search" xml:space="preserve"><value>Eşya ya da tüccar ara (ör. Alev Organı)</value></data>
+  <data name="Shop.Scope" xml:space="preserve"><value>{0} dükkân, {1} eşya</value></data>
+  <data name="Shop.SearchTool" xml:space="preserve"><value>Eşya ara</value></data>
+  <data name="Shop.InHit" xml:space="preserve"><value>{0}: {1} tüccar satıyor</value></data>
+  <data name="Shop.Group.Village" xml:space="preserve"><value>Köy ve kasaba tüccarları</value></data>
+  <data name="Shop.Group.Pal" xml:space="preserve"><value>Pal tüccarları</value></data>
+  <data name="Shop.Group.Wandering" xml:space="preserve"><value>Gezgin ve ziyaretçi tüccarlar</value></data>
+  <data name="Shop.Group.Token" xml:space="preserve"><value>Özel parayla satan dükkânlar</value></data>
+  <data name="Shop.Group.Dungeon" xml:space="preserve"><value>Zindan</value></data>
+  <data name="Shop.Group.Unknown" xml:space="preserve"><value>Yeri bilinmeyen</value></data>
+  <data name="Shop.Items" xml:space="preserve"><value>Eşyalar</value></data>
+  <data name="Shop.Vendors" xml:space="preserve"><value>Tüccarlar</value></data>
+  <data name="Shop.SoldBy" xml:space="preserve"><value>{0} tüccar</value></data>
+  <data name="Shop.ProductCount" xml:space="preserve"><value>{0} ürün</value></data>
+  <data name="Shop.PalCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Shop.UnknownVendor" xml:space="preserve"><value>Bilinmeyen satıcı</value></data>
+  <data name="Shop.PlaceUnknown" xml:space="preserve"><value>Yer bilinmiyor</value></data>
+  <data name="Shop.Visitor" xml:space="preserve"><value>Üssüne gelen ziyaretçi</value></data>
+  <data name="Shop.DungeonPlace" xml:space="preserve"><value>Zindan içi</value></data>
+  <data name="Shop.Col.Vendor" xml:space="preserve"><value>Tüccar</value></data>
+  <data name="Shop.Col.Place" xml:space="preserve"><value>Yer</value></data>
+  <data name="Shop.Col.Item" xml:space="preserve"><value>Eşya</value></data>
+  <data name="Shop.Col.Price" xml:space="preserve"><value>Fiyat</value></data>
+  <data name="Shop.Col.PerBuy" xml:space="preserve"><value>Adet</value></data>
+  <data name="Shop.Col.Stock" xml:space="preserve"><value>Stok</value></data>
+  <data name="Shop.Col.Note" xml:space="preserve"><value>Not</value></data>
+  <data name="Shop.Col.Level" xml:space="preserve"><value>Seviye</value></data>
+  <data name="Shop.Once" xml:space="preserve"><value>Bir kez alınır</value></data>
+  <data name="Shop.Chance" xml:space="preserve"><value>Rastgele stok: %{0} ihtimalle gelir</value></data>
+  <data name="Shop.PoolHead" xml:space="preserve"><value>Rastgele stok: {0} ihtimal</value></data>
+  <data name="Shop.PalNote" xml:space="preserve"><value>Her ziyarette bunlardan {0} tanesi rastgele</value></data>
+  <data name="Shop.Currency" xml:space="preserve"><value>Para birimi</value></data>
+  <data name="Shop.Condition" xml:space="preserve"><value>Koşul</value></data>
+  <data name="Shop.InTower" xml:space="preserve"><value>Kadim kulede ({0}).</value></data>
+  <data name="Shop.ShowOnMap" xml:space="preserve"><value>Haritada göster</value></data>
+  <data name="Shop.Empty" xml:space="preserve"><value>"{0}" hiçbir tüccarda satılmıyor.</value></data>
+  <data name="Shop.EmptyHint" xml:space="preserve"><value>Eşyayı Paldex'te ya da Teknoloji'de arayabilirsin.</value></data>
+  <data name="Nav.Map" xml:space="preserve"><value>Harita</value></data>
+  <data name="Map.Search" xml:space="preserve"><value>Yer, nokta ya da Pal ara</value></data>
+  <data name="Map.MapChoice" xml:space="preserve"><value>Harita</value></data>
+  <data name="Map.Layers" xml:space="preserve"><value>İşaretler</value></data>
+  <data name="Map.ShowAll" xml:space="preserve"><value>Tümünü göster</value></data>
+  <data name="Map.HideAll" xml:space="preserve"><value>Tümünü gizle</value></data>
+  <data name="Map.GroupAll" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Map.Group.Locations" xml:space="preserve"><value>Konumlar</value></data>
+  <data name="Map.Group.Npc" xml:space="preserve"><value>NPC</value></data>
+  <data name="Map.Group.Collectibles" xml:space="preserve"><value>Toplanabilir</value></data>
+  <data name="Map.Group.Items" xml:space="preserve"><value>Eşya</value></data>
+  <data name="Map.Group.Enemies" xml:space="preserve"><value>Düşmanlar</value></data>
+  <data name="Map.Group.Quests" xml:space="preserve"><value>Görevler</value></data>
+  <data name="Map.Group.Materials" xml:space="preserve"><value>Malzemeler</value></data>
+  <data name="Map.Cat.sealed_realm" xml:space="preserve"><value>Mühürlü diyarlar</value></data>
+  <data name="Map.Cat.dungeon" xml:space="preserve"><value>Zindanlar</value></data>
+  <data name="Map.Cat.merchant" xml:space="preserve"><value>Tüccarlar</value></data>
+  <data name="Map.Cat.npc" xml:space="preserve"><value>NPC'ler</value></data>
+  <data name="Map.Cat.effigy" xml:space="preserve"><value>Heykeller</value></data>
+  <data name="Map.Cat.journal" xml:space="preserve"><value>Günlükler</value></data>
+  <data name="Map.Cat.chest" xml:space="preserve"><value>Hazine sandıkları</value></data>
+  <data name="Map.Cat.skill_fruit" xml:space="preserve"><value>Beceri meyvesi ağaçları</value></data>
+  <data name="Map.Cat.enemy_camp" xml:space="preserve"><value>Düşman kampları</value></data>
+  <data name="Map.Cat.fishing" xml:space="preserve"><value>Balık tutma noktaları</value></data>
+  <data name="Map.Cat.supply" xml:space="preserve"><value>Erzak düşüşleri</value></data>
+  <data name="Map.Cat.respawn" xml:space="preserve"><value>Yeniden doğma noktaları</value></data>
+  <data name="Map.Cat.quest" xml:space="preserve"><value>Görev</value></data>
+  <data name="Map.Kind.Region" xml:space="preserve"><value>Bölgeler</value></data>
+  <data name="Map.Kind.FastTravel" xml:space="preserve"><value>Hızlı seyahat</value></data>
+  <data name="Map.Kind.Dungeon" xml:space="preserve"><value>Zindanlar ve kuleler</value></data>
+  <data name="Map.Kind.Merchant" xml:space="preserve"><value>Tüccarlar ve NPC'ler</value></data>
+  <data name="Map.Kind.Quest" xml:space="preserve"><value>Görevler</value></data>
+  <data name="Map.Kind.Enemy" xml:space="preserve"><value>Düşmanlar</value></data>
+  <data name="Map.Kind.Pal" xml:space="preserve"><value>Pal'lar</value></data>
+  <data name="Map.OtherMap" xml:space="preserve"><value>Diğer harita</value></data>
+  <data name="Map.NoResult" xml:space="preserve"><value>"{0}" bulunamadı. Bölge, hızlı seyahat, zindan, tüccar ya da Pal adı deneyin.</value></data>
+  <data name="Map.LoadFailed" xml:space="preserve"><value>Harita işaretleri yüklenemedi.</value></data>
+  <data name="Map.NoPicture" xml:space="preserve"><value>Harita görseli yok.</value></data>
+  <data name="Map.Copy" xml:space="preserve"><value>Kopyala</value></data>
+  <data name="Map.Copied" xml:space="preserve"><value>Koordinat kopyalandı</value></data>
+  <data name="Map.Close" xml:space="preserve"><value>Kapat</value></data>
+  <data name="Map.Region" xml:space="preserve"><value>Bölge</value></data>
+  <data name="Map.Coordinates" xml:space="preserve"><value>Koordinat</value></data>
+  <data name="Map.Level" xml:space="preserve"><value>Sv {0}</value></data>
+  <data name="Map.Grade" xml:space="preserve"><value>Derece {0}</value></data>
+  <data name="Map.ElementChest" xml:space="preserve"><value>Element sandığı</value></data>
+  <data name="Map.OilRigChest" xml:space="preserve"><value>Petrol platformu sandığı</value></data>
+  <data name="Map.Vendor" xml:space="preserve"><value>Satıcı</value></data>
+  <data name="Map.WhatSells" xml:space="preserve"><value>Ne satıyor</value></data>
+  <data name="Map.OpenPaldex" xml:space="preserve"><value>Paldex'te aç</value></data>
+  <data name="Map.Cluster" xml:space="preserve"><value>{0} işaret</value></data>
+  <data name="Map.Cursor" xml:space="preserve"><value>İmleç:</value></data>
+  <data name="Map.CoordHint" xml:space="preserve"><value>Koordinat için haritanın üzerine gel</value></data>
+  <data name="Map.NoCoords" xml:space="preserve"><value>Bu haritada koordinat gösterilmiyor</value></data>
+  <data name="Map.PalLayer" xml:space="preserve"><value>Doğma alanları: {0}</value></data>
+  <data name="Map.PalLayerClear" xml:space="preserve"><value>Doğma alanlarını kaldır</value></data>
+  <data name="Map.Alpha" xml:space="preserve"><value>Alfa</value></data>
+  <data name="Map.Area" xml:space="preserve"><value>Doğma alanı</value></data>
+  <data name="Map.Tabs" xml:space="preserve"><value>Panel</value></data>
+  <data name="Map.Tab.Layers" xml:space="preserve"><value>Katmanlar</value></data>
+  <data name="Map.Tab.Pals" xml:space="preserve"><value>Pal'lar</value></data>
+  <data name="Map.Tab.Quests" xml:space="preserve"><value>Görevler</value></data>
+  <data name="Map.Cat.pickup_tower" xml:space="preserve"><value>Kadim kule</value></data>
+  <data name="Map.Cat.quest_giver" xml:space="preserve"><value>Görev veren</value></data>
+  <data name="Map.Kind.Tower" xml:space="preserve"><value>Kadim kuleler</value></data>
+  <data name="Map.Kind.Effigy" xml:space="preserve"><value>Heykeller</value></data>
+  <data name="Map.EffigyTypes" xml:space="preserve"><value>Heykel türleri</value></data>
+  <data name="Map.TowerContains" xml:space="preserve"><value>İçinde</value></data>
+  <data name="Map.Unlocks" xml:space="preserve"><value>Açtığı: {0}</value></data>
+  <data name="Map.Lock" xml:space="preserve"><value>Kilit</value></data>
+  <data name="Map.UnmarkCollected" xml:space="preserve"><value>Geri al</value></data>
+  <data name="Map.CollectedCount" xml:space="preserve"><value>{0}/{1}</value></data>
+  <data name="Map.Quest.Main" xml:space="preserve"><value>Ana görevler</value></data>
+  <data name="Map.Quest.Sub" xml:space="preserve"><value>Yan görevler</value></data>
+  <data name="Map.Quest.Filter" xml:space="preserve"><value>Görevleri süz</value></data>
+  <data name="Map.Quest.Giver" xml:space="preserve"><value>Veren</value></data>
+  <data name="Map.Quest.GiverUnknown" xml:space="preserve"><value>Veren: bilinmiyor</value></data>
+  <data name="Map.Quest.Steps" xml:space="preserve"><value>Adımlar</value></data>
+  <data name="Map.Quest.Rewards" xml:space="preserve"><value>Ödüller</value></data>
+  <data name="Map.Quest.Exp" xml:space="preserve"><value>Deneyim</value></data>
+  <data name="Map.Quest.NoPlace" xml:space="preserve"><value>Haritada yeri yok</value></data>
+  <data name="Map.Quest.Show" xml:space="preserve"><value>Haritada göster</value></data>
+  <data name="Map.Quest.ShowGiver" xml:space="preserve"><value>Veren kişiyi göster</value></data>
+  <data name="Map.Quest.Of" xml:space="preserve"><value>Buradaki görevler</value></data>
+  <data name="Map.Npc.Quests" xml:space="preserve"><value>Görevleri</value></data>
+  <data name="Map.Pal.Pick" xml:space="preserve"><value>Pal seç</value></data>
+  <data name="Map.Pal.OpenPaldex" xml:space="preserve"><value>Paldex'te aç</value></data>
+  <data name="Map.Pal.OtherMap" xml:space="preserve"><value>Diğer harita: {0}</value></data>
+  <data name="Map.Pal.NoPlaces" xml:space="preserve"><value>Bu Pal'ın haritalarda yeri yok.</value></data>
+  <data name="Map.Effect" xml:space="preserve"><value>Etkisi</value></data>
+  <data name="Map.Cat.watchtower" xml:space="preserve"><value>Gözetleme kulesi</value></data>
+  <data name="Map.Cat.predator" xml:space="preserve"><value>Yırtıcı Pal'lar</value></data>
+  <data name="Map.Cat.base" xml:space="preserve"><value>Üslerim</value></data>
+  <data name="Map.Kind.Predator" xml:space="preserve"><value>Yırtıcı Pal'lar</value></data>
+  <data name="Map.Kind.Base" xml:space="preserve"><value>Üslerim</value></data>
+  <data name="Map.PredatorTypes" xml:space="preserve"><value>Yırtıcı türleri</value></data>
+  <data name="Map.PredatorDefeats" xml:space="preserve"><value>Yenilen yırtıcı: {0}</value></data>
+  <data name="Map.Predator.AreaLevel" xml:space="preserve"><value>Alan Sv {0}</value></data>
+  <data name="Map.Predator.Note" xml:space="preserve"><value>Kesin değil: yırtıcıların nerede çıktığı oyun verisinde yok. Gösterilen, ana türün vahşi alanlarıdır (oyun ayarı: PredatorPal_AppearanceProbability = 4).</value></data>
+  <data name="Map.Pal.Predator" xml:space="preserve"><value>Yırtıcısı da çıkabilir: {0}</value></data>
+  <data name="Map.Boss" xml:space="preserve"><value>Patron</value></data>
+  <data name="Map.FastTravelPoint" xml:space="preserve"><value>Hızlı seyahat noktası</value></data>
+  <data name="Map.Hide.Collect" xml:space="preserve"><value>Toplananları gizle</value></data>
+  <data name="Map.Hide.Open" xml:space="preserve"><value>Açılanları gizle</value></data>
+  <data name="Map.Hide.Defeat" xml:space="preserve"><value>Yenilenleri gizle</value></data>
+  <data name="Map.Mark.Collect" xml:space="preserve"><value>Toplandı olarak işaretle</value></data>
+  <data name="Map.Mark.Open" xml:space="preserve"><value>Açıldı olarak işaretle</value></data>
+  <data name="Map.Mark.Defeat" xml:space="preserve"><value>Yenildi olarak işaretle</value></data>
+  <data name="Map.Done.Collect" xml:space="preserve"><value>Toplandı</value></data>
+  <data name="Map.Done.Open" xml:space="preserve"><value>Açıldı</value></data>
+  <data name="Map.Done.Defeat" xml:space="preserve"><value>Yenildi</value></data>
+  <data name="Map.FromRecord.Collect" xml:space="preserve"><value>Toplandı (oyun kaydından)</value></data>
+  <data name="Map.FromRecord.Open" xml:space="preserve"><value>Açıldı (oyun kaydından)</value></data>
+  <data name="Map.FromRecord.Defeat" xml:space="preserve"><value>Yenildi (oyun kaydından)</value></data>
+  <data name="Map.Locked" xml:space="preserve"><value>Henüz açılmadı</value></data>
+  <data name="Map.Base.Numbered" xml:space="preserve"><value>Üs {0}</value></data>
+  <data name="Map.Base.Count" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Map.Base.CountOf" xml:space="preserve"><value>{0}/{1} Pal</value></data>
+  <data name="Map.Base.Filter" xml:space="preserve"><value>Pal'larım'da bu üse göre süz</value></data>
+  <data name="Map.Quest.Done" xml:space="preserve"><value>Tamamlandı</value></data>
+  <data name="Map.Quest.Active" xml:space="preserve"><value>Devam ediyor · adım {0}/{1}</value></data>
+  <data name="Map.Quest.HideDone" xml:space="preserve"><value>Tamamlananları gizle</value></data>
+  <data name="Map.Quest.Show.Label" xml:space="preserve"><value>Görev durumu</value></data>
+  <data name="Map.Quest.Show.All" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Map.Quest.Show.Active" xml:space="preserve"><value>Devam eden</value></data>
+  <data name="Map.Quest.Show.NotTaken" xml:space="preserve"><value>Alınmamış</value></data>
+  <data name="Map.Quest.Show.Done" xml:space="preserve"><value>Tamamlanan</value></data>
+  <data name="MyPals.FilterOneBase" xml:space="preserve"><value>Tek bir üs</value></data>
+  <data name="Map.CanvasAria" xml:space="preserve"><value>Harita. Artı ve eksi yakınlaştırır, oklar kaydırır, 0 haritayı sığdırır.</value></data>
+  <data name="Map.ZoomIn" xml:space="preserve"><value>Yakınlaştır</value></data>
+  <data name="Map.ZoomOut" xml:space="preserve"><value>Uzaklaştır</value></data>
+  <data name="Map.Fit" xml:space="preserve"><value>Haritayı sığdır</value></data>
+  <data name="Detail.MapAreas" xml:space="preserve"><value>{0} · {1} alan</value></data>
+  <data name="Detail.Map.NoCoords" xml:space="preserve"><value>Bu haritada koordinat gösterilmiyor</value></data>
 </root>

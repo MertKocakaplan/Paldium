@@ -1,0 +1,15 @@
+{
+  "file": "tree-map.png",
+  "width": 2048,
+  "height": 2048,
+  "largeFile": "tree-map-large.png",
+  "largeWidth": 4096,
+  "largeHeight": 4096,
+  "sourceWidth": 8192,
+  "sourceHeight": 8192,
+  "source": "Pal/Content/Pal/Texture/UI/Map/T_TreeMap (DT_WorldMapUIData row Tree)",
+  "worldMinX": 347351.5,
+  "worldMinY": -818197.0,
+  "worldMaxX": 689148.5,
+  "worldMaxY": -476400.0
+}

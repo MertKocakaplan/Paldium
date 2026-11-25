@@ -1,6 +1,11 @@
 @implements IDisposable
+@using System.Diagnostics
+@using System.IO
+@using System.Text
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.JSInterop
+@using MudBlazor
+@using Paldium.Core.Owned
 @using Paldium.Core.Queries
 @using Paldium.Import.Sync
 @inherits LocalizedComponentBase
@@ -12,6 +17,8 @@
 @inject ISyncService Sync
 @inject SettingsStore Settings
 @inject PreferredPalActions PreferredActions
+@inject IFilePickerService FilePicker
+@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -120,6 +127,46 @@
                                ShowScopePrefix="true"
                                AnchorOrigin="Origin.BottomRight"
                                TransformOrigin="Origin.TopRight" />
+
+                    @if (State.Filter.HasAny)
+                    {
+                        var visibleCount = _rows.Count(Scope.IsInScope);
+                        var allScopedCount = Scope.ScopedPals.Count + Repository.Current.Pals.Count(p => p.IsExcluded && Scope.IsInScope(p));
+                        <Dropdown TValue="string"
+                                  TriggerClass="btn2 export-btn"
+                                  ShowChevron="false"
+                                  Open="@_exportOpen"
+                                  OpenChanged="v => _exportOpen = v"
+                                  AnchorOrigin="Origin.BottomRight"
+                                  TransformOrigin="Origin.TopRight"
+                                  AriaLabel="@L["MyPals.Export.Aria"].Value">
+                            <TriggerContent>
+                                <Icon Name="download" Size="14" />
+                                <span class="export-lbl">@L["MyPals.Export"]</span>
+                            </TriggerContent>
+                            <ChildContent>
+                                <div class="cpop" role="menu" aria-label="@L["MyPals.Export.Aria"].Value">
+                                    <button type="button" class="mi" role="menuitem" @onclick="() => ExportMarkdownAsync(visibleOnly: true)">
+                                        <span>@L["MyPals.Export.Visible", visibleCount]</span>
+                                    </button>
+                                    <button type="button" class="mi" role="menuitem" @onclick="() => ExportMarkdownAsync(visibleOnly: false)">
+                                        <span>@L["MyPals.Export.All", allScopedCount]</span>
+                                    </button>
+                                </div>
+                            </ChildContent>
+                        </Dropdown>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="btn2 export-btn"
+                                aria-label="@L["MyPals.Export.Aria"].Value"
+                                title="@L["MyPals.Export.Aria"].Value"
+                                @onclick="() => ExportMarkdownAsync(visibleOnly: false)">
+                            <Icon Name="download" Size="14" />
+                            <span class="export-lbl">@L["MyPals.Export"]</span>
+                        </button>
+                    }
 
                     <button type="button" class="btn2" @onclick="AddPalAsync">
                         <Icon Name="plus" Size="14" />
@@ -331,6 +378,7 @@
     private IReadOnlyList<OwnedPal> _rows = [];
     private bool _filterOpen;
     private bool _srcOpen;
+    private bool _exportOpen;
 
     private OwnedPalEditor? _editor;
     private ElementReference _unsavedDialog;
@@ -347,6 +395,7 @@
     private readonly OnceParameter _speciesOnce = new();
     private readonly OnceParameter _passiveOnce = new();
     private readonly OnceParameter _palOnce = new();
+    private readonly OnceParameter _baseOnce = new();
 
     [CascadingParameter(Name = "CompactNav")] public bool CompactNav { get; set; }
 
@@ -358,6 +407,9 @@
 
     /// <summary>Selection key/uid of a Pal to select and open in the inspector panel.</summary>
     [Parameter] public string? InitialPal { get; set; }
+
+    /// <summary>Base id to filter by when the page opens (from the Map page).</summary>
+    [Parameter] public string? InitialBase { get; set; }
 
     protected override void OnInitialized()
     {
@@ -389,6 +441,12 @@
                 State.Filter = OwnedPalFilter.Empty with { Passives = [match.Id] };
                 changed = true;
             }
+        }
+
+        if (_baseOnce.IsNew(InitialBase) && !string.IsNullOrEmpty(InitialBase))
+        {
+            State.Filter = OwnedPalFilter.Empty with { BaseId = Paldium.Core.Owned.CaptureRecord.ObjectKey(InitialBase) };
+            changed = true;
         }
 
         if (_palOnce.IsNew(InitialPal) && !string.IsNullOrEmpty(InitialPal))
@@ -595,6 +653,13 @@
         {
             var names = f.Locations.Select(FormatLocationFilterValue);
             list.Add(new(OwnedPalFilter.LocationKey, $"{L["MyPals.FilterLocation"].Value}: {string.Join(", ", names)}"));
+        }
+
+        if (!string.IsNullOrEmpty(f.BaseId))
+        {
+            var name = Repository.Current.Pals.FirstOrDefault(p => p.Location.BaseName != null && p.Location.BaseId != null &&
+                                                                   Paldium.Core.Owned.CaptureRecord.ObjectKey(p.Location.BaseId) == f.BaseId)?.Location.BaseName;
+            list.Add(new(OwnedPalFilter.BaseKey, name == null ? L["MyPals.FilterOneBase"].Value : $"{Terms.Location(LocationKind.Base)}: {name}"));
         }
 
         if (f.Owners.Count > 0)
@@ -932,6 +997,76 @@
             _editingUid = null;
         }
         Repository.RemoveManual(target.Uid);
+    }
+
+    private Task ExportMarkdownAsync(bool visibleOnly)
+    {
+        _exportOpen = false;
+        var list = visibleOnly
+            ? _rows.Where(Scope.IsInScope).ToList()
+            : State.ApplySortOnly(Repository.Current.Pals, Data, Lang, _appliedAsTable).Where(Scope.IsInScope).ToList();
+
+        var now = DateTimeOffset.Now;
+        var suggested = L["MyPals.Export.FileName", now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)].Value + ".md";
+        var path = FilePicker.SaveFile(L["MyPals.Export"].Value, "Markdown (*.md)|*.md", suggested);
+        if (string.IsNullOrWhiteSpace(path)) return Task.CompletedTask;
+
+        try
+        {
+            var latestSync = Sync.Statuses
+                .Where(s => s.LastSyncUtc.HasValue)
+                .Select(s => s.LastSyncUtc!.Value)
+                .DefaultIfEmpty()
+                .Max();
+            var srcNames = Sources.Sources.Where(s => s.Enabled).Select(SourceConfigTitle).ToList();
+            var sourceSummary = srcNames.Count > 0
+                ? (latestSync != default
+                    ? $"{string.Join(", ", srcNames)} ({latestSync.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)})"
+                    : string.Join(", ", srcNames))
+                : L["MyPals.SrcNone"].Value;
+
+            var scopeLabel = Settings.Current.Scope.Mode switch
+            {
+                ScopeSettings.All => L["Scope.All"].Value,
+                ScopeSettings.Selected => string.Join(", ", Settings.Current.Scope.SelectedPlayerIds.Select(FormatOwnerFilterValue)),
+                _ => string.IsNullOrEmpty(Settings.Current.Scope.MyPlayerId)
+                    ? L["Scope.All"].Value
+                    : FormatOwnerFilterValue(Settings.Current.Scope.MyPlayerId),
+            };
+            var filterSummary = visibleOnly
+                ? string.Join("; ", BuildActiveItems().Select(i => i.Label))
+                : null;
+
+            var worldNames = Sync.Statuses
+                .Where(s => !string.IsNullOrWhiteSpace(s.WorldName) && Sources.Sources.Any(c => c.Enabled && c.Id == s.SourceId))
+                .Select(s => s.WorldName!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            var worldName = worldNames.Count > 0 ? string.Join(", ", worldNames) : null;
+
+            var context = new ExportContext(Lang, sourceSummary, worldName, scopeLabel, filterSummary, now);
+            var markdown = OwnedPalMarkdownExporter.Write(list, Data, context);
+            File.WriteAllText(path, markdown, new UTF8Encoding(false));
+
+            Snackbar.Add(
+                L["MyPals.Export.Done", list.Count].Value,
+                Severity.Normal,
+                config =>
+                {
+                    config.Action = L["MyPals.Export.OpenFolder"].Value;
+                    config.OnClick = _ =>
+                    {
+                        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+                        return Task.CompletedTask;
+                    };
+                });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(L["MyPals.Export.Failed", ex.Message].Value, Severity.Error);
+        }
+
+        return Task.CompletedTask;
     }
 
     public override void Dispose()

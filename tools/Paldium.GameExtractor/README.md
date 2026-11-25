@@ -52,9 +52,25 @@ Palworld ships with the UE4SS mod loader in this setup (Steam Workshop "UE4SS Ex
 
 The current file is `Pal-5.1.1-0+++UE5+Release-5.1-2281fa31.usmap` (usmap version 4, UE 5.1.1, build 25246127).
 
+## scan-world
+
+`scan-world --out <dir> [--grid MainGrid,oilrig,CloseRange]` reads the persistent map `PL_MainWorld5` and the World Partition cells
+under `PL_MainWorld5/_Generated_/` (about 7,500 packages, about an hour and 4 GB of memory) and writes `world-actors.json` (class -> actors with
+world position and an allow list of properties) and `world-classes.txt` (inventory). At the end it compares known table positions
+(`DT_BossSpawnerLoactionData`, `DT_PalQuestLocationData`) with the nearest scanned actors: a difference above 1,000 units means the
+transform is wrong. Run it once per game update, then give the folder to `export --world <dir>` (shop places) and to
+`Paldium.DataBuilder --world <dir>` (map markers).
+
 ## export
 
 `export --out <dir>` writes normalized JSON for the DataBuilder (`species.json`, `passive-effects.json`, `texts.json`, `meta.json`); it reads only `Pal-Windows.pak`. Feed the folder to `Paldium.DataBuilder --extractor <dir>`.
+
+With `--world <scan folder>` the export also fills what depends on placed actors: shop places, the level spawners, and for the map `quests.json` (main and side quests, their givers, places and rewards) and `pickups.json` (the contents of the ancient towers).
+
+`dump ... --script` also reads Blueprint bytecode, e.g. to see which text keys a function uses.
+
+`types <typeName | ~propertyPart>...` prints the properties of the game's own types from the mappings file (e.g. `types PalPlayerRecordData` for
+the field names a save and the mod read), or which types have a property whose name contains the part.
 
 `export` also writes `world-map.png` (the main world map, `Pal/Content/Pal/Texture/UI/Map/T_WorldMap`, a DXT1 8192x8192 texture, decoded and averaged down to 2048x2048 by the tool's own code, no imaging package) and `world-map.json` (its size and the world bounds of `DT_WorldMapUIData` row `MainMap`). The DataBuilder copies both to `data/map/` when they are in the `--extractor` folder.
 

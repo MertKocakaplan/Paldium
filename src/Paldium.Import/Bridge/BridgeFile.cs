@@ -38,6 +38,13 @@ public sealed record BridgeCoverage
     /// <summary>The oldest read among the stored pages (set by <see cref="BridgePageStore"/>, not by the mod).</summary>
     public DateTimeOffset? OldestReadUtc { get; init; }
 
+    // A base (T151): where it is (world units), its radius and its worker slots; absent in files of older mod versions.
+    public double? X { get; init; }
+    public double? Y { get; init; }
+    public double? Z { get; init; }
+    public double? Range { get; init; }
+    public int? Capacity { get; init; }
+
     /// <summary>Pages below the highest page read that were not read. Empty pages are not known, so nothing above the highest page is listed.</summary>
     public IReadOnlyList<int> MissingPages
     {
@@ -79,6 +86,25 @@ public sealed record BridgeCapture(IReadOnlyDictionary<string, int>? Bonus = nul
 /// <summary>The effigies of one type as the mod reads them (T133): unspent (<c>have</c>) and collected from the world (<c>collected</c>); either may be absent.</summary>
 public sealed record BridgeRelic(int? Have = null, int? Collected = null);
 
+/// <summary>An active quest as the mod reads it (T150): the quest id and the step it is at, counted from 0.</summary>
+public sealed record BridgeQuest(string? Id = null, int? Block = null);
+
+/// <summary>
+/// What the own player has taken, opened and done (T144, T148–T150): level object ids for effigies, ancient towers and fast travel points, journal
+/// row names, tower boss keys, quests and the defeated predators. A field the mod could not read is absent.
+/// </summary>
+public sealed record BridgeObtained
+{
+    public IReadOnlyList<string>? Relic { get; init; }
+    public IReadOnlyList<string>? Pickup { get; init; }
+    public IReadOnlyList<string>? FastTravel { get; init; }
+    public IReadOnlyList<string>? Note { get; init; }
+    public IReadOnlyList<string>? TowerBoss { get; init; }
+    public IReadOnlyList<BridgeQuest>? QuestsActive { get; init; }
+    public IReadOnlyList<string>? QuestsDone { get; init; }
+    public int? PredatorDefeats { get; init; }
+}
+
 public sealed record BridgeFile
 {
     public const int SupportedSchemaVersion = 1;
@@ -101,6 +127,9 @@ public sealed record BridgeFile
 
     /// <summary>The effigies of the own player by <c>EPalRelicType</c> name (T133; absent when the mod could not read them).</summary>
     public IReadOnlyDictionary<string, BridgeRelic>? Relics { get; init; }
+
+    /// <summary>The world progress of the own player (T144; absent in files of older mod versions).</summary>
+    public BridgeObtained? Obtained { get; init; }
 
     /// <summary>Per-box report of the pages read (absent in files of older mod versions).</summary>
     public IReadOnlyList<BridgeCoverage> Coverage { get; init; } = [];

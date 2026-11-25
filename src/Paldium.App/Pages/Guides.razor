@@ -24,6 +24,10 @@
     {
         <EffigyReference />
     }
+    else if (Slug == "tuccarlar")
+    {
+        <ShopReference ItemId="@Item" ShopId="@Shop" />
+    }
     else if (_doc != null)
     {
         <GuideReader Doc="_doc" Next="_next" GuideLang="@_lang" Reading="State.Reading" OnLang="SetLang" OnReading="SetReading" />
@@ -45,7 +49,7 @@
     [SupplyParameterFromQuery(Name = "read")]
     public string? Read { get; set; }
 
-    // The Ranch table (T109): /guides/agil?pal=<id>&item=<id>&rank=<level>; the Transporting table (T120): /guides/tasima?pal=<id>; the Mounts table (T124): /guides/binekler?pal=<id>; the Effigy table (T126): /guides/heykeller
+    // The Ranch table (T109): /guides/agil?pal=<id>&item=<id>&rank=<level>; the Transporting table (T120): /guides/tasima?pal=<id>; the Mounts table (T124): /guides/binekler?pal=<id>; the Effigy table (T126): /guides/heykeller; the Merchants table (T137): /guides/tuccarlar?item=<id>&shop=<id>
     [SupplyParameterFromQuery(Name = "pal")]
     public string? Pal { get; set; }
 
@@ -54,6 +58,9 @@
 
     [SupplyParameterFromQuery(Name = "rank")]
     public int? Rank { get; set; }
+
+    [SupplyParameterFromQuery(Name = "shop")]
+    public string? Shop { get; set; }
 
     private readonly OnceParameter _readOnce = new();
 

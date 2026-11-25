@@ -16,7 +16,54 @@ public sealed record GameDataFile(
     IReadOnlyList<ActiveDto> Actives,
     SortedDictionary<string, SortedDictionary<string, string>>? Terms = null,
     IReadOnlyList<RelicDto>? Relics = null,
-    IReadOnlyList<TechnologyDto>? Technologies = null);
+    IReadOnlyList<TechnologyDto>? Technologies = null,
+    IReadOnlyList<ShopDto>? Shops = null);
+
+/// <summary>T137: one merchant or Pal merchant shop (items or Pals), its vendor texts, place/coordinates, currency and stock.</summary>
+public sealed record ShopDto(
+    string Id,
+    string Kind,
+    SortedDictionary<string, string> VendorNames,
+    ShopPlaceDto Place,
+    ShopCurrencyDto Currency,
+    SortedDictionary<string, string>? Condition = null,
+    IReadOnlyList<ShopPoolEntryDto>? Pool = null,
+    IReadOnlyList<ShopProductDto>? Products = null,
+    int CharacterNum = 0,
+    IReadOnlyList<ShopPalDto>? Pals = null);
+
+public sealed record ShopPlaceDto(
+    string Kind,
+    SortedDictionary<string, string> Names,
+    IReadOnlyList<ShopMapPointDto> MapPoints);
+
+public sealed record ShopMapPointDto(
+    double X,
+    double Y,
+    string? Map,
+    int? MapX,
+    int? MapY,
+    SortedDictionary<string, string>? Names = null);
+
+public sealed record ShopCurrencyDto(
+    string ItemId,
+    SortedDictionary<string, string> Names,
+    string? Icon);
+
+public sealed record ShopPoolEntryDto(string Group, double Weight, double Chance);
+
+public sealed record ShopProductDto(
+    string ItemId,
+    SortedDictionary<string, string> Names,
+    string? Icon,
+    int Price,
+    int PerPurchase,
+    int Stock,
+    bool OncePerPlayer,
+    string? PoolGroup = null,
+    double Chance = 1.0);
+
+public sealed record ShopPalDto(string PalId, int LevelMin, int LevelMax);
 
 /// <summary>
 /// T126: one Pal Effigy enhancement of the player (the statue of power): the game's type name, the effigy item, the texts and the cost and effect of every rank.

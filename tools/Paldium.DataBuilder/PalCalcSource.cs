@@ -306,7 +306,8 @@ public sealed class PalCalcSource
             actives,
             terms,
             extractor?.Relics(),
-            extractor?.Technologies());
+            extractor?.Technologies(),
+            extractor?.Shops());
 
         CopyMiscIcons(outDir);
         return (data, breeding);

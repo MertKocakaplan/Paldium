@@ -86,6 +86,8 @@ public static class LocalizationExporter
         yield return new Def("Gender", "uiCommon", "PALBOX_FILTERING_GENDER");
         yield return new Def("WanderingMerchant", "humanName", "NAME_SELESPERSON");
         yield return new Def("BlackMarketeer", "humanName", "NAME_DarkTrader");
+        yield return new Def("Map.MainMap", "worldMap", "WORLDMAP_NAME_MainMap");
+        yield return new Def("Map.Tree", "worldMap", "WORLDMAP_NAME_Tree");
 
         foreach (var element in Elements)
             yield return new Def($"Element.{element}", "uiCommon", $"COMMON_ELEMENT_NAME_{element}");

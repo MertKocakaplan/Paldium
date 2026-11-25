@@ -40,7 +40,21 @@ public static class BundleWriter
         File.Copy(json, Path.Combine(map, "world-map.json"), overwrite: true);
         var large = Path.Combine(extractorDir, "world-map-large.png");
         if (File.Exists(large)) File.Copy(large, Path.Combine(map, "world-map-large.png"), overwrite: true);
+
+        foreach (var treeFile in new[] { "tree-map.png", "tree-map-large.png", "tree-map.json" })
+        {
+            var src = Path.Combine(extractorDir, treeFile);
+            if (File.Exists(src)) File.Copy(src, Path.Combine(map, treeFile), overwrite: true);
+        }
+
         return true;
+    }
+
+    public static void WriteMapPoints(string outDir, Paldium.Core.Map.MapDataFile mapPoints)
+    {
+        var map = Path.Combine(outDir, "map");
+        Directory.CreateDirectory(map);
+        File.WriteAllText(Path.Combine(map, "map-points.json"), JsonSerializer.Serialize(mapPoints, SchemaJson.Compact) + "\n", Utf8);
     }
 
     /// <summary>Copies the Ranch item icons (<c>icons/items/*.png</c>) of the extractor output (T108); returns how many.</summary>
@@ -48,6 +62,9 @@ public static class BundleWriter
 
     /// <summary>Copies the building icons (<c>icons/buildings/*.png</c>, T128); returns how many.</summary>
     public static int CopyBuildingIcons(string extractorDir, string outDir) => CopyIconFolder(extractorDir, outDir, "buildings");
+
+    /// <summary>Copies the compass/map marker icons (<c>icons/map/*.png</c>, T138); returns how many.</summary>
+    public static int CopyMapIcons(string extractorDir, string outDir) => CopyIconFolder(extractorDir, outDir, "map");
 
     private static int CopyIconFolder(string extractorDir, string outDir, string kind)
     {

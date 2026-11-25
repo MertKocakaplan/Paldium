@@ -1,0 +1,34 @@
+@inherits LocalizedComponentBase
+@inject IGameData Data
+
+@* A predator's area (T149): the variant's name, the level of the wild area it is drawn from and what the game data does not say. *@
+<section class="wm-card" aria-label="@Area.Predator.Names.Get(Lang)">
+    <div class="th">
+        <PalIcon PalId="@Area.Predator.PalId" Size="28" />
+        <div>
+            <h2>@Area.Predator.Names.Get(Lang)</h2>
+            <div class="k">@L["Map.Cat.predator"]</div>
+        </div>
+        <button type="button" class="btn2 x" @onclick="OnClose"><Icon Name="x" Size="14" /><span>@L["Map.Close"]</span></button>
+    </div>
+    <div class="row">
+        <span class="num">@L["Map.Predator.AreaLevel", Area.LevelMin == Area.LevelMax ? Area.LevelMin.ToString() : Area.LevelMin + "–" + Area.LevelMax]</span>
+    </div>
+    @if (WorldMapModel.Coordinates(Area.Point.MapX, Area.Point.MapY, Lang) is { } coordinates)
+    {
+        <div class="row"><span class="m">@L["Map.Coordinates"]</span><span class="num">@coordinates</span></div>
+    }
+    <p class="wm-desc">@L["Map.Predator.Note"]</p>
+    @if (Data.Pals.FirstOrDefault(p => p.Id == Area.Predator.PalId) is { } pal)
+    {
+        <div class="row">
+            <b>@pal.DisplayName(Lang)</b>
+            <a class="lnk" href="@Links.Pal(pal.Id)">@L["Map.OpenPaldex"]<Icon Name="arrow-right" Size="14" /></a>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public PredatorArea Area { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+}

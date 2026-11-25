@@ -49,7 +49,8 @@ public sealed record OwnedPal(
     string? Nickname, PalOwner? Owner, PalLocation Location,
     PalSourceKind Source, string SourceId, DateTimeOffset SeenAtUtc,
     bool IsEdited, bool IsExcluded,
-    bool IsOnExpedition = false)
+    bool IsOnExpedition = false,
+    bool IsAlpha = false)
 {
     /// <summary>
     /// What the planner selections are keyed by: the in-game instance id when there is one (the same Pal read from a save and from the mod has
