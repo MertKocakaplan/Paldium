@@ -206,9 +206,7 @@
                                         var only = atBase.Drops[0];
                                         var top = Pal.Ranch.OrderBy(r => r.Rank).LastOrDefault(r => r.Drops.Any(d => d.ItemId == only.ItemId))?.Drops.FirstOrDefault(d => d.ItemId == only.ItemId) ?? only;
                                         <li>
-                                            @if (only.IconPath != null) { <img src="@("gamedata/" + only.IconPath)" width="24" height="24" alt="" /> }
-                                            <span>@only.Names.Get(Lang)</span>
-                                            <span class="m">@L["Ranch.LevelRange", RanchRange(only), RanchRange(top), atBase.Rank]</span>
+                                            @DropRow(only.ItemId, PalDropSource.Ranch, only.IconPath, only.Names.Get(Lang), L["Ranch.LevelRange", RanchRange(only), RanchRange(top), atBase.Rank].Value)
                                         </li>
                                     }
                                     else
@@ -216,9 +214,7 @@
                                         @foreach (var drop in atOne)
                                         {
                                             <li>
-                                                @if (drop.IconPath != null) { <img src="@("gamedata/" + drop.IconPath)" width="24" height="24" alt="" /> }
-                                                <span>@drop.Names.Get(Lang)</span>
-                                                <span class="m">@Percent(drop.Chance) · @RanchRange(drop)</span>
+                                                @DropRow(drop.ItemId, PalDropSource.Ranch, drop.IconPath, drop.Names.Get(Lang), Percent(drop.Chance) + " · " + RanchRange(drop))
                                             </li>
                                         }
                                         @if (later.Count > 0)
@@ -362,8 +358,7 @@
                                 @foreach (var drop in Pal.Drops)
                                 {
                                     <li>
-                                        <span>@drop.Names.Get(Lang)</span>
-                                        <span class="m">@(drop.Min == drop.Max ? drop.Min.ToString(CultureInfo.InvariantCulture) : $"{drop.Min}–{drop.Max}") · @Percent(drop.Rate)</span>
+                                        @DropRow(drop.ItemId, PalDropSource.Any, null, drop.Names.Get(Lang), DropModel.Amount(drop.Min, drop.Max) + " · " + Percent(drop.Rate))
                                     </li>
                                 }
                             </ul>
@@ -376,6 +371,17 @@
 </div>
 
 @code {
+    // T152: an item row leads to the Pals that drop it.
+    private RenderFragment DropRow(string itemId, PalDropSource source, string? iconPath, string name, string amount) => __builder =>
+    {
+        <a class="dgo" href="@DropModel.Link(itemId, source)" title="@L["Detail.WhoDrops"].Value"
+           @onclick="() => OnShowDrop.InvokeAsync((itemId, source))" @onclick:preventDefault="true">
+            @if (iconPath != null) { <img src="@("gamedata/" + iconPath)" width="24" height="24" alt="" /> }
+            <span>@name</span>
+            <span class="m">@amount</span>
+        </a>
+    };
+
     private static string RanchRange(Paldium.Core.Domain.RanchDrop d) =>
         d.Min == d.Max ? d.Min.ToString(CultureInfo.InvariantCulture) : $"{d.Min}–{d.Max}";
 
@@ -408,6 +414,9 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<PalSpecies> OnSelectPal { get; set; }
     [Parameter] public EventCallback OnShowBestWorkers { get; set; }
+
+    /// <summary>T152: the user picked a dropped item; the page shows the species that drop it.</summary>
+    [Parameter] public EventCallback<(string ItemId, PalDropSource Source)> OnShowDrop { get; set; }
 
     protected override void OnInitialized()
     {
@@ -638,7 +647,7 @@
         return $"--pct:{pct.ToString("0", CultureInfo.InvariantCulture)}%";
     }
 
-    private string Percent(double value) => value.ToString(value < 0.01 ? "P1" : "P0", CultureInfo.GetCultureInfo(Lang));
+    private string Percent(double value) => DropModel.Percent(value, Lang);
 
     private void OpenPlanner() => Navigation.NavigateTo($"planner?target={Uri.EscapeDataString(Pal.Id)}");
 

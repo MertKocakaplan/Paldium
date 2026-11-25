@@ -4264,3 +4264,44 @@ dialog.mview::backdrop { background: var(--ground); }
   .wm { grid-template-columns: 272px minmax(0, 1fr); }
   .wm-card { position: absolute; left: 272px; right: 0; bottom: 0; max-height: 40%; z-index: 4; box-shadow: var(--shadow-float); }
 }
+
+/* T152: search by dropped item. The picker in the filter rail */
+.dpick { display: flex; flex-direction: column; gap: 4px; }
+.dpick-list { list-style: none; margin: 0; padding: 4px; max-height: 264px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); scrollbar-width: thin; scrollbar-color: var(--control) transparent; }
+.dpick-list li { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 6px; border-radius: 5px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.dpick-list li:hover, .dpick-list li[aria-selected="true"] { background: var(--raised); }
+.dpick-list li.none { cursor: default; color: var(--muted); background: none; }
+.dpick-list img, .dpick-list .noic, .dpick-sel img, .dpick-sel .noic { width: 20px; height: 20px; flex: none; object-fit: contain; }
+.dpick-list .n, .dpick-sel .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpick-list .c { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.dpick-sel { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 10px; border: 1px solid var(--control); border-radius: 6px; background: var(--sunk); font-size: 13px; }
+/* The suggestion above the results when the species search names an item */
+.p .dsuggest { flex: none; display: flex; padding: 12px 20px 0; }
+.p .dsuggest button { display: inline-flex; align-items: center; gap: 8px; height: auto; min-height: 32px; text-align: left; }
+.p .dsuggest img { width: 20px; height: 20px; object-fit: contain; }
+/* The "Drop" line makes cards taller: 18px per line plus the 6px gap (Paldex.razor DropLineHeight / DropLineGap) */
+.p .gw.drop1 { --card-h: 348px; }
+.p .gw.drop2 { --card-h: 366px; }
+.p .gw.drop1 .yogun { --card-h: 218px; }
+.p .gw.drop2 .yogun { --card-h: 236px; }
+.x .card.sp .dline { flex: none; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; font-size: 12px; }
+.x .card.sp .dline .k { color: var(--muted); }
+.x .card.sp .dline img { width: 16px; height: 16px; flex: none; object-fit: contain; }
+.x .card.sp .dline .v { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; margin-left: auto; line-height: 18px; }
+.x .card.sp .dline .v b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 500; color: var(--ink); }
+.x .yogun .card.sp .dline .v b { font-size: 11.5px; }
+.x table col.col-drop { width: 144px; }
+/* With the Drop column the others give way, so that the table still fits beside the filter rail at 1264px */
+.x .pdx-tbl.has-drop col.col-sppal { width: 176px; }
+.x .pdx-tbl.has-drop col.col-shown { width: 72px; }
+.x .pdx-tbl.has-drop col.col-capt { width: 112px; }
+.x .pdx-tbl.has-drop col.col-pwr { width: 54px; }
+.x .pdx-tbl.has-drop col.col-rar { width: 54px; }
+.x .pdx-tbl.has-drop col.col-works { width: 140px; }
+.x .pdx-tbl.has-drop col.col-stat { width: 44px; }
+.x table td.dropc span { display: block; font-variant-numeric: tabular-nums; font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Item rows of the detail lead to the Pals that drop the item */
+.drops li > a.dgo { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 30px; margin: 0 -6px; padding: 0 6px; border-radius: 5px; color: inherit; text-decoration: none; }
+.drops li > a.dgo:hover { background: var(--raised); }
+.drops li > a.dgo:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.drops li > a.dgo img { flex: none; }

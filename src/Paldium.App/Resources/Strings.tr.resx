@@ -1811,4 +1811,23 @@ Oyun klasöründe başka hiçbir şey değiştirilmez.</value></data>
   <data name="Map.Fit" xml:space="preserve"><value>Haritayı sığdır</value></data>
   <data name="Detail.MapAreas" xml:space="preserve"><value>{0} · {1} alan</value></data>
   <data name="Detail.Map.NoCoords" xml:space="preserve"><value>Bu haritada koordinat gösterilmiyor</value></data>
+  <data name="Filter.Drop" xml:space="preserve"><value>Düşürdüğü eşya</value></data>
+  <data name="Filter.DropSearch" xml:space="preserve"><value>Eşya ara</value></data>
+  <data name="Filter.DropSource" xml:space="preserve"><value>Nereden geldiği</value></data>
+  <data name="Filter.DropSource.Any" xml:space="preserve"><value>Hepsi</value></data>
+  <data name="Filter.DropSource.Defeat" xml:space="preserve"><value>Yenince</value></data>
+  <data name="Filter.DropSource.Ranch" xml:space="preserve"><value>Ağıl'da</value></data>
+  <data name="Filter.DropCount" xml:space="preserve"><value>{0} Pal</value></data>
+  <data name="Filter.DropNoItem" xml:space="preserve"><value>Eşleşen düşen eşya yok.</value></data>
+  <data name="Clause.Drop" xml:space="preserve"><value>Düşürür: {0}</value></data>
+  <data name="Clause.DropRanch" xml:space="preserve"><value>Ağıl'da düşürür: {0}</value></data>
+  <data name="Col.Drop" xml:space="preserve"><value>Düşürme</value></data>
+  <data name="Sort.DropChance" xml:space="preserve"><value>Düşürme olasılığı</value></data>
+  <data name="Drop.RanchFrom" xml:space="preserve"><value>Ağıl ★{0}'{1}</value></data>
+  <data name="Drop.MinLevel" xml:space="preserve"><value>Sv {0}+</value></data>
+  <data name="Drop.None" xml:space="preserve"><value>"{0}" hiçbir Pal'dan düşmüyor.</value></data>
+  <data name="Drop.NoneFiltered" xml:space="preserve"><value>Bu filtrelerle "{0}" düşüren Pal yok.</value></data>
+  <data name="Drop.Suggest" xml:space="preserve"><value>"{0}" düşüren Pal'ları göster</value></data>
+  <data name="Detail.WhoDrops" xml:space="preserve"><value>Bunu düşüren Pal'lar</value></data>
+  <data name="Shop.AlsoDroppedBy" xml:space="preserve"><value>Pal'lardan da düşer: {0} Pal</value></data>
 </root>

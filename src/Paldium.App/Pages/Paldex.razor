@@ -39,7 +39,8 @@
                                HasElements="_hasElements"
                                Owned="_owned"
                                Capture="_capture"
-                               CaptureState="_captureState" />
+                               CaptureState="_captureState"
+                               DropItems="DropItems" />
             </FilterRail>
         }
 
@@ -51,7 +52,8 @@
                            NextPal="prevNext.Next"
                            OnClose="CloseDetail"
                            OnSelectPal="SelectFromDetail"
-                           OnShowBestWorkers="ShowBestWorkersFromDetail" />
+                           OnShowBestWorkers="ShowBestWorkersFromDetail"
+                           OnShowDrop="ShowDrop" />
             }
             else if (isWorkers)
             {
@@ -119,10 +121,29 @@
                                  OnRemove="k => RemoveFilterClause(k)"
                                  OnClearAll="ClearFilters" />
 
+                @if (PalDrops.Suggest(DropItems, _state.Filter.Text) is { } suggested
+                     && !string.Equals(suggested.ItemId, _state.Filter.DropItem, StringComparison.OrdinalIgnoreCase))
+                {
+                    var suggestedIcon = DropModel.IconUrl(suggested.ItemId, suggested.IconPath);
+                    <div class="dsuggest">
+                        <button type="button" class="btn2" @onclick="() => ShowSuggested(suggested)">
+                            @if (suggestedIcon != null)
+                            {
+                                <img src="@suggestedIcon" width="20" height="20" alt="" />
+                            }
+                            <span>@L["Drop.Suggest", suggested.Names.Get(Lang)]</span>
+                            <Icon Name="arrow-right" Size="14" />
+                        </button>
+                    </div>
+                }
+
+                var dropItem = FilterDrop;
+                var dropIcon = dropItem == null ? null : DropModel.IconUrl(dropItem.ItemId, dropItem.IconPath);
+
                 @if (Results.Count == 0)
                 {
                     <div class="gw">
-                        <EmptyResult Title="@L["Paldex.EmptyTitle"].Value"
+                        <EmptyResult Title="@EmptyTitle(activeClauses)"
                                      Reason="@L["Paldex.EmptyReason"].Value"
                                      Removals="@BuildEmptyRemovals(activeClauses)"
                                      OnRemove="k => RemoveFilterClause(k)"
@@ -132,11 +153,16 @@
                 else if (isGallery)
                 {
                     var isDense = normalizedView == "dense";
-                    <CardGrid TItem="PalSpecies"
+                    var dropLines = DropLineCount;
+                    // The "Drop" line makes the cards taller (app.css .gw.drop1 / .drop2 set the same heights).
+                    var dropHeight = dropLines == 0 ? 0 : dropLines * DropLineHeight + DropLineGap;
+                    <CardGrid @key="@("cards" + dropLines)"
+                              TItem="PalSpecies"
                               Items="Results"
+                              Class="@(dropLines == 0 ? null : "drop" + dropLines.ToString(CultureInfo.InvariantCulture))"
                               Dense="@isDense"
                               CardMin="@(isDense ? 136 : 200)"
-                              CardHeight="@(isDense ? 194 : 324)"
+                              CardHeight="@((isDense ? 194 : 324) + dropHeight)"
                               CardGap="@(isDense ? 10 : 14)"
                               KeySelector="p => p.Id"
                               SelectedKey="@_selected?.Id"
@@ -146,13 +172,16 @@
                                          Dense="@isDense"
                                          OwnedStats="@StatsOf(pal)"
                                          Selected="@(_selected?.Id == pal.Id)"
+                                         DropLines="@DropLinesOf(pal)"
+                                         DropIcon="@dropIcon"
                                          OnOpen="Select" />
                         </ItemTemplate>
                     </CardGrid>
                 }
                 else
                 {
-                    <DataTable TItem="PalSpecies"
+                    <DataTable @key="@("table" + (dropItem == null ? "" : "-drop"))"
+                               TItem="PalSpecies"
                                Items="Results"
                                Columns="@TableColumns()"
                                RowHeight="56"
@@ -162,7 +191,7 @@
                                SortDescending="@_state.Sort.Descending"
                                OnSort="OnTableSort"
                                OnRowActivate="Select"
-                               Class="pdx-tbl">
+                               Class="@(dropItem == null ? "pdx-tbl" : "pdx-tbl has-drop")">
                         <RowTemplate Context="pal">
                             @{
                                 var elements = ResolveElements(pal);
@@ -185,6 +214,15 @@
                                     </div>
                                 </div>
                             </td>
+                            @if (dropItem != null)
+                            {
+                                <td class="dropc">
+                                    @foreach (var line in DropLinesOf(pal) ?? [])
+                                    {
+                                        <span>@line</span>
+                                    }
+                                </td>
+                            }
                             <td><OwnedCountBadge Stats="@StatsOf(pal)" /></td>
                             <td class="cap">@CaptureCell(pal)</td>
                             <td class="num">@pal.BreedingPower.ToString(CultureInfo.InvariantCulture)</td>
@@ -216,6 +254,17 @@
     [SupplyParameterFromQuery(Name = "capture")]
     public string? CaptureParameter { get; set; }
 
+    /// <summary>Optional <c>?drop=ItemId</c> (T152): filters the species list to Pals that drop the item.</summary>
+    [SupplyParameterFromQuery(Name = "drop")]
+    public string? DropParameter { get; set; }
+
+    /// <summary>With <c>?drop=</c>: <c>?dropsrc=defeat|ranch</c>.</summary>
+    [SupplyParameterFromQuery(Name = "dropsrc")]
+    public string? DropSourceParameter { get; set; }
+
+    private const int DropLineHeight = 18;
+    private const int DropLineGap = 6;
+
     private PaldexSettings _state = new();
     private string _mode = "list";
     private bool _workersOwnedOnly;
@@ -233,6 +282,9 @@
     private readonly OnceParameter _palParameter = new();
     private readonly OnceParameter _activeParameter = new();
     private readonly OnceParameter _captureParameter = new();
+    private readonly OnceParameter _dropParameter = new();
+    private IReadOnlyList<DroppedItem>? _dropItems;
+    private string? _dropItemsLang;
 
     protected override void OnInitialized()
     {
@@ -266,6 +318,14 @@
             _selected = null;
             _mode = "list";
             if (_capture != null) SetFilter(new PalFilter { Capture = cap });
+        }
+
+        if (_dropParameter.IsNew(DropParameter == null ? null : DropParameter + "&" + DropSourceParameter)
+            && PalDrops.Find(DropItems, DropParameter) is { } linked)
+        {
+            _selected = null;
+            _mode = "list";
+            SetFilter(new PalFilter { DropItem = linked.ItemId, DropSource = DropModel.ParseSource(DropSourceParameter) });
         }
 
         if (!_palParameter.IsNew(PalParameter) || string.IsNullOrEmpty(PalParameter)) return;
@@ -332,16 +392,62 @@
 
     private void Save() => Settings.Update(s => s with { Paldex = _state });
 
+    // The dropped-item filter brings its own sort and gives the old one back (DropModel.Apply).
     private void SetFilter(PalFilter filter)
     {
-        _state = _state with { Filter = filter };
+        _state = DropModel.Apply(_state, filter);
         Save();
     }
 
-    private void ClearFilters()
+    private void ClearFilters() => SetFilter(new PalFilter());
+
+    private IReadOnlyList<DroppedItem> DropItems
     {
-        _state = _state with { Filter = new PalFilter() };
-        Save();
+        get
+        {
+            if (_dropItems == null || _dropItemsLang != Lang)
+            {
+                _dropItems = PalDrops.Items(Data.Pals, Lang);
+                _dropItemsLang = Lang;
+            }
+            return _dropItems;
+        }
+    }
+
+    private DroppedItem? FilterDrop => PalDrops.Find(DropItems, _state.Filter.DropItem);
+
+    private IReadOnlyList<string>? DropLinesOf(PalSpecies pal) =>
+        string.IsNullOrWhiteSpace(_state.Filter.DropItem)
+            ? null
+            : DropModel.Lines(PalDrops.Of(pal, _state.Filter.DropItem, _state.Filter.DropSource), Lang, L);
+
+    // Lines the tallest card needs: none without the filter, two when a listed species drops the item both ways.
+    private int DropLineCount
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_state.Filter.DropItem)) return 0;
+            var item = _state.Filter.DropItem;
+            var source = _state.Filter.DropSource;
+            return Results.Any(p => PalDrops.Of(p, item, source) is { Defeat: not null, Ranch: not null }) ? 2 : 1;
+        }
+    }
+
+    private void ShowSuggested(DroppedItem item) =>
+        SetFilter(_state.Filter with { Text = null, DropItem = item.ItemId, DropSource = PalDropSource.Any });
+
+    // From a drop row of the detail. The current history entry first gets the species, so that "back" returns to this detail.
+    private void ShowDrop((string ItemId, PalDropSource Source) drop)
+    {
+        if (_selected != null) Navigation.NavigateTo("paldex?pal=" + Uri.EscapeDataString(_selected.Id), replace: true);
+        Navigation.NavigateTo(DropModel.Link(drop.ItemId, drop.Source));
+    }
+
+    private string EmptyTitle(List<PalClauseSpec> clauses)
+    {
+        if (FilterDrop is not { } item) return L["Paldex.EmptyTitle"].Value;
+        var onlyDrop = _state.Filter.DropSource == PalDropSource.Any && clauses.All(c => c.Key == "drop");
+        return L[onlyDrop ? "Drop.None" : "Drop.NoneFiltered", item.Names.Get(Lang)].Value;
     }
 
     private void SetView(string view)
@@ -423,7 +529,11 @@
 
     private List<SortOption> SortOptions()
     {
-        var list = new List<SortOption>
+        var list = new List<SortOption>();
+        if (!string.IsNullOrWhiteSpace(_state.Filter.DropItem))
+            list.Add(new(nameof(PalSortKey.DropChance), L["Sort.DropChance"].Value, DefaultDescending: true));
+
+        list.AddRange(new SortOption[]
         {
             new(nameof(PalSortKey.DexNo), L["Sort.PalNo"].Value, DefaultDescending: false),
             new(nameof(PalSortKey.Name), L["Sort.Name"].Value, DefaultDescending: false),
@@ -431,7 +541,7 @@
             new(nameof(PalSortKey.Rarity), L["Sort.Rarity"].Value, DefaultDescending: true),
             new(nameof(PalSortKey.OwnedCount), L["Sort.OwnedCount"].Value, DefaultDescending: true),
             new(nameof(PalSortKey.CaptureBonus), L["Sort.CaptureBonus"].Value, DefaultDescending: false),
-        };
+        });
 
         PalSortKey[] statKeys =
         [
@@ -459,7 +569,14 @@
 
     private const string MimogIcon = "gamedata/icons/items/Relic_12.png";
 
-    private IReadOnlyList<DataTableColumn> TableColumns() =>
+    private IReadOnlyList<DataTableColumn> TableColumns()
+    {
+        var columns = new List<DataTableColumn>(BaseColumns());
+        if (FilterDrop != null) columns.Insert(2, new(L["Col.Drop"].Value, "col-drop", nameof(PalSortKey.DropChance)));
+        return columns;
+    }
+
+    private IReadOnlyList<DataTableColumn> BaseColumns() =>
     [
         new(L["Paldex.ColNo"].Value, "col-spno", nameof(PalSortKey.DexNo), Align: "n"),
         new(L["Paldex.ColPalHeader"].Value, "col-sppal", nameof(PalSortKey.Name)),
@@ -502,6 +619,18 @@
                 $"{L["Paldex.FilterSpecies"].Value}: {q}",
                 p => PalTextSearch.Matches(p, q),
                 x => x with { Text = null }));
+        }
+
+        if (!string.IsNullOrWhiteSpace(f.DropItem))
+        {
+            var item = f.DropItem;
+            var source = f.DropSource;
+            var name = PalDrops.Find(DropItems, item)?.Names.Get(Lang) ?? item;
+            list.Add(new(
+                "drop",
+                L[source == PalDropSource.Ranch ? "Clause.DropRanch" : "Clause.Drop", name].Value,
+                p => PalDrops.Of(p, item, source).Found,
+                x => x with { DropItem = null, DropSource = PalDropSource.Any }));
         }
 
         if (f.Elements.Count > 0)

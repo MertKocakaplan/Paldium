@@ -1,0 +1,147 @@
+@using Paldium.Core.Queries
+@inherits LocalizedComponentBase
+
+@* T152: the dropped-item filter. A field that opens a list while the user types (empty: the items most species drop); once chosen, the
+   item stands in the field with a button that removes it. *@
+@if (!string.IsNullOrEmpty(SelectedId))
+{
+    var chosen = PalDrops.Find(Items, SelectedId);
+    <div class="dpick-sel">
+        @ItemIcon(chosen)
+        <span class="n">@(chosen?.Names.Get(Lang) ?? SelectedId)</span>
+        <button type="button" @ref="_clear" class="field-clr" aria-label="@L["Common.Clear"].Value" title="@L["Common.Clear"].Value" @onclick="() => SelectAsync(null)">
+            <Icon Name="x" Size="14" />
+        </button>
+    </div>
+}
+else
+{
+    var visible = Visible();
+    <div class="dpick">
+        <div class="field">
+            <Icon Name="search" Size="16" />
+            <input @ref="_input"
+                   type="text"
+                   role="combobox"
+                   autocomplete="off"
+                   aria-label="@L["Filter.Drop"].Value"
+                   aria-autocomplete="list"
+                   aria-expanded="@(_open ? "true" : "false")"
+                   aria-controls="@ListId"
+                   aria-activedescendant="@(_open && visible.Count > 0 ? OptionId(_active) : null)"
+                   placeholder="@L["Filter.DropSearch"].Value"
+                   value="@_query"
+                   @oninput="OnInput"
+                   @onfocus="() => _open = true"
+                   @onclick="() => _open = true"
+                   @onblur="() => _open = false"
+                   @onkeydown="OnKeyDownAsync" />
+        </div>
+        @if (_open)
+        {
+            <ul class="dpick-list" id="@ListId" role="listbox" aria-label="@L["Filter.Drop"].Value" @onmousedown:preventDefault="true">
+                @for (var i = 0; i < visible.Count; i++)
+                {
+                    var item = visible[i];
+                    var index = i;
+                    <li id="@OptionId(index)" role="option" aria-selected="@(index == _active ? "true" : "false")" @key="item.ItemId" @onclick="() => SelectAsync(item.ItemId)">
+                        @ItemIcon(item)
+                        <span class="n">@item.Names.Get(Lang)</span>
+                        <span class="c num">@L["Filter.DropCount", item.PalCount]</span>
+                    </li>
+                }
+                @if (visible.Count == 0)
+                {
+                    <li class="none">@L["Filter.DropNoItem"]</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private const string ListId = "paldex-drop-list";
+
+    /// <summary>How many items the list offers before the user types.</summary>
+    private const int EmptyCount = 8;
+
+    private ElementReference _input;
+    private ElementReference _clear;
+    private string _query = string.Empty;
+    private bool _open;
+    private int _active;
+    private bool _focusAfterSelect;
+
+    [Parameter, EditorRequired] public IReadOnlyList<DroppedItem> Items { get; set; } = [];
+    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public EventCallback<string?> OnSelect { get; set; }
+
+    private IReadOnlyList<DroppedItem> Visible() =>
+        string.IsNullOrWhiteSpace(_query) ? Items.Take(EmptyCount).ToList() : PalDrops.Search(Items, _query);
+
+    private static string OptionId(int index) => ListId + "-" + index.ToString(CultureInfo.InvariantCulture);
+
+    private RenderFragment ItemIcon(DroppedItem? item) => __builder =>
+    {
+        var url = item == null ? null : DropModel.IconUrl(item.ItemId, item.IconPath);
+        if (url != null) { <img src="@url" width="20" height="20" alt="" /> } else { <span class="noic" aria-hidden="true"></span> }
+    };
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+        _open = true;
+        _active = 0;
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        var count = Visible().Count;
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (_open) _active = Math.Min(Math.Max(0, count - 1), _active + 1);
+                _open = true;
+                break;
+            case "ArrowUp":
+                _active = Math.Max(0, _active - 1);
+                break;
+            case "Enter":
+                if (_open && _active < count) await SelectAsync(Visible()[_active].ItemId);
+                break;
+            case "Escape":
+                _open = false;
+                break;
+        }
+    }
+
+    private async Task SelectAsync(string? itemId)
+    {
+        _query = string.Empty;
+        _open = false;
+        _active = 0;
+        // The control the user was on goes away: the focus moves to the one that takes its place.
+        _focusAfterSelect = true;
+        await OnSelect.InvokeAsync(itemId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusAfterSelect) return;
+        _focusAfterSelect = false;
+        var target = string.IsNullOrEmpty(SelectedId) ? _input : _clear;
+        if (target.Context == null) return;
+        try
+        {
+            await target.FocusAsync(preventScroll: true);
+            // Coming back to the empty field after removing the item must not open the list over the other filters.
+            if (string.IsNullOrEmpty(SelectedId) && _open)
+            {
+                _open = false;
+                StateHasChanged();
+            }
+        }
+        catch (Microsoft.JSInterop.JSException) { }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+    }
+}

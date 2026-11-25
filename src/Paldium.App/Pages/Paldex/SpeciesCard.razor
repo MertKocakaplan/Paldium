@@ -70,6 +70,27 @@
 
     <WorkLine Pal="Pal" MaxRows="@(Dense ? 3 : 4)" />
 
+    @if (DropLines is { Count: > 0 })
+    {
+        <div class="dline" title="@L["Col.Drop"].Value">
+            @* A dense card has no room for the label and the picture: the active filter names the item. *@
+            @if (!Dense)
+            {
+                <span class="k">@L["Col.Drop"]</span>
+                @if (DropIcon != null)
+                {
+                    <img src="@DropIcon" width="16" height="16" alt="" />
+                }
+            }
+            <span class="v">
+                @foreach (var line in DropLines)
+                {
+                    <b>@line</b>
+                }
+            </span>
+        </div>
+    }
+
     @if (!Dense)
     {
         <div class="cfoot stats">
@@ -88,6 +109,11 @@
     [Parameter] public bool Dense { get; set; }
     [Parameter] public bool Selected { get; set; }
     [Parameter] public EventCallback<PalSpecies> OnOpen { get; set; }
+
+    /// <summary>T152: how this species drops the item the list is filtered by (one line per way); null without that filter.</summary>
+    [Parameter] public IReadOnlyList<string>? DropLines { get; set; }
+
+    [Parameter] public string? DropIcon { get; set; }
 
     private void NotifyFocused()
     {
@@ -121,6 +147,7 @@
             ? L["Paldex.CardAriaWork", string.Join(", ", works)].Value
             : L["Paldex.CardAriaWorkNone"].Value;
 
-        return L["Paldex.CardAria", Pal.Names.Get(Lang), Pal.DexLabel, elements, workText].Value;
+        var label = L["Paldex.CardAria", Pal.Names.Get(Lang), Pal.DexLabel, elements, workText].Value;
+        return DropLines is { Count: > 0 } ? $"{label} {L["Col.Drop"].Value}: {string.Join(", ", DropLines)}" : label;
     }
 }

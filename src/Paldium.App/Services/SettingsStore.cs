@@ -151,6 +151,9 @@ public sealed record PaldexSettings
     public PalFilter Filter { get; init; } = new();
 
     public PalSort Sort { get; init; } = new();
+
+    /// <summary>T152: the sort to go back to when the dropped-item filter is removed; null without one.</summary>
+    public PalSort? SortBeforeDrop { get; init; }
 }
 
 public sealed record MapSettings

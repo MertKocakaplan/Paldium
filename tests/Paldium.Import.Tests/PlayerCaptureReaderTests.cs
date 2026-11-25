@@ -250,14 +250,19 @@ public class PlayerCaptureReaderTests : IDisposable
         var players = Directory.GetFiles(Path.Combine(TestSupport.WorldFolder!, "Players"), "*.sav")
             .Where(f => !f.EndsWith("_dps.sav", StringComparison.OrdinalIgnoreCase)).ToList();
         Assert.NotEmpty(players);
+        var withBonus = 0;
         foreach (var file in players)
         {
+            // A world can hold nearly empty player files (a few KB, no record), and players who have effigies or collected objects but never
+            // caught a Pal: both are skipped.
             var record = PlayerCaptureReader.Read(file, TestSupport.GameData);
-            Assert.NotNull(record);
-            Assert.NotEmpty(record.Bonus);
+            if (record == null || record.Bonus.Count == 0) continue;
+            withBonus++;
             Assert.All(record.Bonus.Values, v => Assert.InRange(v, 0, 5));
             Assert.All(record.Bonus.Keys, id => Assert.True(TestSupport.GameData.TryNormalizePalId(id, out _), id));
         }
+
+        Assert.True(withBonus > 0, "No player file of the world carries capture bonuses.");
     }
 
     [RealSaveFact(TestSupport.WorldVariable)]

@@ -87,6 +87,7 @@
     [Parameter] public string? ShopId { get; set; }
 
     private IReadOnlyList<ShopItem> _items = [];
+    private IReadOnlyList<Paldium.Core.Queries.DroppedItem> _dropped = [];
     private Paldium.Core.Map.MapData? _map;
     private readonly OnceParameter _itemOnce = new();
     private readonly OnceParameter _shopOnce = new();
@@ -152,7 +153,11 @@
 
     protected override void OnUiLanguageChanged() => Load();
 
-    private void Load() => _items = ShopModel.Items(Data.Shops, Lang);
+    private void Load()
+    {
+        _items = ShopModel.Items(Data.Shops, Lang);
+        _dropped = Paldium.Core.Queries.PalDrops.Items(Data.Pals, Lang);
+    }
 
     private Task SetQuery(string value)
     {
@@ -326,6 +331,10 @@
             @if (ShopModel.Towers(_map, item.ItemId) is { Count: > 0 } towers)
             {
                 <p class="h">@L["Shop.InTower", towers.Count] <a class="lnk" href="@("map?focus=" + Uri.EscapeDataString(towers[0].Id))"><Icon Name="pin" Size="14" />@L["Shop.ShowOnMap"]</a></p>
+            }
+            @if (Paldium.Core.Queries.PalDrops.Find(_dropped, item.ItemId) is { } dropped)
+            {
+                <p class="h"><a class="lnk" href="@Paldium.App.Pages.PaldexParts.DropModel.Link(dropped.ItemId, Paldium.Core.Queries.PalDropSource.Any)">@L["Shop.AlsoDroppedBy", dropped.PalCount]<Icon Name="arrow-right" Size="14" /></a></p>
             }
         </div>
     };

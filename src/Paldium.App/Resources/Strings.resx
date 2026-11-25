@@ -1811,4 +1811,23 @@ Nothing else in the game folder is changed.</value></data>
   <data name="Map.Fit" xml:space="preserve"><value>Fit the map</value></data>
   <data name="Detail.MapAreas" xml:space="preserve"><value>{0} · {1} area(s)</value></data>
   <data name="Detail.Map.NoCoords" xml:space="preserve"><value>Coordinates are not shown on this map</value></data>
+  <data name="Filter.Drop" xml:space="preserve"><value>Drops item</value></data>
+  <data name="Filter.DropSearch" xml:space="preserve"><value>Search an item</value></data>
+  <data name="Filter.DropSource" xml:space="preserve"><value>Where it comes from</value></data>
+  <data name="Filter.DropSource.Any" xml:space="preserve"><value>All</value></data>
+  <data name="Filter.DropSource.Defeat" xml:space="preserve"><value>On defeat</value></data>
+  <data name="Filter.DropSource.Ranch" xml:space="preserve"><value>At the Ranch</value></data>
+  <data name="Filter.DropCount" xml:space="preserve"><value>{0} Pals</value></data>
+  <data name="Filter.DropNoItem" xml:space="preserve"><value>No dropped item matches.</value></data>
+  <data name="Clause.Drop" xml:space="preserve"><value>Drops: {0}</value></data>
+  <data name="Clause.DropRanch" xml:space="preserve"><value>Drops at the Ranch: {0}</value></data>
+  <data name="Col.Drop" xml:space="preserve"><value>Drop</value></data>
+  <data name="Sort.DropChance" xml:space="preserve"><value>Drop chance</value></data>
+  <data name="Drop.RanchFrom" xml:space="preserve"><value>Ranch ★{0}+</value></data>
+  <data name="Drop.MinLevel" xml:space="preserve"><value>Lv {0}+</value></data>
+  <data name="Drop.None" xml:space="preserve"><value>No Pal drops "{0}".</value></data>
+  <data name="Drop.NoneFiltered" xml:space="preserve"><value>No Pal drops "{0}" with these filters.</value></data>
+  <data name="Drop.Suggest" xml:space="preserve"><value>Show Pals that drop "{0}"</value></data>
+  <data name="Detail.WhoDrops" xml:space="preserve"><value>Pals that drop this</value></data>
+  <data name="Shop.AlsoDroppedBy" xml:space="preserve"><value>Also dropped by {0} Pals</value></data>
 </root>

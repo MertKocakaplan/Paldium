@@ -11,6 +11,23 @@
                  AriaLabel="@L["Paldex.FilterSpecies"].Value" />
 </div>
 
+<div class="fg">
+    <span class="l">@L["Filter.Drop"]</span>
+    <DropPicker Items="DropItems"
+                SelectedId="@Filter.DropItem"
+                OnSelect="id => UpdateAsync(Filter with { DropItem = id, DropSource = PalDropSource.Any })" />
+    @if (!string.IsNullOrEmpty(Filter.DropItem))
+    {
+        <Segmented TValue="PalDropSource"
+                   Class="dsrc"
+                   Mini="true"
+                   Items="@DropSourceItems()"
+                   Value="@Filter.DropSource"
+                   ValueChanged="source => UpdateAsync(Filter with { DropSource = source })"
+                   AriaLabel="@L["Filter.DropSource"].Value" />
+    }
+</div>
+
 @if (HasElements)
 {
     <div class="fg">
@@ -213,6 +230,9 @@
     [Parameter] public CaptureRecord? Capture { get; set; }
     [Parameter] public CaptureAvailability CaptureState { get; set; }
 
+    /// <summary>The items some Pal drops, in the current language (T152).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<DroppedItem> DropItems { get; set; } = [];
+
     private bool HasObtain => Data.Pals.Any(p => p.Obtain != null);
     private int MaxWorkLevel => Data.Pals.SelectMany(p => p.Work.Values).DefaultIfEmpty(1).Max();
     private int _minRarity;
@@ -227,6 +247,9 @@
     }
 
     private Task UpdateAsync(PalFilter filter) => FilterChanged.InvokeAsync(filter);
+
+    private IReadOnlyList<SegmentedItem<PalDropSource>> DropSourceItems() =>
+        Enum.GetValues<PalDropSource>().Select(s => new SegmentedItem<PalDropSource>(s, L["Filter.DropSource." + s].Value, IsWord: true)).ToList();
 
     private Task SetTextAsync(string text) =>
         UpdateAsync(Filter with { Text = string.IsNullOrWhiteSpace(text) ? null : text });

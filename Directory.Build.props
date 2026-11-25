@@ -1,7 +1,7 @@
 <Project>
   <!-- Release metadata. build/publish.ps1 reads <Version>. Both src/ and tools/ import this file; external/palcalc keeps its own settings. -->
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

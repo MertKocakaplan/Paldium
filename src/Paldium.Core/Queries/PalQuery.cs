@@ -35,6 +35,9 @@ public enum PalSortKey
 
     /// <summary>Bonus catches 0 to 5 of the species (T121; needs the capture record given to <see cref="PalQuery.Run"/>; without it this sorts by dex number). Uncapturable species always come last.</summary>
     CaptureBonus,
+
+    /// <summary>The chance of the item the filter asks for (<see cref="PalFilter.DropItem"/>, T152); without an item this sorts by dex number.</summary>
+    DropChance,
 }
 
 /// <summary>Capture-bonus filter of the Paldex (T121; needs the capture record; without it every value behaves like <see cref="Any"/>). Uncapturable species never match anything but <see cref="Any"/>.</summary>
@@ -134,12 +137,19 @@ public sealed record PalFilter
     /// <summary>Filter by the capture bonus progress (see <see cref="PalCaptureFilter"/>).</summary>
     public PalCaptureFilter Capture { get; init; } = PalCaptureFilter.Any;
 
+    /// <summary>The Pal must drop this item (T152), see <see cref="PalDrops"/>.</summary>
+    public string? DropItem { get; init; }
+
+    /// <summary>With <see cref="DropItem"/>: which way of dropping counts.</summary>
+    public PalDropSource DropSource { get; init; } = PalDropSource.Any;
+
     [JsonIgnore]
     public bool IsEmpty =>
         string.IsNullOrWhiteSpace(Text) && Elements.Count == 0 && MinWork.Count == 0 &&
         MinRarity == null && MaxRarity == null && Variant == null && Nocturnal == null &&
         SameSpeciesOnly == null && WildCatchable == null && ObtainMethods.Count == 0 &&
-        string.IsNullOrWhiteSpace(ActiveSkill) && Ownership == PalOwnership.Any && Capture == PalCaptureFilter.Any;
+        string.IsNullOrWhiteSpace(ActiveSkill) && Ownership == PalOwnership.Any && Capture == PalCaptureFilter.Any &&
+        string.IsNullOrWhiteSpace(DropItem);
 }
 
 /// <summary>Filtering and sorting of the Pal list, independent of the UI.</summary>
@@ -151,7 +161,7 @@ public static class PalQuery
         IReadOnlyDictionary<string, OwnedSpeciesStats>? owned = null, CaptureRecord? capture = null)
     {
         var filtered = data.Pals.Where(p => Matches(data, p, filter, owned, capture));
-        return Sort(filtered, sort, lang, owned, capture);
+        return Sort(filtered, sort, lang, owned, capture, filter);
     }
 
     /// <summary>True when the species takes part in the capture bonus (it can be caught).</summary>
@@ -211,6 +221,7 @@ public static class PalQuery
         if (!string.IsNullOrWhiteSpace(f.ActiveSkill) &&
             !pal.AttackLearnset.Any(e => string.Equals(e.SkillId, f.ActiveSkill, StringComparison.OrdinalIgnoreCase)))
             return false;
+        if (!string.IsNullOrWhiteSpace(f.DropItem) && !PalDrops.Of(pal, f.DropItem, f.DropSource).Found) return false;
         return true;
     }
 
@@ -228,13 +239,24 @@ public static class PalQuery
             .All(m => selected.Contains(m, StringComparer.OrdinalIgnoreCase));
     }
 
+    /// <param name="drop">The filter whose item and drop source the chance sort reads (T152).</param>
     public static IReadOnlyList<PalSpecies> Sort(IEnumerable<PalSpecies> pals, PalSort sort, string lang,
-        IReadOnlyDictionary<string, OwnedSpeciesStats>? owned = null, CaptureRecord? capture = null)
+        IReadOnlyDictionary<string, OwnedSpeciesStats>? owned = null, CaptureRecord? capture = null, PalFilter? drop = null)
     {
+        if (sort.Key == PalSortKey.DropChance && string.IsNullOrWhiteSpace(drop?.DropItem)) sort = new PalSort { Key = PalSortKey.DexNo };
         if (sort.Key == PalSortKey.OwnedCount && owned == null) sort = new PalSort { Key = PalSortKey.DexNo };
         if (sort.Key == PalSortKey.CaptureBonus && capture == null) sort = new PalSort { Key = PalSortKey.DexNo };
         IOrderedEnumerable<PalSpecies> ordered;
-        if (sort.Key == PalSortKey.CaptureBonus)
+        if (sort.Key == PalSortKey.DropChance)
+        {
+            var keyed = pals.Select(p => (Pal: p, PalDrops.Of(p, drop!.DropItem!, drop.DropSource).Best)).ToList();
+            var byChance = sort.Descending
+                ? keyed.OrderByDescending(x => x.Best.Chance).ThenByDescending(x => x.Best.Amount)
+                : keyed.OrderBy(x => x.Best.Chance).ThenBy(x => x.Best.Amount);
+            return byChance.ThenBy(x => x.Pal.DexNo).ThenBy(x => x.Pal.IsVariant).ThenBy(x => x.Pal.Id, StringComparer.Ordinal)
+                .Select(x => x.Pal).ToList();
+        }
+        else if (sort.Key == PalSortKey.CaptureBonus)
         {
             // Species that cannot be caught are not part of the progress: they stay at the end in either direction.
             var byGroup = pals.OrderBy(p => CountsForCapture(p) ? 0 : 1);
@@ -280,6 +302,7 @@ public static class PalQuery
         PalSortKey.Work => WorkKey(sort.WorkType),
         PalSortKey.OwnedCount => _ => 0, // replaced by the owned counts in Sort
         PalSortKey.CaptureBonus => _ => 0, // replaced by the capture record in Sort
+        PalSortKey.DropChance => _ => 0, // sorted by the filtered item in Sort
         _ => throw new ArgumentOutOfRangeException(nameof(sort), sort.Key, "Unsupported sort key."),
     };
 
